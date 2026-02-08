@@ -31,7 +31,7 @@ export default function Ships() {
   const [openCreateCompany, setOpenCreateCompany] = useState(false)
   const [companyForm, setCompanyForm] = useState({ nombre: '' })
   const [openCreateUser, setOpenCreateUser] = useState(false)
-  const [userForm, setUserForm] = useState({ name: '', email: '', role: '' })
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: '' })
 
   useEffect(() => {
     setLoading(true)
@@ -195,10 +195,10 @@ export default function Ships() {
       {/* Modal crear usuario */}
       <Modal open={openCreateUser} title="Crear usuario" onClose={() => setOpenCreateUser(false)} onSubmit={async () => {
         try {
-          if (!userForm.name || !userForm.email || !userForm.role) {
-            setSnack({ open: true, message: 'Nombre, email y rol son obligatorios', type: 'error' })
-            return
-          }
+          if (!userForm.name || !userForm.email || !userForm.password || !userForm.role) {
+          setSnack({ open: true, message: 'Nombre, email, contraseña y rol son obligatorios', type: 'error' })
+          return
+        }
           const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, creado_por: 'Testing' }) })
           if (!res.ok) {
             const err = await res.json().catch(() => ({}))
@@ -208,7 +208,7 @@ export default function Ships() {
           const created = await res.json()
           setUsers(prev => ([...prev, created]))
           setOpenCreateUser(false)
-          setUserForm({ name: '', email: '', role: '' })
+          setUserForm({ name: '', email: '', password: '', role: '' })
           setSnack({ open: true, message: 'Usuario creado', type: 'success' })
         } catch (e) {
           setSnack({ open: true, message: 'Error de red creando usuario', type: 'error' })
@@ -221,6 +221,10 @@ export default function Ships() {
         <div>
           <div className="label">Email</div>
           <input className="input" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="email@dominio.com" />
+        </div>
+        <div>
+          <div className="label">Contraseña</div>
+          <input className="input" type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} placeholder="Contraseña" />
         </div>
         <div>
           <div className="label">Rol</div>

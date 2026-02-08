@@ -63,6 +63,10 @@ export default function Users() {
 
   const submit = async () => {
     try {
+      if (!form.name || !form.email || !form.password) {
+        setSnack({ open: true, message: 'Nombre, email y contraseña son obligatorios', type: 'error' })
+        return
+      }
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,6 +169,10 @@ export default function Users() {
         <div>
           <div className="label">Email</div>
           <input className="input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@dominio.com" />
+        </div>
+        <div>
+          <div className="label">Contraseña</div>
+          <input className="input" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Contraseña" />
         </div>
         <div>
           <div className="label">Rol</div>

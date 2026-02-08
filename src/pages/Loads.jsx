@@ -64,7 +64,7 @@ export default function Loads() {
   const [openCreateShip, setOpenCreateShip] = useState(false)
   const [shipForm, setShipForm] = useState({ nombre_del_barco: '', empresa: '' })
   const [openCreateUser, setOpenCreateUser] = useState(false)
-  const [userForm, setUserForm] = useState({ name: '', email: '', role: '' })
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: '' })
   const [openCreatePallet, setOpenCreatePallet] = useState(false)
   const [palletForm, setPalletForm] = useState({ numero_palet: '', tipo: 'Seco' })
 
@@ -164,8 +164,8 @@ export default function Loads() {
 
   const createUser = async () => {
     try {
-      if (!userForm.name || !userForm.email || !userForm.role) {
-        setSnack({ open: true, message: 'Nombre, email y rol son obligatorios', type: 'error' })
+      if (!userForm.name || !userForm.email || !userForm.password || !userForm.role) {
+        setSnack({ open: true, message: 'Nombre, email, contraseña y rol son obligatorios', type: 'error' })
         return
       }
       const res = await fetch('/api/users', {
@@ -179,7 +179,7 @@ export default function Loads() {
       const created = await res.json()
       setUsers(prev => ([...prev, created]))
       setOpenCreateUser(false)
-      setUserForm({ name: '', email: '', role: '' })
+      setUserForm({ name: '', email: '', password: '', role: '' })
       setSnack({ open: true, message: 'Usuario creado', type: 'success' })
     } catch (e) {
       setSnack({ open: true, message: 'Error de red creando usuario', type: 'error' })
@@ -429,6 +429,10 @@ export default function Loads() {
         <div>
           <div className="label">Email</div>
           <input className="input" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="email@dominio.com" />
+        </div>
+        <div>
+          <div className="label">Contraseña</div>
+          <input className="input" type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} placeholder="Contraseña" />
         </div>
         <div>
           <div className="label">Rol</div>

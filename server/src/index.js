@@ -8,6 +8,7 @@ import shipsRouter from './routes/ships.js'
 import palletsRouter from './routes/pallets.js'
 import loadsRouter from './routes/loads.js'
 import locationsRouter from './routes/locations.js'
+import authRouter from './routes/auth.js'
 
 const app = express()
 app.use(cors())
@@ -34,6 +35,7 @@ async function start() {
     app.use('/api/pallets', palletsRouter)
     app.use('/api/loads', loadsRouter)
     app.use('/api/locations', locationsRouter)
+    app.use('/api/auth', authRouter)
 
     app.listen(PORT, () => console.log(`API escuchando en http://localhost:${PORT}`))
   } catch (err) {

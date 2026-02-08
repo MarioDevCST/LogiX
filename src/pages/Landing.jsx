@@ -10,7 +10,7 @@ export default function Landing() {
           Optimiza rutas, asigna pedidos y controla el estado de tus entregas
           con una interfaz clara y rápida.
         </p>
-        <Link to="/app" className="primary-button">Entrar</Link>
+        <Link to="/login" className="primary-button">Entrar</Link>
       </div>
       <footer className="landing-footer">© {new Date().getFullYear()} LogiX</footer>
     </div>

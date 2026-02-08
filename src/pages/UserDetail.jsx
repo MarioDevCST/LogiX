@@ -5,9 +5,10 @@ import Snackbar from '../components/Snackbar.jsx'
 
 const ROLE_OPTIONS = [
   { label: 'Administrador', value: 'admin' },
-  { label: 'Despachador', value: 'dispatcher' },
+  { label: 'Oficina', value: 'dispatcher' },
   { label: 'Conductor', value: 'driver' },
   { label: 'Almacén', value: 'warehouse' },
+  { label: 'Logistica', value: 'logistic' },
 ]
 
 export default function UserDetail() {

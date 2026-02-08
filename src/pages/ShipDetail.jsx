@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import Modal from '../components/Modal.jsx'
+import Snackbar from '../components/Snackbar.jsx'
+
+export default function ShipDetail() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [ship, setShip] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ nombre_del_barco: '' })
+  const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
+
+  useEffect(() => {
+    fetch(`/api/ships/${id}`).then(r => r.json()).then(s => {
+      setShip(s)
+      setForm({ nombre_del_barco: s.nombre_del_barco || '' })
+    }).catch(() => {})
+  }, [id])
+
+  const submit = async () => {
+    try {
+      const res = await fetch(`/api/ships/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: 'Testing' })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSnack({ open: true, message: err.error || 'Error actualizando barco', type: 'error' })
+        return
+      }
+      const updated = await res.json()
+      setShip(updated)
+      setOpen(false)
+      setSnack({ open: true, message: 'Barco actualizado', type: 'success' })
+    } catch (e) {
+      setSnack({ open: true, message: 'Error de red actualizando barco', type: 'error' })
+    }
+  }
+
+  if (!ship) return <p>Cargando...</p>
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h2 className="card-title">Detalle barco</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="icon-button" onClick={() => setOpen(true)} title="Modificar">
+            <span className="material-symbols-outlined">edit</span>
+          </button>
+          <button className="icon-button" onClick={() => navigate(-1)} title="Atrás">
+            <span className="material-symbols-outlined">arrow_back</span>
+          </button>
+        </div>
+      </div>
+      <div style={{ padding: 16 }}>
+        <p><strong>Nombre:</strong> {ship.nombre_del_barco}</p>
+        <p><strong>Empresa:</strong> {ship.empresa?.nombre || '-'}</p>
+        <p><strong>Responsable:</strong> {ship.responsable?.name || '-'}</p>
+      </div>
+
+      <Modal open={open} title="Modificar barco" onClose={() => setOpen(false)} onSubmit={submit} submitLabel="Guardar">
+        <div>
+          <div className="label">Nombre del barco</div>
+          <input className="input" value={form.nombre_del_barco} onChange={e => setForm({ ...form, nombre_del_barco: e.target.value })} />
+        </div>
+      </Modal>
+
+      <Snackbar open={snack.open} message={snack.message} type={snack.type} onClose={() => setSnack(s => ({ ...s, open: false }))} />
+    </section>
+  )
+}

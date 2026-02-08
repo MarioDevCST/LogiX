@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-build-client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Lint (client + server)
+        run: npm run lint
+
+      - name: Build client
+        run: npm run build
+
+      - name: Install server deps
+        working-directory: server
+        run: npm ci
+
+  # Optional: start server with Mongo service for smoke test
+  # Uncomment to enable server health check in CI
+  # server-smoke:
+  #   runs-on: ubuntu-latest
+  #   services:
+  #     mongo:
+  #       image: mongo:6
+  #       ports:
+  #         - 27017:27017
+  #   env:
+  #     MONGODB_URI: mongodb://localhost:27017
+  #     MONGODB_DB: logix-ci
+  #     PORT: 5000
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #     - name: Setup Node
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - name: Install server deps
+  #       working-directory: server
+  #       run: npm ci
+  #     - name: Start server
+  #       working-directory: server
+  #       run: |
+  #         node src/index.js &
+  #         echo $! > server.pid
+  #         sleep 4
+  #     - name: Health check
+  #       run: |
+  #         curl -f http://localhost:5000/api/health || (echo "health check failed" && exit 1)
+  #     - name: Stop server
+  #       if: always()
+  #       run: |
+  #         kill $(cat server/server.pid) || true

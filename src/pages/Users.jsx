@@ -1,17 +1,17 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DataTable from '../components/DataTable.jsx'
-import Modal from '../components/Modal.jsx'
 import CardGrid from '../components/CardGrid.jsx'
+import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { getCurrentRole, hasPermission, PERMISSIONS, ROLES, getCurrentUser } from '../utils/roles.js'
 
 const ROLE_OPTIONS = [
   { label: 'Administrador', value: 'admin' },
   { label: 'Oficina', value: 'dispatcher' },
   { label: 'Conductor', value: 'driver' },
   { label: 'Almacén', value: 'warehouse' },
-  { label: 'Consignatario', value: 'consignee' },
   { label: 'Logistica', value: 'logistic' },
 ]
 
@@ -24,11 +24,20 @@ export default function Users() {
   ]
 
   const navigate = useNavigate()
+  const role = getCurrentRole()
+  const canCreate = role ? hasPermission(role, PERMISSIONS.MANAGE_USERS) : true
+  const meId = (getCurrentUser()?._id || getCurrentUser()?.id)
   const [view, setView] = useState('table') // 'table' | 'cards'
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'dispatcher', active: true })
+
+  useEffect(() => {
+    if (role === ROLES.ALMACEN && meId) {
+      navigate(`/app/admin/usuarios/${meId}`)
+    }
+  }, [role, meId, navigate])
 
   // búsqueda y filtros
   const [query, setQuery] = useState('')
@@ -63,15 +72,17 @@ export default function Users() {
 
   const submit = async () => {
     try {
-      if (!form.name || !form.email || !form.password) {
-        setSnack({ open: true, message: 'Nombre, email y contraseña son obligatorios', type: 'error' })
+      if (!form.name || !form.email) {
+        setSnack({ open: true, message: 'Nombre y email son obligatorios', type: 'error' })
         return
       }
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
+      if (!form.password) {
+        setSnack({ open: true, message: 'La contraseña es obligatoria', type: 'error' })
+        return
+      }
+      const body = { name: form.name, email: form.email, role: form.role, active: form.active, creado_por: (getCurrentUser()?.name || 'Testing') }
+      if (form.password) body.password = form.password
+      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setSnack({ open: true, message: err.error || 'Error creando usuario', type: 'error' })
@@ -154,9 +165,9 @@ export default function Users() {
       </div>
 
       {view === 'table' ? (
-        <DataTable title="Usuarios" columns={columns} data={paginated} loading={loading} createLabel="Crear usuario" onCreate={onCreate} onRowClick={goDetail} />
+        <DataTable title="Usuarios" columns={columns} data={paginated} loading={loading} createLabel={canCreate ? 'Crear usuario' : undefined} onCreate={canCreate ? onCreate : undefined} onRowClick={goDetail} />
       ) : (
-        <CardGrid title="Usuarios" items={paginated.map(i => ({ ...i, name: i.name, subtitle: i.email, role: i.role, active: i.active }))} loading={loading} onCreate={onCreate} createLabel="Crear usuario" onCardClick={goDetail} />
+        <CardGrid title="Usuarios" items={paginated.map(i => ({ ...i, name: i.name, subtitle: i.email, role: i.role, active: i.active }))} loading={loading} onCreate={canCreate ? onCreate : undefined} createLabel={canCreate ? 'Crear usuario' : undefined} onCardClick={goDetail} />
       )}
 
       <Pagination page={page} pageSize={pageSize} total={filtered.length} onPageChange={(p) => setPage(Math.max(1, p))} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />

@@ -12,7 +12,7 @@ const LoadSchema = new mongoose.Schema({
   chofer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   palets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Pallet' }],
   carga: [{ type: String, enum: ['Seco', 'Refrigerado', 'Congelado', 'Técnico'] }],
-  consignatario: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  consignatario: { type: mongoose.Schema.Types.ObjectId, ref: 'Consignee' },
   cash: { type: Boolean, default: false },
   lancha: { type: Boolean, default: false },
   estado_viaje: { type: String, enum: ['Preparando', 'En Proceso', 'Cancelado', 'Entregado'], default: 'Preparando' },

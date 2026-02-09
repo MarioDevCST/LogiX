@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import Load from '../models/Load.js'
 import Ship from '../models/Ship.js'
+import Pallet from '../models/Pallet.js'
 
 const router = Router()
 
@@ -10,7 +11,7 @@ router.get('/', async (req, res) => {
     const list = await Load.find()
       .populate('barco', 'nombre_del_barco')
       .populate('chofer', 'name')
-      .populate('consignatario', 'name')
+      .populate('consignatario', 'nombre email telefono')
       .populate('palets', 'numero_palet')
     res.json(list)
   } catch (err) {
@@ -24,9 +25,17 @@ router.get('/:id', async (req, res) => {
     const item = await Load.findById(req.params.id)
       .populate('barco', 'nombre_del_barco')
       .populate('chofer', 'name')
-      .populate('consignatario', 'name')
+      .populate('consignatario', 'nombre email telefono')
       .populate('palets')
     if (!item) return res.status(404).json({ error: 'Carga no encontrada' })
+
+    // Unificar palets provenientes del array Load.palets y los encontrados por la relación Pallet.carga
+    const byArray = Array.isArray(item.palets) ? item.palets : []
+    const byRelation = await Pallet.find({ carga: item._id })
+    const map = new Map()
+    ;[...byArray, ...byRelation].forEach(p => map.set(String(p._id), p))
+    item.palets = Array.from(map.values())
+
     res.json(item)
   } catch (err) {
     res.status(500).json({ error: 'Error obteniendo carga' })
@@ -94,7 +103,7 @@ router.post('/', async (req, res) => {
     const populated = await created.populate([
       { path: 'barco' },
       { path: 'chofer', select: 'name email role' },
-      { path: 'consignatario', select: 'name email role' },
+      { path: 'consignatario', select: 'nombre email telefono' },
       { path: 'palets' },
     ])
     res.status(201).json(populated)
@@ -167,7 +176,7 @@ router.put('/:id', async (req, res) => {
     const populated = await updated.populate([
       { path: 'barco' },
       { path: 'chofer', select: 'name email role' },
-      { path: 'consignatario', select: 'name email role' },
+      { path: 'consignatario', select: 'nombre email telefono' },
       { path: 'palets' },
     ])
 

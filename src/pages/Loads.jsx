@@ -6,6 +6,7 @@ import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import Pagination from '../components/Pagination.jsx'
 import Calendar from '../components/Calendar.jsx'
+import { getCurrentRole, hasPermission, PERMISSIONS, getCurrentUser } from '../utils/roles.js'
 
 const ESTADO_VIAJE_OPTIONS = [ 'Preparando', 'En Proceso', 'Cancelado', 'Entregado' ]
 const CARGA_OPTIONS = [ 'Seco', 'Refrigerado', 'Congelado', 'Técnico' ]
@@ -13,16 +14,25 @@ const ENTREGA_OPTIONS = [ 'Provisión', 'Alimentación', 'Repuesto', 'Técnico' 
 
 export default function Loads() {
   const columns = [
+    { key: 'nombre', header: 'Nombre' },
     { key: 'barco', header: 'Barco' },
     { key: 'entrega', header: 'Entrega' },
+    { key: 'chofer', header: 'Chofer' },
+    { key: 'consignatario', header: 'Consignatario' },
+    { key: 'carga', header: 'Tipo de carga' },
     { key: 'total_palets', header: 'Palets' },
     { key: 'estado_viaje', header: 'Estado viaje' },
+    { key: 'cash', header: 'Cash' },
+    { key: 'lancha', header: 'Lancha' },
+    { key: 'fecha_de_carga', header: 'Fecha de carga' },
+    { key: 'hora_de_carga', header: 'Hora de carga' },
+    { key: 'fecha_de_descarga', header: 'Fecha de descarga' },
+    { key: 'hora_de_descarga', header: 'Hora de descarga' },
     { key: 'estado_carga', header: 'Carga completa' },
   ]
 
   const navigate = useNavigate()
   const [view, setView] = useState('table')
-  const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({
@@ -43,6 +53,7 @@ export default function Loads() {
   const [ships, setShips] = useState([])
   const [pallets, setPallets] = useState([])
   const [users, setUsers] = useState([])
+const [consignees, setConsignees] = useState([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -60,35 +71,37 @@ export default function Loads() {
   const prevPeriod = () => setCalMonth(d => calMode === 'week' ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7) : new Date(d.getFullYear(), d.getMonth() - 1, 1))
   const nextPeriod = () => setCalMonth(d => calMode === 'week' ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7) : new Date(d.getFullYear(), d.getMonth() + 1, 1))
 
+  // nuevos estados base para recomputar filas con palets
+  const [loadDocs, setLoadDocs] = useState([])
+
   // modales de creación rápida
   const [openCreateShip, setOpenCreateShip] = useState(false)
   const [shipForm, setShipForm] = useState({ nombre_del_barco: '', empresa: '' })
   const [openCreateUser, setOpenCreateUser] = useState(false)
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: '' })
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'consignee' })
   const [openCreatePallet, setOpenCreatePallet] = useState(false)
   const [palletForm, setPalletForm] = useState({ numero_palet: '', tipo: 'Seco' })
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/loads').then(r => r.json()).then(list => {
-      const mapped = list.map(l => ({
-        id: l._id,
-        barco: l.barco?.nombre_del_barco || '',
-        entrega: Array.isArray(l.entrega) ? l.entrega.join(', ') : (l.entrega || ''),
-        total_palets: l.total_palets ?? (Array.isArray(l.palets) ? l.palets.length : 0),
-        estado_viaje: l.estado_viaje || 'Preparando',
-        estado_carga: (l.estado_carga ? 'Sí' : 'No'),
-        fecha_de_carga: l.fecha_de_carga || null,
-        fecha_de_descarga: l.fecha_de_descarga || null,
-      }))
-      setRows(mapped)
-    }).catch(() => {}).finally(() => setLoading(false))
+    fetch('/api/loads').then(r => r.json()).then(setLoadDocs).catch(() => {}).finally(() => setLoading(false))
     fetch('/api/ships').then(r => r.json()).then(setShips).catch(() => {})
     fetch('/api/pallets').then(r => r.json()).then(setPallets).catch(() => {})
     fetch('/api/users').then(r => r.json()).then(setUsers).catch(() => {})
+  fetch('/api/consignees').then(r => r.json()).then(setConsignees).catch(() => {})
   }, [])
 
-  const onCreate = () => setOpen(true)
+  const role = getCurrentRole()
+  const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS)
+  const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS)
+
+  const onCreate = () => {
+    if (!canManageLoads) {
+      setSnack({ open: true, message: 'No tienes permiso para crear cargas', type: 'error' })
+      return
+    }
+    setOpen(true)
+  }
 
   const submit = async () => {
     try {
@@ -110,7 +123,7 @@ export default function Loads() {
         cash: !!form.cash,
         lancha: !!form.lancha,
         estado_viaje: form.estado_viaje,
-        creado_por: 'Testing',
+        creado_por: (getCurrentUser()?.name || 'Testing'),
       }
       const res = await fetch('/api/loads', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
@@ -121,15 +134,7 @@ export default function Loads() {
         return
       }
       const created = await res.json()
-      setRows(prev => ([...prev, {
-        id: created._id,
-        barco: created.barco?.nombre_del_barco || '',
-        entrega: Array.isArray(created.entrega) ? created.entrega.join(', ') : (created.entrega || ''),
-        total_palets: created.total_palets ?? (Array.isArray(created.palets) ? created.palets.length : 0),
-        estado_viaje: created.estado_viaje || 'Preparando',
-        estado_carga: (created.estado_carga ? 'Sí' : 'No'),
-        fecha_de_carga: created.fecha_de_carga || null,
-      }]))
+      setLoadDocs(prev => ([...prev, created]))
       setOpen(false)
       setForm({ barco: '', entrega: [], chofer: '', consignatario: '', palets: [], carga: [], fecha_de_carga: '', hora_de_carga: '', fecha_de_descarga: '', hora_de_descarga: '', cash: false, lancha: false, estado_viaje: 'Preparando' })
       setSnack({ open: true, message: 'Carga creada', type: 'success' })
@@ -145,7 +150,7 @@ export default function Loads() {
         return
       }
       const res = await fetch('/api/ships', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...shipForm, creado_por: 'Testing' })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...shipForm, creado_por: (getCurrentUser()?.name || 'Testing') })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -164,12 +169,19 @@ export default function Loads() {
 
   const createUser = async () => {
     try {
-      if (!userForm.name || !userForm.email || !userForm.password || !userForm.role) {
-        setSnack({ open: true, message: 'Nombre, email, contraseña y rol son obligatorios', type: 'error' })
+      if (!userForm.name || !userForm.email || !userForm.role) {
+        setSnack({ open: true, message: 'Nombre, email y rol son obligatorios', type: 'error' })
         return
       }
+      // Si el rol es consignatario, la contraseña es opcional
+      if (userForm.role !== 'consignee' && !userForm.password) {
+        setSnack({ open: true, message: 'La contraseña es obligatoria para este rol', type: 'error' })
+        return
+      }
+      const body = { name: userForm.name, email: userForm.email, role: userForm.role, creado_por: (getCurrentUser()?.name || 'Testing') }
+      if (userForm.password) body.password = userForm.password
       const res = await fetch('/api/users', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, creado_por: 'Testing' })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -179,7 +191,7 @@ export default function Loads() {
       const created = await res.json()
       setUsers(prev => ([...prev, created]))
       setOpenCreateUser(false)
-      setUserForm({ name: '', email: '', password: '', role: '' })
+      setUserForm({ name: '', email: '', password: '', role: 'consignee' })
       setSnack({ open: true, message: 'Usuario creado', type: 'success' })
     } catch (e) {
       setSnack({ open: true, message: 'Error de red creando usuario', type: 'error' })
@@ -193,7 +205,7 @@ export default function Loads() {
         return
       }
       const res = await fetch('/api/pallets', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...palletForm, creado_por: 'Testing' })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...palletForm, creado_por: (getCurrentUser()?.name || 'Testing') })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -209,6 +221,47 @@ export default function Loads() {
       setSnack({ open: true, message: 'Error de red creando palet', type: 'error' })
     }
   }
+
+  const formatDate = (d) => {
+    if (!d) return ''
+    const date = new Date(d)
+    if (isNaN(date.getTime())) return ''
+    const dd = String(date.getDate()).padStart(2, '0')
+    const mm = String(date.getMonth() + 1).padStart(2, '0')
+    const yyyy = date.getFullYear()
+    return `${dd}/${mm}/${yyyy}`
+  }
+
+  // Derivar filas con todos los campos y conteo correcto de palets
+  const rows = useMemo(() => {
+    return loadDocs.map(l => {
+      const paletsArray = Array.isArray(l.palets) ? l.palets : []
+      const byRelation = pallets.filter(p => String(p.carga?._id || p.carga) === String(l._id))
+      const uniqueIds = new Set([
+        ...paletsArray.map(p => String(p._id || p)),
+        ...byRelation.map(p => String(p._id)),
+      ])
+      const totalPalets = uniqueIds.size
+      return {
+        id: l._id,
+        nombre: l.nombre || '',
+        barco: l.barco?.nombre_del_barco || '',
+        entrega: Array.isArray(l.entrega) ? l.entrega.join(', ') : (l.entrega || ''),
+        chofer: l.chofer?.name || '',
+        consignatario: l.consignatario?.nombre || '',
+        carga: Array.isArray(l.carga) ? l.carga.join(', ') : (l.carga || ''),
+        total_palets: totalPalets,
+        estado_viaje: l.estado_viaje || 'Preparando',
+        cash: l.cash ? 'Sí' : 'No',
+        lancha: l.lancha ? 'Sí' : 'No',
+        fecha_de_carga: formatDate(l.fecha_de_carga),
+        hora_de_carga: l.hora_de_carga || '',
+        fecha_de_descarga: formatDate(l.fecha_de_descarga),
+        hora_de_descarga: l.hora_de_descarga || '',
+        estado_carga: l.estado_carga ? 'Sí' : 'No',
+      }
+    })
+  }, [loadDocs, pallets])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -275,9 +328,9 @@ export default function Loads() {
       </div>
 
       {view === 'table' ? (
-        <DataTable title="Cargas" columns={columns} data={paginated} loading={loading} groupBy={groupBy !== 'none' ? groupBy : undefined} createLabel="Crear carga" onCreate={onCreate} onRowClick={goDetail} />
+        <DataTable title="Cargas" columns={columns} data={paginated} loading={loading} groupBy={groupBy !== 'none' ? groupBy : undefined} createLabel={canManageLoads ? 'Crear carga' : undefined} onCreate={canManageLoads ? onCreate : undefined} onRowClick={goDetail} />
       ) : view === 'cards' ? (
-        <CardGrid title="Cargas" items={paginated.map(i => ({ ...i, name: i.entrega, subtitle: `${i.barco} · ${i.estado_viaje}` }))} loading={loading} onCreate={onCreate} createLabel="Crear carga" onCardClick={goDetail} />
+        <CardGrid title="Cargas" items={paginated.map(i => ({ ...i, name: i.nombre || i.entrega, subtitle: `${i.barco} · ${i.estado_viaje}` }))} loading={loading} onCreate={canManageLoads ? onCreate : undefined} createLabel={canManageLoads ? 'Crear carga' : undefined} onCardClick={goDetail} />
       ) : (
         <Calendar title="Cargas" items={filtered} loading={loading} month={calMonth} mode={calMode} onPrevMonth={prevPeriod} onNextMonth={nextPeriod} onItemClick={goDetail} dateKey="fecha_de_carga" secondaryDateKey="fecha_de_descarga" statusKey="estado_viaje" />
       )}
@@ -343,8 +396,8 @@ export default function Loads() {
             <div className="label">Consignatario</div>
             <select className="input" value={form.consignatario} onChange={e => setForm({ ...form, consignatario: e.target.value })}>
               <option value="">Sin consignatario</option>
-              {users.filter(u => u.role === 'consignee').map(u => (
-                <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+              {consignees.map(c => (
+                <option key={c._id} value={c._id}>{c.nombre}{c.email ? ` (${c.email})` : ''}</option>
               ))}
             </select>
           </div>
@@ -420,7 +473,7 @@ export default function Loads() {
         </div>
       </Modal>
 
-      {/* Modal crear usuario */}
+      {/* Modal crear usuario (consignatario sin contraseña) */}
       <Modal open={openCreateUser} title="Crear usuario" onClose={() => setOpenCreateUser(false)} onSubmit={createUser} submitLabel="Crear">
         <div>
           <div className="label">Nombre</div>
@@ -431,19 +484,21 @@ export default function Loads() {
           <input className="input" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="email@dominio.com" />
         </div>
         <div>
-          <div className="label">Contraseña</div>
-          <input className="input" type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} placeholder="Contraseña" />
-        </div>
-        <div>
           <div className="label">Rol</div>
           <select className="input" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })}>
-            <option value="">Selecciona rol</option>
-            <option value="driver">Chofer</option>
             <option value="consignee">Consignatario</option>
+            <option value="driver">Chofer</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
+            <option value="dispatcher">Dispatcher</option>
           </select>
         </div>
+        {userForm.role !== 'consignee' && (
+          <div>
+            <div className="label">Contraseña</div>
+            <input className="input" type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} placeholder="Contraseña" />
+          </div>
+        )}
       </Modal>
 
       {/* Modal crear palet */}

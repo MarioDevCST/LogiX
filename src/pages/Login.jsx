@@ -11,13 +11,15 @@ export default function Login() {
   const submit = async (e) => {
     e.preventDefault()
     try {
-      if (!form.email || !form.password) {
+      const email = form.email.trim().toLowerCase()
+      const password = form.password.trim()
+      if (!email || !password) {
         setSnack({ open: true, message: 'Email y contraseña son obligatorios', type: 'error' })
         return
       }
       setLoading(true)
       const res = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))

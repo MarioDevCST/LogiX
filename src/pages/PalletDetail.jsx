@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import { getCurrentUser } from '../utils/roles.js'
 
 export default function PalletDetail() {
   const { id } = useParams()
@@ -21,7 +22,7 @@ export default function PalletDetail() {
   const submit = async () => {
     try {
       const res = await fetch(`/api/pallets/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: 'Testing' })
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: (getCurrentUser()?.name || 'Testing') })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import { getCurrentRole, hasPermission, PERMISSIONS, getCurrentUser } from '../utils/roles.js'
 
 const ESTADO_VIAJE_OPTIONS = [ 'Preparando', 'En Proceso', 'Cancelado', 'Entregado' ]
 const CARGA_OPTIONS = [ 'Seco', 'Refrigerado', 'Congelado', 'Técnico' ]
@@ -32,6 +33,7 @@ export default function LoadDetail() {
   const [ships, setShips] = useState([])
   const [pallets, setPallets] = useState([])
   const [users, setUsers] = useState([])
+  const [consignees, setConsignees] = useState([])
   const [form, setForm] = useState({
     barco: '',
     entrega: [],
@@ -76,7 +78,11 @@ export default function LoadDetail() {
     fetch('/api/ships').then(r => r.json()).then(setShips).catch(() => {})
     fetch('/api/pallets').then(r => r.json()).then(setPallets).catch(() => {})
     fetch('/api/users').then(r => r.json()).then(setUsers).catch(() => {})
+    fetch('/api/consignees').then(r => r.json()).then(setConsignees).catch(() => {})
   }, [])
+
+  const role = getCurrentRole()
+  const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS)
 
   const submit = async () => {
     try {
@@ -94,7 +100,7 @@ export default function LoadDetail() {
         cash: !!form.cash,
         lancha: !!form.lancha,
         estado_viaje: form.estado_viaje,
-        modificado_por: 'Testing',
+        modificado_por: (getCurrentUser()?.name || 'Testing'),
       }
 
       const res = await fetch(`/api/loads/${id}`, {
@@ -130,9 +136,11 @@ export default function LoadDetail() {
       <div className="card-header">
         <h2 className="card-title">Detalle carga</h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="icon-button" onClick={() => setOpen(true)} title="Modificar">
-            <span className="material-symbols-outlined">edit</span>
-          </button>
+          {canManageLoads && (
+            <button className="icon-button" onClick={() => setOpen(true)} title="Modificar">
+              <span className="material-symbols-outlined">edit</span>
+            </button>
+          )}
           <button className="icon-button" onClick={() => navigate('/app/palets', { state: { createPalletForCarga: id } })} title="Crear palet">
             <span className="material-symbols-outlined">add_box</span>
           </button>
@@ -145,7 +153,7 @@ export default function LoadDetail() {
         <p><strong>Barco:</strong> {load.barco?.nombre_del_barco || '-'}</p>
         <p><strong>Entrega:</strong> {Array.isArray(load.entrega) ? load.entrega.join(', ') : ''}</p>
         <p><strong>Chofer:</strong> {load.chofer?.name || '-'}</p>
-        <p><strong>Consignatario:</strong> {load.consignatario?.name || '-'}</p>
+        <p><strong>Consignatario:</strong> {load.consignatario?.nombre || '-'}</p>
         <p><strong>Palets de carga:</strong> {totalPallets}</p>
         <p><strong>Estado viaje:</strong> {load.estado_viaje}</p>
         <p><strong>Fecha de carga:</strong> {formatDateLabel(load.fecha_de_carga)}{load.hora_de_carga ? `, ${load.hora_de_carga}` : ''}</p>
@@ -269,8 +277,8 @@ export default function LoadDetail() {
             <div className="label">Consignatario</div>
             <select className="input" value={form.consignatario} onChange={e => setForm({ ...form, consignatario: e.target.value })}>
               <option value="">Sin consignatario</option>
-              {users.filter(u => u.role === 'consignee').map(u => (
-                <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+              {consignees.map(c => (
+                <option key={c._id} value={c._id}>{c.nombre}{c.email ? ` (${c.email})` : ''}</option>
               ))}
             </select>
           </div>

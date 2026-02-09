@@ -5,6 +5,7 @@ import CardGrid from '../components/CardGrid.jsx'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { getCurrentRole, hasPermission, PERMISSIONS, getCurrentUser } from '../utils/roles.js'
 
 const TIPO_OPTIONS = [
   { label: 'Seco', value: 'Seco' },
@@ -45,6 +46,10 @@ export default function Pallets() {
   const [open, setOpen] = useState(false)
 
 const [form, setForm] = useState({ numero_palet: '', tipo: 'Seco', carga: '', productos: '' })
+
+  const role = getCurrentRole()
+  const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS)
+  const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -91,7 +96,7 @@ const [palletsListPageSize, setPalletsListPageSize] = useState(10)
       setSnack({ open: true, message: 'Número de palet, tipo y carga son obligatorios', type: 'error' })
         return
       }
-      const res = await fetch('/api/pallets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, creado_por: 'Testing' }) })
+      const res = await fetch('/api/pallets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, creado_por: (getCurrentUser()?.name || 'Testing') }) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setSnack({ open: true, message: err.error || 'Error creando palet', type: 'error' })
@@ -157,12 +162,16 @@ const latestPalletsPage = useMemo(() => {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <input className="input" style={{ width: 280 }} placeholder="Buscar por número o tipo" value={query} onChange={e => setQuery(e.target.value)} />
-          <button className="icon-button" onClick={() => setOpen(true)} title="Crear palet">
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
-          <button className="icon-button" onClick={() => navigate('/app/logistica/cargas')} title="Crear carga">
-            <span className="material-symbols-outlined">add_business</span>
-          </button>
+          {canManagePallets && (
+            <button className="icon-button" onClick={() => setOpen(true)} title="Crear palet">
+              <span className="material-symbols-outlined">add_box</span>
+            </button>
+          )}
+          {canManageLoads && (
+            <button className="icon-button" onClick={() => navigate('/app/logistica/cargas')} title="Crear carga">
+              <span className="material-symbols-outlined">add_business</span>
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="icon-button" title="Vista tabla" onClick={() => setView('table')}>
@@ -178,9 +187,9 @@ const latestPalletsPage = useMemo(() => {
       </div>
 
       {view === 'table' ? (
-        <DataTable title="Palets" columns={columns} data={paginated} loading={loading} createLabel="Crear palet" onCreate={onCreate} onRowClick={goDetail} />
+        <DataTable title="Palets" columns={columns} data={paginated} loading={loading} createLabel={canManagePallets ? 'Crear palet' : undefined} onCreate={canManagePallets ? onCreate : undefined} onRowClick={goDetail} />
       ) : view === 'cards' ? (
-        <CardGrid title="Palets" items={paginated.map(i => ({ ...i, name: i.nombre || i.numero_palet, subtitle: i.tipo }))} loading={loading} onCreate={onCreate} createLabel="Crear palet" onCardClick={goDetail} />
+        <CardGrid title="Palets" items={paginated.map(i => ({ ...i, name: i.nombre || i.numero_palet, subtitle: i.tipo }))} loading={loading} onCreate={canManagePallets ? onCreate : undefined} createLabel={canManagePallets ? 'Crear palet' : undefined} onCardClick={goDetail} />
       ) : (
 
         <section style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16 }}>

@@ -5,6 +5,7 @@ import CardGrid from '../components/CardGrid.jsx'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { getCurrentUser } from '../utils/roles.js'
 
 export default function Ships() {
   const columns = [
@@ -57,7 +58,7 @@ export default function Ships() {
         setSnack({ open: true, message: 'El nombre del barco es obligatorio', type: 'error' })
         return
       }
-      const payload = { ...form, creado_por: 'Testing' }
+      const payload = { ...form, creado_por: (getCurrentUser()?.name || 'Testing') }
       const res = await fetch('/api/ships', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       })
@@ -171,7 +172,7 @@ export default function Ships() {
             setSnack({ open: true, message: 'El nombre es obligatorio', type: 'error' })
             return
           }
-          const res = await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...companyForm, creado_por: 'Testing' }) })
+          const res = await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...companyForm, creado_por: (getCurrentUser()?.name || 'Testing') }) })
           if (!res.ok) {
             const err = await res.json().catch(() => ({}))
             setSnack({ open: true, message: err.error || 'Error creando empresa', type: 'error' })
@@ -199,7 +200,7 @@ export default function Ships() {
           setSnack({ open: true, message: 'Nombre, email, contraseña y rol son obligatorios', type: 'error' })
           return
         }
-          const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, creado_por: 'Testing' }) })
+          const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, creado_por: (getCurrentUser()?.name || 'Testing') }) })
           if (!res.ok) {
             const err = await res.json().catch(() => ({}))
             setSnack({ open: true, message: err.error || 'Error creando usuario', type: 'error' })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import { getCurrentUser } from '../utils/roles.js'
 
 export default function CompanyDetail() {
   const { id } = useParams()
@@ -20,9 +20,7 @@ export default function CompanyDetail() {
 
   const submit = async () => {
     try {
-      const res = await fetch(`/api/companies/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: 'Testing' })
-      })
+      const res = await fetch(`/api/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: (getCurrentUser()?.name || 'Testing') }) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setSnack({ open: true, message: err.error || 'Error actualizando empresa', type: 'error' })

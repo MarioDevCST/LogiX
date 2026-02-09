@@ -5,6 +5,7 @@ import CardGrid from '../components/CardGrid.jsx'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { getCurrentUser } from '../utils/roles.js'
 
 export default function Locations() {
   const columns = [
@@ -38,7 +39,7 @@ export default function Locations() {
 
   const submit = async () => {
     try {
-      const res = await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const res = await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, creado_por: (getCurrentUser()?.name || 'Testing') }) })
       if (!res.ok) throw new Error('Error al crear localización')
       const created = await res.json()
       setRows(rows => [{ id: created._id, nombre: created.nombre || '', ciudad: created.ciudad || '', puerto: created.puerto || '', coordenadas: created.coordenadas || '' }, ...rows])

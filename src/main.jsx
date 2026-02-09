@@ -18,6 +18,8 @@ import LoadDetail from './pages/LoadDetail.jsx'
 import Pallets from './pages/Pallets.jsx'
 import PalletDetail from './pages/PalletDetail.jsx'
 import './index.css'
+import Consignees from './pages/Consignees.jsx'
+import ConsigneeDetail from './pages/ConsigneeDetail.jsx'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -30,6 +32,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Administración */}
           <Route path="admin/usuarios" element={<Users />} />
           <Route path="admin/usuarios/:id" element={<UserDetail />} />
+          <Route path="admin/consignatarios" element={<Consignees />} />
+          <Route path="admin/consignatarios/:id" element={<ConsigneeDetail />} />
           <Route path="admin/barcos" element={<Ships />} />
           <Route path="admin/barcos/:id" element={<ShipDetail />} />
           <Route path="admin/empresas" element={<Companies />} />

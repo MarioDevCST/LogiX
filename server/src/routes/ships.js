@@ -33,10 +33,20 @@ router.post('/', async (req, res) => {
   try {
     const { nombre_del_barco, empresa, responsable, tipo, creado_por } = req.body
     if (!nombre_del_barco) return res.status(400).json({ error: 'nombre_del_barco es obligatorio' })
-    const created = await Ship.create({ nombre_del_barco, empresa, responsable, tipo, creado_por: creado_por || 'Testing' })
+    
+    const payload = {
+      nombre_del_barco,
+      empresa: empresa || undefined,
+      responsable: responsable || undefined,
+      tipo,
+      creado_por: creado_por || 'Testing'
+    }
+
+    const created = await Ship.create(payload)
     res.status(201).json(created)
   } catch (err) {
-    res.status(500).json({ error: 'Error creando barco' })
+    console.error('Error creando barco:', err)
+    res.status(500).json({ error: 'Error creando barco: ' + err.message })
   }
 })
 
@@ -45,15 +55,25 @@ router.put('/:id', async (req, res) => {
   try {
     const { nombre_del_barco, empresa, responsable, tipo, modificado_por } = req.body
     if (!modificado_por) return res.status(400).json({ error: 'modificado_por es obligatorio' })
+    
+    const payload = {
+      nombre_del_barco,
+      empresa: empresa || undefined,
+      responsable: responsable || undefined,
+      tipo,
+      modificado_por
+    }
+
     const updated = await Ship.findByIdAndUpdate(
       req.params.id,
-      { $set: { nombre_del_barco, empresa, responsable, tipo, modificado_por } },
+      { $set: payload },
       { new: true, runValidators: true }
     )
     if (!updated) return res.status(404).json({ error: 'Barco no encontrado' })
     res.json(updated)
   } catch (err) {
-    res.status(500).json({ error: 'Error actualizando barco' })
+    console.error('Error actualizando barco:', err)
+    res.status(500).json({ error: 'Error actualizando barco: ' + err.message })
   }
 })
 

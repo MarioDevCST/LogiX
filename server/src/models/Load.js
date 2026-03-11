@@ -13,6 +13,7 @@ const LoadSchema = new mongoose.Schema({
   palets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Pallet' }],
   carga: [{ type: String, enum: ['Seco', 'Refrigerado', 'Congelado', 'Técnico'] }],
   consignatario: { type: mongoose.Schema.Types.ObjectId, ref: 'Consignee' },
+  terminal_entrega: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
   cash: { type: Boolean, default: false },
   lancha: { type: Boolean, default: false },
   estado_viaje: { type: String, enum: ['Preparando', 'En Proceso', 'Cancelado', 'Entregado'], default: 'Preparando' },

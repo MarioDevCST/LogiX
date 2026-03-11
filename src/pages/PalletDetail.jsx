@@ -9,13 +9,13 @@ export default function PalletDetail() {
   const navigate = useNavigate()
   const [pallet, setPallet] = useState(null)
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ numero_palet: '', tipo: 'Seco' })
+  const [form, setForm] = useState({ numero_palet: '', tipo: 'Seco', base: 'Europeo' })
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
 
   useEffect(() => {
     fetch(`/api/pallets/${id}`).then(r => r.json()).then(p => {
       setPallet(p)
-      setForm({ numero_palet: p.numero_palet || '', tipo: p.tipo || 'Seco' })
+      setForm({ numero_palet: p.numero_palet || '', tipo: p.tipo || 'Seco', base: p.base || 'Europeo' })
     }).catch(() => {})
   }, [id])
 
@@ -82,6 +82,7 @@ export default function PalletDetail() {
         <p><strong>Nombre:</strong> {pallet.nombre || '-'}</p>
         <p><strong>Número de palet:</strong> {pallet.numero_palet}</p>
         <p><strong>Tipo:</strong> {pallet.tipo}</p>
+        <p><strong>Base:</strong> {pallet.base || '-'}</p>
         <p><strong>Carga:</strong> {typeof pallet.carga === 'object' ? (pallet.carga?.nombre || '-') : pallet.carga}</p>
         <p><strong>Productos:</strong> {pallet.productos ? pallet.productos : '-'}</p>
         <p><strong>Creado:</strong> {pallet.createdAt ? new Date(pallet.createdAt).toLocaleString('es-ES') : '-'}</p>
@@ -100,6 +101,13 @@ export default function PalletDetail() {
             <option value="Refrigerado">Refrigerado</option>
             <option value="Congelado">Congelado</option>
             <option value="Técnico">Técnico</option>
+          </select>
+        </div>
+        <div>
+          <div className="label">Base</div>
+          <select className="select" value={form.base || 'Europeo'} onChange={e => setForm({ ...form, base: e.target.value })}>
+            <option value="Europeo">Europeo</option>
+            <option value="Americano">Americano</option>
           </select>
         </div>
       </Modal>

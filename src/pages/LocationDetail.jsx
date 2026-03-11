@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import { getCurrentUser } from '../utils/roles.js'
 

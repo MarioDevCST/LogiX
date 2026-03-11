@@ -256,6 +256,28 @@ body {
 .sidebar.collapsed .nav-label { display: none; }
 .sidebar.collapsed .nav-item { justify-content: center; }
 
+.tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.tab-button {
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.tab-button.active {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

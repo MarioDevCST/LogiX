@@ -1,59 +1,61 @@
-import { Router } from 'express'
-import Load from '../models/Load.js'
-import Ship from '../models/Ship.js'
-import Pallet from '../models/Pallet.js'
+import { Router } from "express";
+import Load from "../models/Load.js";
+import Ship from "../models/Ship.js";
+import Pallet from "../models/Pallet.js";
 
-const router = Router()
+const router = Router();
 
 // Lista de cargas (populate de barco)
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const list = await Load.find()
-      .populate('barco', 'nombre_del_barco')
-      .populate('chofer', 'name')
-      .populate('consignatario', 'nombre email telefono')
-      .populate('palets', 'numero_palet')
-    res.json(list)
+      .populate("barco", "nombre_del_barco")
+      .populate("chofer", "name")
+      .populate("consignatario", "nombre email telefono")
+      .populate("terminal_entrega", "nombre puerto ciudad")
+      .populate("palets", "numero_palet");
+    res.json(list);
   } catch (err) {
-    res.status(500).json({ error: 'Error obteniendo cargas' })
+    res.status(500).json({ error: "Error obteniendo cargas" });
   }
-})
+});
 
 // Detalle de carga
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const item = await Load.findById(req.params.id)
-      .populate('barco', 'nombre_del_barco')
-      .populate('chofer', 'name')
-      .populate('consignatario', 'nombre email telefono')
-      .populate('palets')
-    if (!item) return res.status(404).json({ error: 'Carga no encontrada' })
+      .populate("barco", "nombre_del_barco")
+      .populate("chofer", "name")
+      .populate("consignatario", "nombre email telefono")
+      .populate("terminal_entrega", "nombre puerto ciudad")
+      .populate("palets");
+    if (!item) return res.status(404).json({ error: "Carga no encontrada" });
 
     // Unificar palets provenientes del array Load.palets y los encontrados por la relación Pallet.carga
-    const byArray = Array.isArray(item.palets) ? item.palets : []
-    const byRelation = await Pallet.find({ carga: item._id })
-    const map = new Map()
-    ;[...byArray, ...byRelation].forEach(p => map.set(String(p._id), p))
-    item.palets = Array.from(map.values())
+    const byArray = Array.isArray(item.palets) ? item.palets : [];
+    const byRelation = await Pallet.find({ carga: item._id });
+    const map = new Map();
+    [...byArray, ...byRelation].forEach((p) => map.set(String(p._id), p));
+    item.palets = Array.from(map.values());
 
-    res.json(item)
+    res.json(item);
   } catch (err) {
-    res.status(500).json({ error: 'Error obteniendo carga' })
+    res.status(500).json({ error: "Error obteniendo carga" });
   }
-})
+});
 
 function isoDateOnly(value) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 // Crear carga (soporta múltiples valores en entrega y carga, calcula nombre y lancha)
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const {
       fecha_de_carga,
@@ -66,19 +68,25 @@ router.post('/', async (req, res) => {
       palets,
       carga,
       consignatario,
+      terminal_entrega,
       cash,
       estado_viaje,
       creado_por,
       lancha,
-    } = req.body
+    } = req.body;
 
-    const entregaArr = Array.isArray(entrega) ? entrega : entrega ? [entrega] : []
-    const cargaArr = Array.isArray(carga) ? carga : carga ? [carga] : []
+    const entregaArr = Array.isArray(entrega)
+      ? entrega
+      : entrega
+      ? [entrega]
+      : [];
+    const cargaArr = Array.isArray(carga) ? carga : carga ? [carga] : [];
 
-    let nombre = ''
+    let nombre = "";
     if (barco && fecha_de_carga) {
-      const ship = await Ship.findById(barco).select('nombre_del_barco')
-      if (ship) nombre = `${ship.nombre_del_barco} - ${isoDateOnly(fecha_de_carga)}`
+      const ship = await Ship.findById(barco).select("nombre_del_barco");
+      if (ship)
+        nombre = `${ship.nombre_del_barco} - ${isoDateOnly(fecha_de_carga)}`;
     }
 
     const payload = {
@@ -87,33 +95,35 @@ router.post('/', async (req, res) => {
       hora_de_carga,
       fecha_de_descarga,
       hora_de_descarga,
-      barco,
+      barco: barco || undefined,
       entrega: entregaArr,
-      chofer,
+      chofer: chofer || undefined,
       palets,
       carga: cargaArr,
-      consignatario,
+      consignatario: consignatario || undefined,
+      terminal_entrega: terminal_entrega || undefined,
       cash,
       estado_viaje,
       lancha: !!lancha,
-      creado_por: creado_por || 'Testing',
-    }
+      creado_por: creado_por || "Testing",
+    };
 
-    const created = await Load.create(payload)
+    const created = await Load.create(payload);
     const populated = await created.populate([
-      { path: 'barco' },
-      { path: 'chofer', select: 'name email role' },
-      { path: 'consignatario', select: 'nombre email telefono' },
-      { path: 'palets' },
-    ])
-    res.status(201).json(populated)
+      { path: "barco" },
+      { path: "chofer", select: "name email role" },
+      { path: "consignatario", select: "nombre email telefono" },
+      { path: "terminal_entrega", select: "nombre puerto ciudad" },
+      { path: "palets" },
+    ]);
+    res.status(201).json(populated);
   } catch (err) {
-    res.status(500).json({ error: 'Error creando carga' })
+    res.status(500).json({ error: "Error creando carga" });
   }
-})
+});
 
 // Actualizar carga (recalcula nombre si cambian barco o fecha)
-router.put('/:id', async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const {
       fecha_de_carga,
@@ -126,27 +136,40 @@ router.put('/:id', async (req, res) => {
       palets,
       carga,
       consignatario,
+      terminal_entrega,
       cash,
       estado_viaje,
       modificado_por,
       lancha,
-    } = req.body
+    } = req.body;
 
-    if (!modificado_por) return res.status(400).json({ error: 'modificado_por es obligatorio' })
+    if (!modificado_por)
+      return res.status(400).json({ error: "modificado_por es obligatorio" });
 
-    const current = await Load.findById(req.params.id)
-    if (!current) return res.status(404).json({ error: 'Carga no encontrada' })
+    const current = await Load.findById(req.params.id);
+    if (!current) return res.status(404).json({ error: "Carga no encontrada" });
 
-    const entregaArr = Array.isArray(entrega) ? entrega : entrega ? [entrega] : current.entrega
-    const cargaArr = Array.isArray(carga) ? carga : carga ? [carga] : current.carga
+    const entregaArr = Array.isArray(entrega)
+      ? entrega
+      : entrega
+      ? [entrega]
+      : current.entrega;
+    const cargaArr = Array.isArray(carga)
+      ? carga
+      : carga
+      ? [carga]
+      : current.carga;
 
-    const nextBarco = typeof barco !== 'undefined' ? barco : current.barco
-    const nextFecha = typeof fecha_de_carga !== 'undefined' ? fecha_de_carga : current.fecha_de_carga
+    const nextBarco = typeof barco !== "undefined" ? barco : current.barco;
+    const nextFecha =
+      typeof fecha_de_carga !== "undefined"
+        ? fecha_de_carga
+        : current.fecha_de_carga;
 
-    let nombre = current.nombre
+    let nombre = current.nombre;
     if (nextBarco && nextFecha) {
-      const ship = await Ship.findById(nextBarco).select('nombre_del_barco')
-      if (ship) nombre = `${ship.nombre_del_barco} - ${isoDateOnly(nextFecha)}`
+      const ship = await Ship.findById(nextBarco).select("nombre_del_barco");
+      if (ship) nombre = `${ship.nombre_del_barco} - ${isoDateOnly(nextFecha)}`;
     }
 
     const updated = await Load.findByIdAndUpdate(
@@ -160,41 +183,43 @@ router.put('/:id', async (req, res) => {
           hora_de_descarga,
           barco,
           entrega: entregaArr,
-          chofer,
+          chofer: chofer || undefined,
           palets,
           carga: cargaArr,
-          consignatario,
+          consignatario: consignatario || undefined,
+          terminal_entrega: terminal_entrega || undefined,
           cash,
           estado_viaje,
-          lancha: typeof lancha !== 'undefined' ? !!lancha : current.lancha,
+          lancha: typeof lancha !== "undefined" ? !!lancha : current.lancha,
           modificado_por,
         },
       },
       { new: true, runValidators: true }
-    )
+    );
 
     const populated = await updated.populate([
-      { path: 'barco' },
-      { path: 'chofer', select: 'name email role' },
-      { path: 'consignatario', select: 'nombre email telefono' },
-      { path: 'palets' },
-    ])
+      { path: "barco" },
+      { path: "chofer", select: "name email role" },
+      { path: "consignatario", select: "nombre email telefono" },
+      { path: "terminal_entrega", select: "nombre puerto ciudad" },
+      { path: "palets" },
+    ]);
 
-    res.json(populated)
+    res.json(populated);
   } catch (err) {
-    res.status(500).json({ error: 'Error actualizando carga' })
+    res.status(500).json({ error: "Error actualizando carga" });
   }
-})
+});
 
 // Eliminar carga
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Load.findByIdAndDelete(req.params.id)
-    if (!deleted) return res.status(404).json({ error: 'Carga no encontrada' })
-    res.json({ ok: true })
+    const deleted = await Load.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Carga no encontrada" });
+    res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Error eliminando carga' })
+    res.status(500).json({ error: "Error eliminando carga" });
   }
-})
+});
 
-export default router
+export default router;

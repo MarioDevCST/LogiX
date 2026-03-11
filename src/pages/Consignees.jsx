@@ -29,6 +29,35 @@ export default function Consignees() {
   const [pageSize, setPageSize] = useState(10)
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
 
+  const startEdit = async (id) => {
+    try {
+      const res = await fetch(`/api/consignees/${id}`)
+      if (!res.ok) return
+      const c = await res.json()
+      setEditingId(id)
+      setEditForm({ nombre: c.nombre || '' })
+      setOpenEdit(true)
+    } catch (e) {
+      setSnack({ open: true, message: 'Error de red cargando consignatario', type: 'error' })
+    }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Seguro que deseas borrar este consignatario?')) return
+    try {
+      const res = await fetch(`/api/consignees/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSnack({ open: true, message: err.error || 'Error borrando consignatario', type: 'error' })
+        return
+      }
+      setRows(prev => prev.filter(r => r.id !== id))
+      setSnack({ open: true, message: 'Consignatario borrado', type: 'success' })
+    } catch (e) {
+      setSnack({ open: true, message: 'Error de red borrando consignatario', type: 'error' })
+    }
+  }
+
   useEffect(() => {
     setLoading(true)
     fetch('/api/consignees').then(r => r.json()).then(list => {
@@ -49,33 +78,6 @@ export default function Consignees() {
       setRows(mapped)
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
-
-  const startEdit = async (id) => {
-    try {
-      const res = await fetch(`/api/consignees/${id}`)
-      if (!res.ok) return
-      const c = await res.json()
-      setEditingId(id)
-      setEditForm({ nombre: c.nombre || '' })
-      setOpenEdit(true)
-    } catch (e) {}
-  }
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Seguro que deseas borrar este consignatario?')) return
-    try {
-      const res = await fetch(`/api/consignees/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error borrando consignatario', type: 'error' })
-        return
-      }
-      setRows(prev => prev.filter(r => r.id !== id))
-      setSnack({ open: true, message: 'Consignatario borrado', type: 'success' })
-    } catch (e) {
-      setSnack({ open: true, message: 'Error de red borrando consignatario', type: 'error' })
-    }
-  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

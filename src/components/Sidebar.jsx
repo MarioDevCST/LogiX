@@ -29,6 +29,10 @@ export default function Sidebar({ collapsed }) {
               <span className="nav-label">Barcos</span>
             </NavLink>
             {/* Ocultamos Empresas y Localizaciones para almacén */}
+            <NavLink to="/app/admin/mensajes" title="Mensajes" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon material-symbols-outlined">mail</span>
+              <span className="nav-label">Mensajes</span>
+            </NavLink>
           </>
         ) : (
           <>
@@ -36,10 +40,10 @@ export default function Sidebar({ collapsed }) {
               <span className="nav-icon material-symbols-outlined">group</span>
               <span className="nav-label">Usuarios</span>
             </NavLink>
-+           <NavLink to="/app/admin/consignatarios" title="Consignatarios" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-+             <span className="nav-icon material-symbols-outlined">person_pin_circle</span>
-+             <span className="nav-label">Consignatarios</span>
-+           </NavLink>
+            <NavLink to="/app/admin/colecciones" title="Colecciones" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon material-symbols-outlined">dataset</span>
+              <span className="nav-label">Colecciones</span>
+            </NavLink>
             <NavLink to="/app/admin/barcos" title="Barcos" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
               <span className="nav-icon material-symbols-outlined">sailing</span>
               <span className="nav-label">Barcos</span>
@@ -48,9 +52,9 @@ export default function Sidebar({ collapsed }) {
               <span className="nav-icon material-symbols-outlined">business</span>
               <span className="nav-label">Empresas</span>
             </NavLink>
-            <NavLink to="/app/admin/localizaciones" title="Localizaciones" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <span className="nav-icon material-symbols-outlined">location_on</span>
-              <span className="nav-label">Localizaciones</span>
+            <NavLink to="/app/admin/mensajes" title="Mensajes" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon material-symbols-outlined">mail</span>
+              <span className="nav-label">Mensajes</span>
             </NavLink>
           </>
         )}

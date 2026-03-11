@@ -25,7 +25,6 @@ export default function Locations() {
   const [pageSize, setPageSize] = useState(10)
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
   const mapsEnabled = import.meta.env.VITE_FEATURE_MAPS === 'enabled'
-  const hasMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
   useEffect(() => {
     setLoading(true)

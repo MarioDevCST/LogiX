@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable from "../components/DataTable.jsx";
 import CardGrid from "../components/CardGrid.jsx";
@@ -23,24 +23,27 @@ const CARGA_OPTIONS = ["Seco", "Refrigerado", "Congelado", "Técnico"];
 const ENTREGA_OPTIONS = ["Provisión", "Alimentación", "Repuesto", "Técnico"];
 
 export default function Loads() {
-  const columns = [
-    { key: "nombre", header: "Nombre" },
-    { key: "barco", header: "Barco" },
-    { key: "entrega", header: "Entrega" },
-    { key: "chofer", header: "Chofer" },
-    { key: "consignatario", header: "Consignatario" },
-    { key: "terminal_entrega", header: "Terminal entrega" },
-    { key: "carga", header: "Tipo de carga" },
-    { key: "total_palets", header: "Palets" },
-    { key: "estado_viaje", header: "Estado viaje" },
-    { key: "cash", header: "Cash" },
-    { key: "lancha", header: "Lancha" },
-    { key: "fecha_de_carga", header: "Fecha de carga" },
-    { key: "hora_de_carga", header: "Hora de carga" },
-    { key: "fecha_de_descarga", header: "Fecha de descarga" },
-    { key: "hora_de_descarga", header: "Hora de descarga" },
-    { key: "estado_carga", header: "Carga completa" },
-  ];
+  const allColumns = useMemo(
+    () => [
+      { key: "nombre", header: "Nombre" },
+      { key: "barco", header: "Barco" },
+      { key: "entrega", header: "Entrega" },
+      { key: "chofer", header: "Chofer" },
+      { key: "consignatario", header: "Consignatario" },
+      { key: "terminal_entrega", header: "Terminal entrega" },
+      { key: "carga", header: "Tipo de carga" },
+      { key: "total_palets", header: "Palets" },
+      { key: "estado_viaje", header: "Estado viaje" },
+      { key: "cash", header: "Cash" },
+      { key: "lancha", header: "Lancha" },
+      { key: "fecha_de_carga", header: "Fecha de carga" },
+      { key: "hora_de_carga", header: "Hora de carga" },
+      { key: "fecha_de_descarga", header: "Fecha de descarga" },
+      { key: "hora_de_descarga", header: "Hora de descarga" },
+      { key: "estado_carga", header: "Carga completa" },
+    ],
+    []
+  );
 
   const navigate = useNavigate();
   const [view, setView] = useState("table");
@@ -81,6 +84,44 @@ export default function Loads() {
   const [entregaFilter, setEntregaFilter] = useState("");
   const [barcoFilter, setBarcoFilter] = useState("");
   const [groupBy, setGroupBy] = useState("none");
+  const columnsMenuRef = useRef(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const allColumnKeys = useMemo(
+    () => allColumns.map((c) => c.key),
+    [allColumns]
+  );
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => {
+    try {
+      const raw = localStorage.getItem("loads_table_columns");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {
+      void e;
+    }
+    return allColumnKeys;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "loads_table_columns",
+        JSON.stringify(visibleColumnKeys)
+      );
+    } catch {
+      return;
+    }
+  }, [visibleColumnKeys]);
+
+  useEffect(() => {
+    if (!columnsOpen) return undefined;
+    const onDown = (e) => {
+      const el = columnsMenuRef.current;
+      if (!el) return;
+      if (el.contains(e.target)) return;
+      setColumnsOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [columnsOpen]);
 
   // mes de calendario
   const [calMonth, setCalMonth] = useState(() => new Date());
@@ -381,6 +422,27 @@ export default function Loads() {
     return `${dd}/${mm}/${yyyy}`;
   };
 
+  const toIsoDateKey = (d) => {
+    if (!d) return "";
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "";
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yyyy = date.getFullYear();
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const parseIsoDateKey = (key) => {
+    const m = String(key || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const d = new Date(yyyy, mm - 1, dd);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  };
+
   // Derivar filas con todos los campos y conteo correcto de palets
   const rows = useMemo(() => {
     return loadDocs.map((l) => {
@@ -413,9 +475,12 @@ export default function Loads() {
         lancha: l.lancha ? "Sí" : "No",
         fecha_de_carga: formatDate(l.fecha_de_carga),
         fecha_de_carga_raw: l.fecha_de_carga,
+        fecha_de_carga_group: toIsoDateKey(l.fecha_de_carga) || "Sin fecha",
         hora_de_carga: l.hora_de_carga || "",
         fecha_de_descarga: formatDate(l.fecha_de_descarga),
         fecha_de_descarga_raw: l.fecha_de_descarga,
+        fecha_de_descarga_group:
+          toIsoDateKey(l.fecha_de_descarga) || "Sin fecha",
         hora_de_descarga: l.hora_de_descarga || "",
         estado_carga: l.estado_carga ? "Sí" : "No",
       };
@@ -444,6 +509,56 @@ export default function Loads() {
     const end = start + pageSize;
     return filtered.slice(start, end);
   }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setVisibleColumnKeys((prev) => {
+      const next = prev.filter((k) => allColumnKeys.includes(k));
+      const ensured = next.length > 0 ? next : [allColumnKeys[0]];
+      if (
+        ensured.length === prev.length &&
+        ensured.every((k, i) => k === prev[i])
+      ) {
+        return prev;
+      }
+      return ensured;
+    });
+  }, [allColumnKeys]);
+
+  const toggleColumnKey = (key) => {
+    setVisibleColumnKeys((prev) => {
+      const exists = prev.includes(key);
+      if (exists && prev.length === 1) return prev;
+      if (exists) return prev.filter((k) => k !== key);
+      return [...prev, key];
+    });
+  };
+
+  const tableColumns = useMemo(() => {
+    const keySet = new Set(visibleColumnKeys);
+    const cols = allColumns.filter((c) => keySet.has(c.key));
+    return cols.length > 0 ? cols : [allColumns[0]];
+  }, [allColumns, visibleColumnKeys]);
+
+  const groupLabel = useMemo(() => {
+    if (
+      groupBy !== "fecha_de_carga_group" &&
+      groupBy !== "fecha_de_descarga_group"
+    ) {
+      return undefined;
+    }
+    return (key) => {
+      const k = String(key || "");
+      if (!k || k === "(Sin valor)" || k === "Sin fecha") return "Sin fecha";
+      const d = parseIsoDateKey(k);
+      if (!d) return k;
+      return new Intl.DateTimeFormat("es-ES", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "2-digit",
+      }).format(d);
+    };
+  }, [groupBy]);
 
   useEffect(() => {
     setPage(1);
@@ -521,7 +636,114 @@ export default function Loads() {
             <option value="none">Sin agrupación</option>
             <option value="barco">Agrupar por barco</option>
             <option value="estado_viaje">Agrupar por estado</option>
+            <option value="fecha_de_carga_group">
+              Agrupar por fecha de carga
+            </option>
+            <option value="fecha_de_descarga_group">
+              Agrupar por fecha de descarga
+            </option>
           </select>
+          {view === "table" && (
+            <div ref={columnsMenuRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                title="Columnas"
+                onClick={() => setColumnsOpen((o) => !o)}
+                style={{
+                  height: 40,
+                  padding: "0 12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  background: "#fff",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span className="material-symbols-outlined">view_column</span>
+                Columnas
+              </button>
+              {columnsOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 44,
+                    width: 260,
+                    background: "#fff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 10,
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
+                    padding: 10,
+                    zIndex: 50,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>Columnas</div>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleColumnKeys(allColumnKeys)}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        color: "#2563eb",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Todas
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 6,
+                      maxHeight: 320,
+                      overflowY: "auto",
+                      paddingRight: 4,
+                    }}
+                  >
+                    {allColumns.map((c) => {
+                      const checked = visibleColumnKeys.includes(c.key);
+                      const disabled =
+                        checked && visibleColumnKeys.length === 1;
+                      return (
+                        <label
+                          key={c.key}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "6px 8px",
+                            borderRadius: 8,
+                            cursor: disabled ? "not-allowed" : "pointer",
+                            opacity: disabled ? 0.6 : 1,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleColumnKey(c.key)}
+                          />
+                          <span>{c.header}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             className="icon-button"
             title="Vista tabla"
@@ -573,10 +795,11 @@ export default function Loads() {
       {view === "table" ? (
         <DataTable
           title="Cargas"
-          columns={columns}
+          columns={tableColumns}
           data={paginated}
           loading={loading}
           groupBy={groupBy !== "none" ? groupBy : undefined}
+          groupLabel={groupLabel}
           createLabel={canManageLoads ? "Crear carga" : undefined}
           onCreate={canManageLoads ? onCreate : undefined}
           onRowClick={goDetail}

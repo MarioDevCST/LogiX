@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function DataTable({ title, columns = [], data = [], createLabel = 'Crear', onCreate, onRowClick, loading = false, groupBy }) {
+export default function DataTable({ title, columns = [], data = [], createLabel = 'Crear', onCreate, onRowClick, loading = false, groupBy, groupLabel }) {
   const grouped = React.useMemo(() => {
     if (!groupBy || loading) return null
     const map = new Map()
@@ -51,7 +51,7 @@ export default function DataTable({ title, columns = [], data = [], createLabel 
                 <React.Fragment key={group}>
                   <tr className="table-group">
                     <td colSpan={columns.length}>
-                      <strong>{group}</strong>
+                      <strong>{groupLabel ? groupLabel(group) : group}</strong>
                     </td>
                   </tr>
                   {rows.map((row, idx) => (

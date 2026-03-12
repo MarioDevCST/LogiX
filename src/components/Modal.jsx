@@ -1,7 +1,28 @@
-import React from 'react'
+import React from "react";
 
-export default function Modal({ open, title, children, onClose, onSubmit, submitLabel = 'Aceptar', width, bodyStyle }) {
-  if (!open) return null
+export default function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  onSubmit,
+  submitLabel = "Aceptar",
+  width,
+  bodyStyle,
+}) {
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [open]);
+
+  if (!open) return null;
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-card" style={width ? { width } : undefined}>
@@ -15,9 +36,11 @@ export default function Modal({ open, title, children, onClose, onSubmit, submit
           {children}
         </div>
         <div className="modal-footer">
-          <button className="primary-button" onClick={onSubmit}>{submitLabel}</button>
+          <button className="primary-button" onClick={onSubmit}>
+            {submitLabel}
+          </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

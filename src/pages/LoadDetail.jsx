@@ -39,6 +39,32 @@ function formatDateLabel(value) {
   }).format(d);
 }
 
+function parseNumeroPaletsInput(value) {
+  const raw = String(value || "");
+  const tokens = raw
+    .split(/[\s,;]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const out = [];
+  for (const tok of tokens) {
+    const match = tok.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (match) {
+      const a = Number(match[1]);
+      const b = Number(match[2]);
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        const start = Math.min(a, b);
+        const end = Math.max(a, b);
+        if (end - start <= 500) {
+          for (let n = start; n <= end; n += 1) out.push(String(n));
+          continue;
+        }
+      }
+    }
+    out.push(tok);
+  }
+  return Array.from(new Set(out));
+}
+
 export default function LoadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -70,6 +96,18 @@ export default function LoadDetail() {
     message: "",
     type: "success",
   });
+  const [openFuse, setOpenFuse] = useState(false);
+  const [fuseMode, setFuseMode] = useState("seleccion");
+  const [fuseTargetId, setFuseTargetId] = useState("");
+  const [fuseSourceIds, setFuseSourceIds] = useState([]);
+  const [fuseNumbers, setFuseNumbers] = useState("");
+  const [fuseSubmitting, setFuseSubmitting] = useState(false);
+  const [dragPalletId, setDragPalletId] = useState("");
+  const [dragPalletTipo, setDragPalletTipo] = useState("");
+  const [dragOverPalletId, setDragOverPalletId] = useState("");
+  const [openFuseDnD, setOpenFuseDnD] = useState(false);
+  const [fuseDnDSourceId, setFuseDnDSourceId] = useState("");
+  const [fuseDnDTargetId, setFuseDnDTargetId] = useState("");
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -123,6 +161,7 @@ export default function LoadDetail() {
 
   const role = getCurrentRole();
   const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS);
+  const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS);
 
   const submit = async () => {
     try {
@@ -182,6 +221,232 @@ export default function LoadDetail() {
     return acc;
   }, {});
 
+  const fuseTarget = palletsInLoad.find(
+    (p) => String(p._id) === String(fuseTargetId)
+  );
+  const fuseOthers = palletsInLoad.filter(
+    (p) => String(p._id) !== String(fuseTargetId)
+  );
+  const fuseParsedNumbers = parseNumeroPaletsInput(fuseNumbers);
+  const fuseMatchedByNumbers = palletsInLoad.filter(
+    (p) =>
+      fuseParsedNumbers.includes(String(p.numero_palet)) &&
+      String(p._id) !== String(fuseTargetId)
+  );
+  const fuseMissingNumbers = fuseParsedNumbers.filter(
+    (n) =>
+      !palletsInLoad.some(
+        (p) =>
+          String(p.numero_palet) === String(n) &&
+          String(p._id) !== String(fuseTargetId)
+      )
+  );
+
+  const openFuseModal = () => {
+    if (palletsInLoad.length < 2) {
+      setSnack({
+        open: true,
+        message: "Necesitas al menos 2 palets para fusionar",
+        type: "error",
+      });
+      return;
+    }
+    setFuseMode("seleccion");
+    setFuseNumbers("");
+    setFuseSourceIds([]);
+    setFuseTargetId(String(palletsInLoad[0]?._id || ""));
+    setOpenFuse(true);
+  };
+
+  const submitFuse = async () => {
+    if (fuseSubmitting) return;
+    const targetId = String(fuseTargetId || "");
+    if (!targetId) {
+      setSnack({
+        open: true,
+        message: "Selecciona un palet destino",
+        type: "error",
+      });
+      return;
+    }
+
+    const isSelectMode = fuseMode === "seleccion";
+    const sourceIds = isSelectMode ? fuseSourceIds : [];
+    const sourceNumbers = !isSelectMode ? fuseParsedNumbers : [];
+
+    if (isSelectMode && sourceIds.length === 0) {
+      setSnack({
+        open: true,
+        message: "Selecciona al menos un palet para fusionar",
+        type: "error",
+      });
+      return;
+    }
+    if (!isSelectMode && sourceNumbers.length === 0) {
+      setSnack({
+        open: true,
+        message: "Introduce números de palet para fusionar",
+        type: "error",
+      });
+      return;
+    }
+    if (!isSelectMode && fuseMissingNumbers.length > 0) {
+      setSnack({
+        open: true,
+        message: `Números no encontrados: ${fuseMissingNumbers.join(", ")}`,
+        type: "error",
+      });
+      return;
+    }
+    if (!window.confirm("¿Seguro que quieres fusionar estos palets?")) return;
+
+    try {
+      setFuseSubmitting(true);
+      const res = await fetch("/api/pallets/fuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: isSelectMode ? "ids" : "numbers",
+          targetPalletId: targetId,
+          sourcePalletIds: isSelectMode ? sourceIds : undefined,
+          sourcePalletNumbers: !isSelectMode ? sourceNumbers : undefined,
+          modificado_por: getCurrentUser()?.name || "Testing",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSnack({
+          open: true,
+          message: err.error || "Error fusionando palets",
+          type: "error",
+        });
+        return;
+      }
+
+      const loadRes = await fetch(`/api/loads/${id}`);
+      if (loadRes.ok) {
+        const l = await loadRes.json();
+        setLoad(l);
+        setForm({
+          barco: l.barco?._id || "",
+          entrega: Array.isArray(l.entrega) ? l.entrega : [],
+          chofer: l.chofer?._id || "",
+          consignatario: l.consignatario?._id || "",
+          terminal_entrega: l.terminal_entrega?._id || "",
+          palets: Array.isArray(l.palets) ? l.palets.map((p) => p._id) : [],
+          carga: Array.isArray(l.carga) ? l.carga : [],
+          fecha_de_carga: toDateInput(l.fecha_de_carga),
+          hora_de_carga: l.hora_de_carga || "",
+          fecha_de_descarga: toDateInput(l.fecha_de_descarga),
+          hora_de_descarga: l.hora_de_descarga || "",
+          cash: !!l.cash,
+          lancha: !!l.lancha,
+          estado_viaje: l.estado_viaje || "Preparando",
+        });
+      }
+
+      setOpenFuse(false);
+      setSnack({ open: true, message: "Palets fusionados", type: "success" });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: "Error de red fusionando palets",
+        type: "error",
+      });
+    } finally {
+      setFuseSubmitting(false);
+    }
+  };
+
+  const canDnDFuseTo = (targetPallet) => {
+    if (!dragPalletId) return false;
+    if (!targetPallet?._id) return false;
+    if (String(targetPallet._id) === String(dragPalletId)) return false;
+    return String(targetPallet.tipo || "") === String(dragPalletTipo || "");
+  };
+
+  const closeFuseDnD = () => {
+    setOpenFuseDnD(false);
+    setFuseDnDSourceId("");
+    setFuseDnDTargetId("");
+    setDragPalletId("");
+    setDragPalletTipo("");
+    setDragOverPalletId("");
+  };
+
+  const submitFuseDnD = async () => {
+    if (fuseSubmitting) return;
+    const targetId = String(fuseDnDTargetId || "");
+    const sourceId = String(fuseDnDSourceId || "");
+    if (!targetId || !sourceId) {
+      closeFuseDnD();
+      return;
+    }
+
+    try {
+      setFuseSubmitting(true);
+      const res = await fetch("/api/pallets/fuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "ids",
+          targetPalletId: targetId,
+          sourcePalletIds: [sourceId],
+          modificado_por: getCurrentUser()?.name || "Testing",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSnack({
+          open: true,
+          message: err.error || "Error fusionando palets",
+          type: "error",
+        });
+        return;
+      }
+
+      const loadRes = await fetch(`/api/loads/${id}`);
+      if (loadRes.ok) {
+        const l = await loadRes.json();
+        setLoad(l);
+        setForm({
+          barco: l.barco?._id || "",
+          entrega: Array.isArray(l.entrega) ? l.entrega : [],
+          chofer: l.chofer?._id || "",
+          consignatario: l.consignatario?._id || "",
+          terminal_entrega: l.terminal_entrega?._id || "",
+          palets: Array.isArray(l.palets) ? l.palets.map((p) => p._id) : [],
+          carga: Array.isArray(l.carga) ? l.carga : [],
+          fecha_de_carga: toDateInput(l.fecha_de_carga),
+          hora_de_carga: l.hora_de_carga || "",
+          fecha_de_descarga: toDateInput(l.fecha_de_descarga),
+          hora_de_descarga: l.hora_de_descarga || "",
+          cash: !!l.cash,
+          lancha: !!l.lancha,
+          estado_viaje: l.estado_viaje || "Preparando",
+        });
+      }
+
+      setSnack({ open: true, message: "Palets fusionados", type: "success" });
+      closeFuseDnD();
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: "Error de red fusionando palets",
+        type: "error",
+      });
+    } finally {
+      setFuseSubmitting(false);
+    }
+  };
+
+  const fuseDnDSource = palletsInLoad.find(
+    (p) => String(p._id) === String(fuseDnDSourceId)
+  );
+  const fuseDnDTarget = palletsInLoad.find(
+    (p) => String(p._id) === String(fuseDnDTargetId)
+  );
+
   return (
     <section className="card">
       <div className="card-header">
@@ -194,6 +459,15 @@ export default function LoadDetail() {
               title="Modificar"
             >
               <span className="material-symbols-outlined">edit</span>
+            </button>
+          )}
+          {canManagePallets && (
+            <button
+              className="icon-button"
+              onClick={openFuseModal}
+              title="Fusionar palets"
+            >
+              <span className="material-symbols-outlined">call_merge</span>
             </button>
           )}
           <button
@@ -215,44 +489,54 @@ export default function LoadDetail() {
         </div>
       </div>
       <div style={{ padding: 16 }}>
-        <p>
-          <strong>Barco:</strong> {load.barco?.nombre_del_barco || "-"}
-        </p>
-        <p>
-          <strong>Entrega:</strong>{" "}
-          {Array.isArray(load.entrega) ? load.entrega.join(", ") : ""}
-        </p>
-        <p>
-          <strong>Chofer:</strong> {load.chofer?.name || "-"}
-        </p>
-        <p>
-          <strong>Consignatario:</strong> {load.consignatario?.nombre || "-"}
-        </p>
-        <p>
-          <strong>Terminal entrega:</strong>{" "}
-          {(load.terminal_entrega?.puerto
-            ? `${load.terminal_entrega.puerto} · `
-            : "") + (load.terminal_entrega?.nombre || "-")}
-        </p>
-        <p>
-          <strong>Palets de carga:</strong> {totalPallets}
-        </p>
-        <p>
-          <strong>Estado viaje:</strong> {load.estado_viaje}
-        </p>
-        <p>
-          <strong>Fecha de carga:</strong>{" "}
-          {formatDateLabel(load.fecha_de_carga)}
-          {load.hora_de_carga ? `, ${load.hora_de_carga}` : ""}
-        </p>
-        <p>
-          <strong>Fecha de descarga:</strong>{" "}
-          {formatDateLabel(load.fecha_de_descarga)}
-          {load.hora_de_descarga ? `, ${load.hora_de_descarga}` : ""}
-        </p>
-        <p>
-          <strong>Cash:</strong> {load.cash ? "Sí" : "No"}
-        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            columnGap: 16,
+            rowGap: 6,
+            alignItems: "start",
+          }}
+        >
+          <div>
+            <strong>Barco:</strong> {load.barco?.nombre_del_barco || "-"}
+          </div>
+          <div>
+            <strong>Entrega:</strong>{" "}
+            {Array.isArray(load.entrega) ? load.entrega.join(", ") : ""}
+          </div>
+          <div>
+            <strong>Chofer:</strong> {load.chofer?.name || "-"}
+          </div>
+          <div>
+            <strong>Consignatario:</strong> {load.consignatario?.nombre || "-"}
+          </div>
+          <div>
+            <strong>Terminal entrega:</strong>{" "}
+            {(load.terminal_entrega?.puerto
+              ? `${load.terminal_entrega.puerto} · `
+              : "") + (load.terminal_entrega?.nombre || "-")}
+          </div>
+          <div>
+            <strong>Palets de carga:</strong> {totalPallets}
+          </div>
+          <div>
+            <strong>Estado viaje:</strong> {load.estado_viaje}
+          </div>
+          <div>
+            <strong>Fecha de carga:</strong>{" "}
+            {formatDateLabel(load.fecha_de_carga)}
+            {load.hora_de_carga ? `, ${load.hora_de_carga}` : ""}
+          </div>
+          <div>
+            <strong>Fecha de descarga:</strong>{" "}
+            {formatDateLabel(load.fecha_de_descarga)}
+            {load.hora_de_descarga ? `, ${load.hora_de_descarga}` : ""}
+          </div>
+          <div>
+            <strong>Cash:</strong> {load.cash ? "Sí" : "No"}
+          </div>
+        </div>
 
         {/* Resumen por tipo y listado de palets */}
         <div
@@ -309,58 +593,307 @@ export default function LoadDetail() {
                   Sin palets asociados
                 </div>
               ) : (
-                palletsInLoad.map((p) => (
-                  <div
-                    key={p._id}
-                    className="calendar-item"
-                    style={{
-                      padding: "10px 12px",
-                      minHeight: 56,
-                      marginBottom: 8,
-                      cursor: "pointer",
-                      background: "#f8fafc",
-                      borderLeft: "4px solid #9ca3af",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                    onClick={() => navigate(`/app/palets/${p._id}`)}
-                  >
+                palletsInLoad.map((p) => {
+                  const idStr = String(p._id);
+                  const isDragging = !!dragPalletId;
+                  const isSource = isDragging && idStr === String(dragPalletId);
+                  const isDroppable = isDragging && canDnDFuseTo(p);
+                  const isDisabled = isDragging && !isSource && !isDroppable;
+                  const isOver =
+                    isDroppable && idStr === String(dragOverPalletId);
+
+                  return (
                     <div
+                      key={p._id}
+                      className="calendar-item"
+                      draggable={canManagePallets}
                       style={{
+                        padding: "10px 12px",
+                        minHeight: 56,
+                        marginBottom: 8,
+                        cursor: isDragging
+                          ? isSource
+                            ? "grabbing"
+                            : isDroppable
+                            ? "copy"
+                            : "not-allowed"
+                          : "pointer",
+                        background: isOver ? "var(--hover)" : "#f8fafc",
+                        borderLeft: `4px solid ${
+                          isOver ? "var(--brand-blue)" : "#9ca3af"
+                        }`,
                         display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
+                        alignItems: "center",
+                        opacity: isDisabled ? 0.45 : 1,
+                        filter: isDisabled ? "grayscale(1)" : "none",
+                      }}
+                      onDragStart={(e) => {
+                        if (!canManagePallets) return;
+                        e.dataTransfer.effectAllowed = "copy";
+                        setDragPalletId(idStr);
+                        setDragPalletTipo(String(p.tipo || ""));
+                        setDragOverPalletId("");
+                      }}
+                      onDragEnd={() => {
+                        setDragPalletId("");
+                        setDragPalletTipo("");
+                        setDragOverPalletId("");
+                      }}
+                      onDragOver={(e) => {
+                        if (!canManagePallets) return;
+                        if (!canDnDFuseTo(p)) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                        if (dragOverPalletId !== idStr)
+                          setDragOverPalletId(idStr);
+                      }}
+                      onDrop={(e) => {
+                        if (!canManagePallets) return;
+                        if (!canDnDFuseTo(p)) return;
+                        e.preventDefault();
+                        setFuseDnDSourceId(String(dragPalletId));
+                        setFuseDnDTargetId(idStr);
+                        setOpenFuseDnD(true);
+                        setDragPalletId("");
+                        setDragPalletTipo("");
+                        setDragOverPalletId("");
+                      }}
+                      onClick={() => {
+                        if (dragPalletId) return;
+                        navigate(`/app/palets/${p._id}`);
                       }}
                     >
-                      <div style={{ fontSize: 18, lineHeight: "22px" }}>
-                        <strong>{p.nombre || p.numero_palet}</strong>
-                      </div>
-                      <div style={{ color: "var(--text-secondary)" }}>
-                        {p.tipo}
-                        {p.createdAt || p.fecha_creacion
-                          ? ` · ${formatDateLabel(
-                              p.createdAt || p.fecha_creacion
-                            )}`
-                          : ""}
-                      </div>
-                      {p.contenedor && (
-                        <div
-                          style={{
-                            marginTop: 4,
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          Contenedor: {p.contenedor}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <div style={{ fontSize: 18, lineHeight: "22px" }}>
+                          <strong>{p.nombre || p.numero_palet}</strong>
                         </div>
-                      )}
+                        <div style={{ color: "var(--text-secondary)" }}>
+                          {p.tipo}
+                          {p.createdAt || p.fecha_creacion
+                            ? ` · ${formatDateLabel(
+                                p.createdAt || p.fecha_creacion
+                              )}`
+                            : ""}
+                        </div>
+                        {p.contenedor && (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            Contenedor: {p.contenedor}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
         </div>
       </div>
+
+      <Modal
+        open={openFuseDnD}
+        title="Fusionar palets"
+        onClose={closeFuseDnD}
+        onSubmit={submitFuseDnD}
+        submitLabel="Fusionar"
+        width={520}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        <div style={{ fontSize: 16 }}>
+          ¿Desea fusionar los palets {fuseDnDSource?.numero_palet || "-"} y{" "}
+          {fuseDnDTarget?.numero_palet || "-"}?
+        </div>
+      </Modal>
+
+      <Modal
+        open={openFuse}
+        title="Fusionar palets"
+        onClose={() => setOpenFuse(false)}
+        onSubmit={submitFuse}
+        submitLabel="Fusionar"
+        width={720}
+        bodyStyle={{
+          gridTemplateColumns: "1fr",
+          maxHeight: "80vh",
+          overflow: "auto",
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={() => {
+              setFuseMode("seleccion");
+              setFuseNumbers("");
+              setFuseSourceIds([]);
+            }}
+            style={{
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: fuseMode === "seleccion" ? "var(--hover)" : "#fff",
+              cursor: "pointer",
+              fontWeight: fuseMode === "seleccion" ? 600 : 500,
+            }}
+          >
+            Selección
+          </button>
+          <button
+            onClick={() => {
+              setFuseMode("numeros");
+              setFuseSourceIds([]);
+            }}
+            style={{
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: fuseMode === "numeros" ? "var(--hover)" : "#fff",
+              cursor: "pointer",
+              fontWeight: fuseMode === "numeros" ? 600 : 500,
+            }}
+          >
+            Números
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 8 }}>
+          <div className="label">Palet destino</div>
+          <select
+            className="input"
+            value={fuseTargetId}
+            onChange={(e) => {
+              const nextTarget = e.target.value;
+              setFuseTargetId(nextTarget);
+              setFuseSourceIds((prev) =>
+                prev.filter((pid) => String(pid) !== String(nextTarget))
+              );
+            }}
+          >
+            {palletsInLoad.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.numero_palet}
+                {p.tipo ? ` · ${p.tipo}` : ""}
+                {p.base ? ` · ${p.base}` : ""}
+              </option>
+            ))}
+          </select>
+          <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+            {fuseTarget
+              ? `Destino: ${fuseTarget.numero_palet}${
+                  fuseTarget.tipo ? ` · ${fuseTarget.tipo}` : ""
+                }`
+              : ""}
+          </div>
+        </div>
+
+        {fuseMode === "seleccion" ? (
+          <div style={{ display: "grid", gap: 8 }}>
+            <div className="label">Palets a fusionar</div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={
+                  fuseOthers.length > 0 &&
+                  fuseSourceIds.length === fuseOthers.length
+                }
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setFuseSourceIds(fuseOthers.map((p) => String(p._id)));
+                  } else {
+                    setFuseSourceIds([]);
+                  }
+                }}
+              />
+              Seleccionar todos
+            </label>
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: 10,
+                maxHeight: "55vh",
+                overflowY: "scroll",
+                scrollbarGutter: "stable",
+                overscrollBehavior: "contain",
+                WebkitOverflowScrolling: "touch",
+                touchAction: "pan-y",
+              }}
+            >
+              {fuseOthers.map((p) => {
+                const checked = fuseSourceIds.some(
+                  (pid) => String(pid) === String(p._id)
+                );
+                return (
+                  <label
+                    key={p._id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      padding: "6px 0",
+                      borderBottom: "1px solid #f1f3f4",
+                    }}
+                  >
+                    <span
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setFuseSourceIds((prev) => {
+                            const next = new Set(prev.map((v) => String(v)));
+                            const idStr = String(p._id);
+                            if (isChecked) next.add(idStr);
+                            else next.delete(idStr);
+                            return Array.from(next);
+                          });
+                        }}
+                      />
+                      <span>
+                        {p.numero_palet}
+                        {p.tipo ? ` · ${p.tipo}` : ""}
+                        {p.base ? ` · ${p.base}` : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+              Seleccionados: {fuseSourceIds.length}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            <div className="label">Números de palet a fusionar</div>
+            <textarea
+              className="input"
+              style={{ height: 110, resize: "vertical" }}
+              placeholder="Ej: 12 13 14 o 12,13,14 o 12-20"
+              value={fuseNumbers}
+              onChange={(e) => setFuseNumbers(e.target.value)}
+            />
+            <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+              Encontrados: {fuseMatchedByNumbers.length}
+              {fuseMissingNumbers.length > 0
+                ? ` · No encontrados: ${fuseMissingNumbers.join(", ")}`
+                : ""}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={open}

@@ -40,12 +40,20 @@ body {
   text-align: center;
   padding: 40px;
 }
-.logo {
+.landing-logo-text {
   font-size: 48px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--brand-blue);
   margin-bottom: 12px;
+}
+.landing-logo-img {
+  display: block;
+  height: 88px;
+  width: auto;
+  max-width: min(520px, 90vw);
+  object-fit: contain;
+  margin: 0 auto 12px;
 }
 .landing-title {
   margin: 0 0 8px;
@@ -149,6 +157,38 @@ body {
   text-align: center;
 }
 
+/* Auth */
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-alt);
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 0;
+}
+.auth-logo-wrap {
+  padding: 24px 16px 8px;
+  display: flex;
+  justify-content: center;
+}
+.auth-logo {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
+}
+.auth-card-header {
+  justify-content: center;
+}
+.auth-form {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
 /* App layout */
 .header {
   height: 64px;
@@ -172,6 +212,12 @@ body {
 }
 .header-title {
   font-weight: 600;
+}
+.header-logo-img {
+  display: block;
+  height: 26px;
+  width: auto;
+  object-fit: contain;
 }
 .header .search {
   margin-left: auto;

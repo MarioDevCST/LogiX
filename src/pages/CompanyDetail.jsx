@@ -2,6 +2,22 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import { getCurrentUser } from '../utils/roles.js'
+import { fetchCompanyById, updateCompanyById } from '../firebase/auth.js'
+
+function toDate(value) {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value.toDate === 'function') return value.toDate()
+  if (typeof value.seconds === 'number') return new Date(value.seconds * 1000)
+  return null
+}
+
+function formatDateTime(value) {
+  const d = toDate(value)
+  if (!d) return '-'
+  return d.toLocaleString('es-ES')
+}
 
 export default function CompanyDetail() {
   const { id } = useParams()
@@ -12,28 +28,34 @@ export default function CompanyDetail() {
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
 
   useEffect(() => {
-    fetch(`/api/companies/${id}`).then(r => r.json()).then(c => {
-      setCompany(c)
-      setForm({ nombre: c.nombre || '' })
-    }).catch(() => {})
+    let mounted = true
+    const run = async () => {
+      try {
+        const c = await fetchCompanyById(id)
+        if (!mounted) return
+        setCompany(c)
+        setForm({ nombre: c?.nombre || '' })
+      } catch {
+        if (!mounted) return
+        setCompany(null)
+      }
+    }
+    run()
+    return () => { mounted = false }
   }, [id])
 
   const submit = async () => {
     try {
-      const res = await fetch(`/api/companies/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: 'Testing' })
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error actualizando empresa', type: 'error' })
+      const updated = await updateCompanyById(id, { ...form, modificado_por: (getCurrentUser()?.name || 'Testing') })
+      if (!updated) {
+        setSnack({ open: true, message: 'Empresa no encontrada', type: 'error' })
         return
       }
-      const updated = await res.json()
       setCompany(updated)
       setOpen(false)
       setSnack({ open: true, message: 'Empresa actualizada', type: 'success' })
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red actualizando empresa', type: 'error' })
+      setSnack({ open: true, message: 'Error actualizando empresa', type: 'error' })
     }
   }
 
@@ -54,7 +76,7 @@ export default function CompanyDetail() {
       </div>
       <div style={{ padding: 16 }}>
         <p><strong>Nombre:</strong> {company.nombre}</p>
-        <p><strong>Creación:</strong> {company.createdAt ? new Date(company.createdAt).toLocaleString() : '-'}</p>
+        <p><strong>Creación:</strong> {formatDateTime(company.createdAt || company.fecha_creacion)}</p>
       </div>
 
       <Modal open={open} title="Modificar empresa" onClose={() => setOpen(false)} onSubmit={submit} submitLabel="Guardar">

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import { getCurrentUser } from '../utils/roles.js'
+import { fetchShipById, updateShipById } from '../firebase/auth.js'
 
 export default function ShipDetail() {
   const { id } = useParams()
@@ -12,28 +14,34 @@ export default function ShipDetail() {
   const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
 
   useEffect(() => {
-    fetch(`/api/ships/${id}`).then(r => r.json()).then(s => {
-      setShip(s)
-      setForm({ nombre_del_barco: s.nombre_del_barco || '' })
-    }).catch(() => {})
+    let mounted = true
+    const run = async () => {
+      try {
+        const s = await fetchShipById(id)
+        if (!mounted) return
+        setShip(s)
+        setForm({ nombre_del_barco: s?.nombre_del_barco || '' })
+      } catch {
+        if (!mounted) return
+        setShip(null)
+      }
+    }
+    run()
+    return () => { mounted = false }
   }, [id])
 
   const submit = async () => {
     try {
-      const res = await fetch(`/api/ships/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, modificado_por: 'Testing' })
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error actualizando barco', type: 'error' })
+      const updated = await updateShipById(id, { ...form, modificado_por: (getCurrentUser()?.name || 'Testing') })
+      if (!updated) {
+        setSnack({ open: true, message: 'Barco no encontrado', type: 'error' })
         return
       }
-      const updated = await res.json()
       setShip(updated)
       setOpen(false)
       setSnack({ open: true, message: 'Barco actualizado', type: 'success' })
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red actualizando barco', type: 'error' })
+      setSnack({ open: true, message: 'Error actualizando barco', type: 'error' })
     }
   }
 
@@ -54,8 +62,8 @@ export default function ShipDetail() {
       </div>
       <div style={{ padding: 16 }}>
         <p><strong>Nombre:</strong> {ship.nombre_del_barco}</p>
-        <p><strong>Empresa:</strong> {ship.empresa?.nombre || '-'}</p>
-        <p><strong>Responsable:</strong> {ship.responsable?.name || '-'}</p>
+        <p><strong>Empresa:</strong> {ship.empresa_nombre || '-'}</p>
+        <p><strong>Responsable:</strong> {ship.responsable_nombre || '-'}</p>
       </div>
 
       <Modal open={open} title="Modificar barco" onClose={() => setOpen(false)} onSubmit={submit} submitLabel="Guardar">

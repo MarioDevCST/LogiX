@@ -8,6 +8,16 @@ import {
   PERMISSIONS,
   getCurrentUser,
 } from "../utils/roles.js";
+import {
+  fetchAllConsignees,
+  fetchAllLocations,
+  fetchAllPallets,
+  fetchAllShips,
+  fetchAllUsers,
+  fetchLoadById,
+  fusePallets,
+  updateLoadById,
+} from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
   "Preparando",
@@ -111,17 +121,20 @@ export default function LoadDetail() {
 
   // Carga detalle y precarga formulario
   useEffect(() => {
-    fetch(`/api/loads/${id}`)
-      .then((r) => r.json())
-      .then((l) => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        const l = await fetchLoadById(id);
+        if (!mounted) return;
         setLoad(l);
+        if (!l) return;
         setForm({
-          barco: l.barco?._id || "",
+          barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
-          chofer: l.chofer?._id || "",
-          consignatario: l.consignatario?._id || "",
-          terminal_entrega: l.terminal_entrega?._id || "",
-          palets: Array.isArray(l.palets) ? l.palets.map((p) => p._id) : [],
+          chofer: String(l.chofer || ""),
+          consignatario: String(l.consignatario || ""),
+          terminal_entrega: String(l.terminal_entrega || ""),
+          palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
           fecha_de_carga: toDateInput(l.fecha_de_carga),
           hora_de_carga: l.hora_de_carga || "",
@@ -131,32 +144,59 @@ export default function LoadDetail() {
           lancha: !!l.lancha,
           estado_viaje: l.estado_viaje || "Preparando",
         });
-      })
-      .catch(() => {});
+      } catch {
+        if (!mounted) return;
+        setLoad(null);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
   }, [id]);
 
   // Datos auxiliares para selects
   useEffect(() => {
-    fetch("/api/ships")
-      .then((r) => r.json())
-      .then(setShips)
-      .catch(() => {});
-    fetch("/api/pallets")
-      .then((r) => r.json())
-      .then(setPallets)
-      .catch(() => {});
-    fetch("/api/users")
-      .then((r) => r.json())
-      .then(setUsers)
-      .catch(() => {});
-    fetch("/api/consignees")
-      .then((r) => r.json())
-      .then(setConsignees)
-      .catch(() => {});
-    fetch("/api/locations")
-      .then((r) => r.json())
-      .then(setLocations)
-      .catch(() => {});
+    let mounted = true;
+    const run = async () => {
+      try {
+        const [
+          shipsList,
+          palletsList,
+          usersList,
+          consigneesList,
+          locationsList,
+        ] = await Promise.all([
+          fetchAllShips(),
+          fetchAllPallets(),
+          fetchAllUsers(),
+          fetchAllConsignees(),
+          fetchAllLocations(),
+        ]);
+        if (!mounted) return;
+        const normalize = (x) => ({
+          ...x,
+          _id: x?._id || x?.id,
+          id: x?.id || x?._id,
+        });
+        setShips(shipsList.map(normalize));
+        setPallets(palletsList.map(normalize));
+        setUsers(usersList.map(normalize));
+        setConsignees(consigneesList.map(normalize));
+        setLocations(locationsList.map(normalize));
+      } catch {
+        if (!mounted) return;
+        setShips([]);
+        setPallets([]);
+        setUsers([]);
+        setConsignees([]);
+        setLocations([]);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const role = getCurrentRole();
@@ -182,29 +222,23 @@ export default function LoadDetail() {
         estado_viaje: form.estado_viaje,
         modificado_por: getCurrentUser()?.name || "Testing",
       };
-
-      const res = await fetch(`/api/loads/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      const updated = await updateLoadById(id, payload);
+      if (!updated) {
         setSnack({
           open: true,
-          message: err.error || "Error actualizando carga",
+          message: "Error actualizando carga",
           type: "error",
         });
         return;
       }
-      const updated = await res.json();
       setLoad(updated);
       setOpen(false);
       setSnack({ open: true, message: "Carga actualizada", type: "success" });
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red actualizando carga",
+        message: msg || "Error de red actualizando carga",
         type: "error",
       });
     }
@@ -212,8 +246,25 @@ export default function LoadDetail() {
 
   if (!load) return <p>Cargando...</p>;
 
-  // Resumen de palets de esta carga
-  const palletsInLoad = Array.isArray(load.palets) ? load.palets : [];
+  const loadId = String(load?._id || load?.id || id || "");
+
+  const palletsInLoad = (() => {
+    const byRelation = pallets.filter(
+      (p) => String(p.carga?._id || p.carga) === String(loadId)
+    );
+    const byArrayIds = Array.isArray(load.palets)
+      ? load.palets.map((p) => String(p?._id || p?.id || p)).filter(Boolean)
+      : [];
+    const byId = new Map(
+      byRelation.map((p) => [String(p._id || p.id), p]).filter((p) => p[0])
+    );
+    byArrayIds.forEach((pid) => {
+      const found = pallets.find((p) => String(p._id || p.id) === String(pid));
+      if (found) byId.set(String(found._id || found.id), found);
+    });
+    return Array.from(byId.values());
+  })();
+
   const totalPallets = palletsInLoad.length;
   const tipoCounts = palletsInLoad.reduce((acc, p) => {
     const t = p.tipo || "Sin tipo";
@@ -302,38 +353,34 @@ export default function LoadDetail() {
 
     try {
       setFuseSubmitting(true);
-      const res = await fetch("/api/pallets/fuse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: isSelectMode ? "ids" : "numbers",
-          targetPalletId: targetId,
-          sourcePalletIds: isSelectMode ? sourceIds : undefined,
-          sourcePalletNumbers: !isSelectMode ? sourceNumbers : undefined,
-          modificado_por: getCurrentUser()?.name || "Testing",
-        }),
+      await fusePallets({
+        mode: isSelectMode ? "ids" : "numbers",
+        targetPalletId: targetId,
+        sourcePalletIds: isSelectMode ? sourceIds : undefined,
+        sourcePalletNumbers: !isSelectMode ? sourceNumbers : undefined,
+        modificado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSnack({
-          open: true,
-          message: err.error || "Error fusionando palets",
-          type: "error",
-        });
-        return;
-      }
 
-      const loadRes = await fetch(`/api/loads/${id}`);
-      if (loadRes.ok) {
-        const l = await loadRes.json();
-        setLoad(l);
+      const [l, palletsList] = await Promise.all([
+        fetchLoadById(id),
+        fetchAllPallets(),
+      ]);
+      setLoad(l);
+      setPallets(
+        palletsList.map((x) => ({
+          ...x,
+          _id: x?._id || x?.id,
+          id: x?.id || x?._id,
+        }))
+      );
+      if (l) {
         setForm({
-          barco: l.barco?._id || "",
+          barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
-          chofer: l.chofer?._id || "",
-          consignatario: l.consignatario?._id || "",
-          terminal_entrega: l.terminal_entrega?._id || "",
-          palets: Array.isArray(l.palets) ? l.palets.map((p) => p._id) : [],
+          chofer: String(l.chofer || ""),
+          consignatario: String(l.consignatario || ""),
+          terminal_entrega: String(l.terminal_entrega || ""),
+          palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
           fecha_de_carga: toDateInput(l.fecha_de_carga),
           hora_de_carga: l.hora_de_carga || "",
@@ -348,9 +395,10 @@ export default function LoadDetail() {
       setOpenFuse(false);
       setSnack({ open: true, message: "Palets fusionados", type: "success" });
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red fusionando palets",
+        message: msg || "Error de red fusionando palets",
         type: "error",
       });
     } finally {
@@ -385,37 +433,33 @@ export default function LoadDetail() {
 
     try {
       setFuseSubmitting(true);
-      const res = await fetch("/api/pallets/fuse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "ids",
-          targetPalletId: targetId,
-          sourcePalletIds: [sourceId],
-          modificado_por: getCurrentUser()?.name || "Testing",
-        }),
+      await fusePallets({
+        mode: "ids",
+        targetPalletId: targetId,
+        sourcePalletIds: [sourceId],
+        modificado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSnack({
-          open: true,
-          message: err.error || "Error fusionando palets",
-          type: "error",
-        });
-        return;
-      }
 
-      const loadRes = await fetch(`/api/loads/${id}`);
-      if (loadRes.ok) {
-        const l = await loadRes.json();
-        setLoad(l);
+      const [l, palletsList] = await Promise.all([
+        fetchLoadById(id),
+        fetchAllPallets(),
+      ]);
+      setLoad(l);
+      setPallets(
+        palletsList.map((x) => ({
+          ...x,
+          _id: x?._id || x?.id,
+          id: x?.id || x?._id,
+        }))
+      );
+      if (l) {
         setForm({
-          barco: l.barco?._id || "",
+          barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
-          chofer: l.chofer?._id || "",
-          consignatario: l.consignatario?._id || "",
-          terminal_entrega: l.terminal_entrega?._id || "",
-          palets: Array.isArray(l.palets) ? l.palets.map((p) => p._id) : [],
+          chofer: String(l.chofer || ""),
+          consignatario: String(l.consignatario || ""),
+          terminal_entrega: String(l.terminal_entrega || ""),
+          palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
           fecha_de_carga: toDateInput(l.fecha_de_carga),
           hora_de_carga: l.hora_de_carga || "",
@@ -430,9 +474,10 @@ export default function LoadDetail() {
       setSnack({ open: true, message: "Palets fusionados", type: "success" });
       closeFuseDnD();
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red fusionando palets",
+        message: msg || "Error de red fusionando palets",
         type: "error",
       });
     } finally {

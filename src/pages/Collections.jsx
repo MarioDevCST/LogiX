@@ -6,6 +6,34 @@ import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
 import { getCurrentUser } from "../utils/roles.js";
+import {
+  createCompany,
+  createConsignee,
+  createLocation,
+  deleteCompanyById,
+  deleteConsigneeById,
+  fetchAllCompanies,
+  fetchAllConsignees,
+  fetchAllLocations,
+  fetchCompanyById,
+  fetchConsigneeById,
+  updateCompanyById,
+  updateConsigneeById,
+} from "../firebase/auth.js";
+
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
+  return null;
+}
+
+function formatDateOnly(value) {
+  const d = toDate(value);
+  if (!d) return "";
+  return d.toLocaleDateString("es-ES");
+}
 
 function LocationsTab() {
   const columns = [
@@ -38,21 +66,30 @@ function LocationsTab() {
   const mapsEnabled = import.meta.env.VITE_FEATURE_MAPS === "enabled";
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/locations")
-      .then((r) => r.json())
-      .then((list) => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllLocations();
+        if (!mounted) return;
         const mapped = list.map((l) => ({
-          id: l._id,
+          id: l._id || l.id,
           nombre: l.nombre || "",
           ciudad: l.ciudad || "",
           puerto: l.puerto || "",
           coordenadas: l.coordenadas || "",
         }));
         setRows(mapped);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const ports = useMemo(() => {
@@ -102,20 +139,14 @@ function LocationsTab() {
         });
         return;
       }
-      const res = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          puerto,
-          creado_por: getCurrentUser()?.name || "Testing",
-        }),
+      const created = await createLocation({
+        ...form,
+        puerto,
+        creado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) throw new Error("Error al crear localización");
-      const created = await res.json();
       setRows((rows) => [
         {
-          id: created._id,
+          id: created._id || created.id,
           nombre: created.nombre || "",
           ciudad: created.ciudad || "",
           puerto: created.puerto || "",
@@ -432,9 +463,8 @@ function ConsigneesTab() {
 
   const startEdit = async (id) => {
     try {
-      const res = await fetch(`/api/consignees/${id}`);
-      if (!res.ok) return;
-      const c = await res.json();
+      const c = await fetchConsigneeById(id);
+      if (!c) return;
       setEditingId(id);
       setEditForm({ nombre: c.nombre || "" });
       setOpenEdit(true);
@@ -451,16 +481,7 @@ function ConsigneesTab() {
     if (!window.confirm("¿Seguro que deseas borrar este consignatario?"))
       return;
     try {
-      const res = await fetch(`/api/consignees/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSnack({
-          open: true,
-          message: err.error || "Error borrando consignatario",
-          type: "error",
-        });
-        return;
-      }
+      await deleteConsigneeById(id);
       setRows((prev) => prev.filter((r) => r.id !== id));
       setSnack({
         open: true,
@@ -477,42 +498,54 @@ function ConsigneesTab() {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/consignees")
-      .then((r) => r.json())
-      .then((list) => {
-        const mapped = list.map((c) => ({
-          id: c._id,
-          nombre: c.nombre,
-          acciones: (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className="icon-button"
-                title="Editar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startEdit(c._id);
-                }}
-              >
-                <span className="material-symbols-outlined">edit</span>
-              </button>
-              <button
-                className="icon-button"
-                title="Borrar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(c._id);
-                }}
-              >
-                <span className="material-symbols-outlined">delete</span>
-              </button>
-            </div>
-          ),
-        }));
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllConsignees();
+        if (!mounted) return;
+        const mapped = list.map((c) => {
+          const id = c._id || c.id;
+          return {
+            id,
+            nombre: c.nombre,
+            acciones: (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="icon-button"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Borrar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ),
+          };
+        });
         setRows(mapped);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -546,25 +579,12 @@ function ConsigneesTab() {
         nombre: form.nombre,
         creado_por: getCurrentUser()?.name || "Testing",
       };
-      const res = await fetch("/api/consignees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSnack({
-          open: true,
-          message: err.error || "Error creando consignatario",
-          type: "error",
-        });
-        return;
-      }
-      const created = await res.json();
+      const created = await createConsignee(payload);
+      const id = created?._id || created?.id;
       setRows((prev) => [
         ...prev,
         {
-          id: created._id,
+          id,
           nombre: created.nombre,
           acciones: (
             <div style={{ display: "flex", gap: 6 }}>
@@ -573,7 +593,7 @@ function ConsigneesTab() {
                 title="Editar"
                 onClick={(e) => {
                   e.stopPropagation();
-                  startEdit(created._id);
+                  startEdit(id);
                 }}
               >
                 <span className="material-symbols-outlined">edit</span>
@@ -583,7 +603,7 @@ function ConsigneesTab() {
                 title="Borrar"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete(created._id);
+                  handleDelete(id);
                 }}
               >
                 <span className="material-symbols-outlined">delete</span>
@@ -623,21 +643,15 @@ function ConsigneesTab() {
         nombre: editForm.nombre,
         modificado_por: getCurrentUser()?.name || "Testing",
       };
-      const res = await fetch(`/api/consignees/${editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      const updated = await updateConsigneeById(editingId, payload);
+      if (!updated) {
         setSnack({
           open: true,
-          message: err.error || "Error actualizando consignatario",
+          message: "Consignatario no encontrado",
           type: "error",
         });
         return;
       }
-      const updated = await res.json();
       setRows((prev) =>
         prev.map((r) =>
           r.id === editingId ? { ...r, nombre: updated.nombre } : r
@@ -787,6 +801,365 @@ function ConsigneesTab() {
   );
 }
 
+function CompaniesTab() {
+  const navigate = useNavigate();
+  const columns = [
+    { key: "nombre", header: "Nombre" },
+    { key: "fecha", header: "Creación" },
+    { key: "acciones", header: "Acciones" },
+  ];
+
+  const [view, setView] = useState("table");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ nombre: "" });
+
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ nombre: "" });
+
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const startEdit = async (id) => {
+    try {
+      const c = await fetchCompanyById(id);
+      if (!c) return;
+      setEditingId(id);
+      setEditForm({ nombre: c.nombre || "" });
+      setOpenEdit(true);
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error de red cargando empresa",
+        type: "error",
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Seguro que deseas borrar esta empresa?")) return;
+    try {
+      await deleteCompanyById(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      setSnack({ open: true, message: "Empresa borrada", type: "success" });
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error de red borrando empresa",
+        type: "error",
+      });
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllCompanies();
+        if (!mounted) return;
+        const mapped = list.map((c) => {
+          const id = c._id || c.id;
+          return {
+            id,
+            nombre: c.nombre || "",
+            fecha: formatDateOnly(c.createdAt || c.fecha_creacion),
+            acciones: (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="icon-button"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Borrar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ),
+          };
+        });
+        setRows(mapped);
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => q === "" || r.nombre.toLowerCase().includes(q));
+  }, [rows, query]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filtered.slice(start, end);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const onCreate = () => setOpen(true);
+
+  const submit = async () => {
+    try {
+      if (!form.nombre) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const created = await createCompany({
+        nombre: form.nombre,
+        creado_por: getCurrentUser()?.name || "Testing",
+      });
+      const id = created?._id || created?.id;
+      setRows((prev) => [
+        ...prev,
+        {
+          id,
+          nombre: created.nombre || "",
+          fecha: formatDateOnly(created.createdAt || created.fecha_creacion),
+          acciones: (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="icon-button"
+                title="Editar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEdit(id);
+                }}
+              >
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+              <button
+                className="icon-button"
+                title="Borrar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(id);
+                }}
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          ),
+        },
+      ]);
+      setOpen(false);
+      setForm({ nombre: "" });
+      setSnack({ open: true, message: "Empresa creada", type: "success" });
+    } catch (e) {
+      const message =
+        e?.message === "nombre es obligatorio"
+          ? "El nombre es obligatorio"
+          : "Error creando empresa";
+      setSnack({ open: true, message, type: "error" });
+    }
+  };
+
+  const submitEdit = async () => {
+    try {
+      if (!editingId) return;
+      if (!editForm.nombre) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const updated = await updateCompanyById(editingId, {
+        nombre: editForm.nombre,
+        modificado_por: getCurrentUser()?.name || "Testing",
+      });
+      if (!updated) {
+        setSnack({
+          open: true,
+          message: "Empresa no encontrada",
+          type: "error",
+        });
+        return;
+      }
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === editingId ? { ...r, nombre: updated.nombre } : r
+        )
+      );
+      setOpenEdit(false);
+      setEditingId(null);
+      setSnack({ open: true, message: "Empresa actualizada", type: "success" });
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error actualizando empresa",
+        type: "error",
+      });
+    }
+  };
+
+  const goDetail = (row) => {
+    if (row.id) navigate(`/app/admin/empresas/${row.id}`);
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            className="input"
+            style={{ width: 280 }}
+            placeholder="Buscar por nombre"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button
+            className="icon-button"
+            onClick={onCreate}
+            title="Crear empresa"
+          >
+            <span className="material-symbols-outlined">add_box</span>
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="icon-button"
+            title="Vista tabla"
+            onClick={() => setView("table")}
+          >
+            <span className="material-symbols-outlined">table</span>
+          </button>
+          <button
+            className="icon-button"
+            title="Vista tarjetas"
+            onClick={() => setView("cards")}
+          >
+            <span className="material-symbols-outlined">view_agenda</span>
+          </button>
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <DataTable
+          title="Empresas"
+          columns={columns}
+          data={paginated}
+          loading={loading}
+          createLabel={"Crear empresa"}
+          onCreate={onCreate}
+          onRowClick={goDetail}
+        />
+      ) : (
+        <CardGrid
+          title="Empresas"
+          items={paginated.map((i) => ({
+            ...i,
+            name: i.nombre,
+            subtitle: i.fecha,
+          }))}
+          loading={loading}
+          createLabel={"Crear empresa"}
+          onCreate={onCreate}
+          onCardClick={goDetail}
+        />
+      )}
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={filtered.length}
+        onPageChange={(p) => setPage(Math.max(1, p))}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+
+      <Modal
+        open={open}
+        title="Crear empresa"
+        onClose={() => setOpen(false)}
+        onSubmit={submit}
+        submitLabel="Crear"
+      >
+        <div>
+          <div className="label">Nombre</div>
+          <input
+            className="input"
+            value={form.nombre}
+            onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            placeholder="Nombre"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={openEdit}
+        title="Editar empresa"
+        onClose={() => setOpenEdit(false)}
+        onSubmit={submitEdit}
+        submitLabel="Guardar"
+      >
+        <div>
+          <div className="label">Nombre</div>
+          <input
+            className="input"
+            value={editForm.nombre}
+            onChange={(e) =>
+              setEditForm({ ...editForm, nombre: e.target.value })
+            }
+            placeholder="Nombre"
+          />
+        </div>
+      </Modal>
+
+      <Snackbar
+        open={snack.open}
+        message={snack.message}
+        type={snack.type}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+      />
+    </>
+  );
+}
+
 export default function Collections({ initialTab = "locations" }) {
   const [tab, setTab] = useState(initialTab);
 
@@ -821,6 +1194,13 @@ export default function Collections({ initialTab = "locations" }) {
           >
             Consignatarios
           </button>
+          <button
+            type="button"
+            className={`tab-button ${tab === "companies" ? "active" : ""}`}
+            onClick={() => setTab("companies")}
+          >
+            Empresas
+          </button>
         </div>
       </div>
 
@@ -829,6 +1209,9 @@ export default function Collections({ initialTab = "locations" }) {
       </div>
       <div style={{ display: tab === "consignees" ? "block" : "none" }}>
         <ConsigneesTab />
+      </div>
+      <div style={{ display: tab === "companies" ? "block" : "none" }}>
+        <CompaniesTab />
       </div>
     </>
   );

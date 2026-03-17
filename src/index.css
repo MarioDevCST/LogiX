@@ -87,6 +87,24 @@ body {
   cursor: not-allowed;
 }
 
+.secondary-button {
+  background: transparent;
+  color: #1a73e8;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.secondary-button:hover {
+  background: #f5f6f8;
+}
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Snackbar */
 .snackbar {
   position: fixed;
@@ -198,6 +216,19 @@ body {
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+}
+.header.header-dev {
+  background: #fff7e0;
+  border-bottom-color: #f9ab00;
+}
+.env-badge {
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #f9ab00;
+  color: #7a4a00;
+  background: #fff;
 }
 .icon-button {
   border: 1px solid var(--border);

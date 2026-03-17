@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRoleColor, getCurrentUser } from "../utils/roles.js";
+import { firebaseLogout, logInteraction } from "../firebase/auth.js";
 
 export default function Header({ onToggleSidebar }) {
   const [logoOk, setLogoOk] = useState(true);
@@ -9,15 +10,41 @@ export default function Header({ onToggleSidebar }) {
   const userName = user?.name || "";
   const roleColor = getRoleColor(user?.role);
   const initial = (userName || "").trim().charAt(0).toUpperCase();
+  const stageRaw =
+    import.meta.env.VITE_APP_STAGE ||
+    (import.meta.env.MODE || "").toUpperCase();
+  const stage = String(stageRaw || "").toUpperCase();
+  const isDev = stage === "DEV" || stage === "DEVELOPMENT";
 
-  const logout = () => {
+  const logout = async () => {
+    if (user?.id || user?._id) {
+      logInteraction({
+        type: "user_logged_out",
+        actor: {
+          id: user.id || user._id,
+          name: user.name || "",
+          email: user.email || "",
+          role: user.role || "",
+        },
+        target: {
+          id: user.id || user._id,
+          name: user.name || "",
+          email: user.email || "",
+        },
+      }).catch(() => {});
+    }
+    try {
+      await firebaseLogout();
+    } catch {
+      void 0;
+    }
     localStorage.removeItem("auth");
     navigate("/login");
   };
 
   return (
     <header
-      className="header"
+      className={`header${isDev ? " header-dev" : ""}`}
       style={{ display: "flex", alignItems: "center" }}
     >
       <button
@@ -37,6 +64,7 @@ export default function Header({ onToggleSidebar }) {
       ) : (
         <div className="header-title">LogiX</div>
       )}
+      {isDev && <div className="env-badge">Developer</div>}
       <div
         className="header-actions"
         style={{

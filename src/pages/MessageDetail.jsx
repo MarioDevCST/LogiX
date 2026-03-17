@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import { ROLES, ROLE_LABELS, getCurrentUser } from '../utils/roles.js'
+import { deleteMessageById, fetchMessageById, updateMessageById } from '../firebase/auth.js'
 
 export default function MessageDetail() {
   const navigate = useNavigate()
@@ -18,12 +19,21 @@ export default function MessageDetail() {
 
   useEffect(() => {
     let mounted = true
-    setLoading(true)
-    fetch(`/api/messages/${id}`).then(r => r.json()).then(m => {
-      if (!mounted) return
-      setMessage(m)
-      setEditForm({ titulo: m.titulo || '', cuerpo: m.cuerpo || '', roles: Array.isArray(m.roles) ? m.roles : [] })
-    }).catch(() => {}).finally(() => setLoading(false))
+    const run = async () => {
+      try {
+        setLoading(true)
+        const m = await fetchMessageById(id)
+        if (!mounted) return
+        setMessage(m)
+        setEditForm({ titulo: m?.titulo || '', cuerpo: m?.cuerpo || '', roles: Array.isArray(m?.roles) ? m.roles : [] })
+      } catch {
+        if (!mounted) return
+        setMessage(null)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    run()
     return () => { mounted = false }
   }, [id])
 
@@ -34,34 +44,27 @@ export default function MessageDetail() {
         return
       }
       const payload = { titulo: editForm.titulo, cuerpo: editForm.cuerpo, roles: editForm.roles, modificado_por: (getCurrentUser()?.name || 'Testing') }
-      const res = await fetch(`/api/messages/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error actualizando mensaje', type: 'error' })
+      const updated = await updateMessageById(id, payload)
+      if (!updated) {
+        setSnack({ open: true, message: 'Mensaje no encontrado', type: 'error' })
         return
       }
-      const updated = await res.json()
       setMessage(updated)
       setOpenEdit(false)
       setSnack({ open: true, message: 'Mensaje actualizado', type: 'success' })
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red actualizando mensaje', type: 'error' })
+      setSnack({ open: true, message: 'Error actualizando mensaje', type: 'error' })
     }
   }
 
   const handleDelete = async () => {
     if (!window.confirm('¿Seguro que deseas borrar este mensaje?')) return
     try {
-      const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error borrando mensaje', type: 'error' })
-        return
-      }
+      await deleteMessageById(id)
       setSnack({ open: true, message: 'Mensaje borrado', type: 'success' })
       navigate('/app/admin/mensajes')
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red borrando mensaje', type: 'error' })
+      setSnack({ open: true, message: 'Error borrando mensaje', type: 'error' })
     }
   }
 

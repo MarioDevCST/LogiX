@@ -11,6 +11,11 @@ import {
   PERMISSIONS,
   getCurrentUser,
 } from "../utils/roles.js";
+import {
+  createPallet,
+  fetchAllLoads,
+  fetchAllPallets,
+} from "../firebase/auth.js";
 
 const TIPO_OPTIONS = [
   { label: "Seco", value: "Seco" },
@@ -86,30 +91,52 @@ export default function Pallets() {
   const [palletsListPageSize, setPalletsListPageSize] = useState(10);
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/pallets")
-      .then((r) => r.json())
-      .then((list) => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllPallets();
+        if (!mounted) return;
         setPalletDocs(list);
         const mapped = list.map((p) => ({
-          id: p._id,
+          id: p._id || p.id,
           nombre: p.nombre,
           numero_palet: p.numero_palet,
           tipo: p.tipo,
           base: p.base || "",
         }));
         setRows(mapped);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
 
     // cargar cargas para el modo dual
     setLoadsLoading(true);
-    fetch("/api/loads")
-      .then((r) => r.json())
-      .then(setLoads)
-      .catch(() => {})
-      .finally(() => setLoadsLoading(false));
+    fetchAllLoads()
+      .then((list) => {
+        if (!mounted) return;
+        const normalize = (x) => ({
+          ...x,
+          _id: x?._id || x?.id,
+          id: x?.id || x?._id,
+        });
+        setLoads(Array.isArray(list) ? list.map(normalize) : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setLoads([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoadsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const location = useLocation();
@@ -133,28 +160,18 @@ export default function Pallets() {
         });
         return;
       }
-      const res = await fetch("/api/pallets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          creado_por: getCurrentUser()?.name || "Testing",
-        }),
+      const load = loads.find((l) => String(l._id) === String(form.carga));
+      const cargaNombre =
+        load?.nombre || load?.barco?.nombre_del_barco || "Sin carga";
+      const created = await createPallet({
+        ...form,
+        carga_nombre: cargaNombre,
+        creado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSnack({
-          open: true,
-          message: err.error || "Error creando palet",
-          type: "error",
-        });
-        return;
-      }
-      const created = await res.json();
       setRows((prev) => [
         ...prev,
         {
-          id: created._id,
+          id: created._id || created.id,
           nombre: created.nombre,
           numero_palet: created.numero_palet,
           tipo: created.tipo,
@@ -173,9 +190,17 @@ export default function Pallets() {
       });
       setSnack({ open: true, message: "Palet creado", type: "success" });
     } catch (e) {
+      const message =
+        e?.message === "numero_palet es obligatorio"
+          ? "El número de palet es obligatorio"
+          : e?.message === "tipo es obligatorio"
+          ? "El tipo es obligatorio"
+          : e?.message === "carga es obligatoria"
+          ? "La carga es obligatoria"
+          : "Error creando palet";
       setSnack({
         open: true,
-        message: "Error de red creando palet",
+        message,
         type: "error",
       });
     }
@@ -416,7 +441,7 @@ export default function Pallets() {
               ) : (
                 latestPalletsPage.map((p) => (
                   <div
-                    key={p._id}
+                    key={p._id || p.id}
                     className="calendar-item"
                     style={{
                       padding: "10px 12px",
@@ -428,7 +453,7 @@ export default function Pallets() {
                       display: "flex",
                       alignItems: "center",
                     }}
-                    onClick={() => navigate(`/app/palets/${p._id}`)}
+                    onClick={() => navigate(`/app/palets/${p._id || p.id}`)}
                   >
                     <div
                       style={{

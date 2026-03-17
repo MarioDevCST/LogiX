@@ -1,16 +1,25 @@
-# React + Vite
+# LogiX
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación React (Vite) con Firebase Authentication + Firestore.
 
-Currently, two official plugins are available:
+## Entornos (DEV y PROD)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Se recomienda trabajar con dos proyectos de Firebase:
 
-## React Compiler
+- **DEV**: para desarrollo y pruebas (puedes resetear datos y probar cambios).
+- **PROD**: para demo/cliente (datos reales + reglas estrictas).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+La app lee la configuración de Firebase desde variables `VITE_FIREBASE_*`. Para diferenciar claramente el entorno en pantalla, el Header muestra una insignia “Developer” y cambia de color cuando el entorno es DEV.
 
-## Expanding the ESLint configuration
+### Variables de entorno
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Copia `.env.example` a un archivo local y rellena los valores.
+- Para local, usa un archivo de entorno de desarrollo y pon `VITE_APP_STAGE=DEV`.
+- Para el despliegue de PROD, usa configuración del proyecto PROD y `VITE_APP_STAGE=PROD`.
+- Si despliegas una versión “staging” apuntando a Firebase DEV pero en modo build, pon explícitamente `VITE_APP_STAGE=DEV` para que se vea el indicador.
+
+## Scripts
+
+- `npm run dev`
+- `npm run lint`
+- `npm run build`

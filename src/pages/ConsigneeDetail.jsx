@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
 import { getCurrentUser } from '../utils/roles.js'
+import { deleteConsigneeById, fetchConsigneeById, updateConsigneeById } from '../firebase/auth.js'
 
 export default function ConsigneeDetail() {
   const navigate = useNavigate()
@@ -19,11 +20,20 @@ export default function ConsigneeDetail() {
   useEffect(() => {
     let mounted = true
     setLoading(true)
-    fetch(`/api/consignees/${id}`).then(r => r.json()).then(c => {
-      if (!mounted) return
-      setConsignee(c)
-      setEditForm({ nombre: c.nombre || '' })
-    }).catch(() => {}).finally(() => setLoading(false))
+    const run = async () => {
+      try {
+        const c = await fetchConsigneeById(id)
+        if (!mounted) return
+        setConsignee(c)
+        setEditForm({ nombre: c?.nombre || '' })
+      } catch {
+        if (!mounted) return
+        setConsignee(null)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    run()
     return () => { mounted = false }
   }, [id])
 
@@ -34,34 +44,27 @@ export default function ConsigneeDetail() {
         return
       }
       const payload = { nombre: editForm.nombre, modificado_por: (getCurrentUser()?.name || 'Testing') }
-      const res = await fetch(`/api/consignees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error actualizando consignatario', type: 'error' })
+      const updated = await updateConsigneeById(id, payload)
+      if (!updated) {
+        setSnack({ open: true, message: 'Consignatario no encontrado', type: 'error' })
         return
       }
-      const updated = await res.json()
       setConsignee(updated)
       setOpenEdit(false)
       setSnack({ open: true, message: 'Consignatario actualizado', type: 'success' })
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red actualizando consignatario', type: 'error' })
+      setSnack({ open: true, message: 'Error actualizando consignatario', type: 'error' })
     }
   }
 
   const handleDelete = async () => {
     if (!window.confirm('¿Seguro que deseas borrar este consignatario?')) return
     try {
-      const res = await fetch(`/api/consignees/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setSnack({ open: true, message: err.error || 'Error borrando consignatario', type: 'error' })
-        return
-      }
+      await deleteConsigneeById(id)
       setSnack({ open: true, message: 'Consignatario borrado', type: 'success' })
       navigate('/app/admin/consignatarios')
     } catch (e) {
-      setSnack({ open: true, message: 'Error de red borrando consignatario', type: 'error' })
+      setSnack({ open: true, message: 'Error borrando consignatario', type: 'error' })
     }
   }
 

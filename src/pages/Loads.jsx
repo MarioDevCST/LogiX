@@ -12,6 +12,18 @@ import {
   PERMISSIONS,
   getCurrentUser,
 } from "../utils/roles.js";
+import {
+  createLoad,
+  createShip as createShipFirebase,
+  createPallet as createPalletFirebase,
+  createUser as createUserFirebase,
+  fetchAllConsignees,
+  fetchAllLoads,
+  fetchAllLocations,
+  fetchAllPallets,
+  fetchAllShips,
+  fetchAllUsers,
+} from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
   "Preparando",
@@ -163,32 +175,53 @@ export default function Loads() {
   });
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/loads")
-      .then((r) => r.json())
-      .then(setLoadDocs)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-    fetch("/api/ships")
-      .then((r) => r.json())
-      .then(setShips)
-      .catch(() => {});
-    fetch("/api/pallets")
-      .then((r) => r.json())
-      .then(setPallets)
-      .catch(() => {});
-    fetch("/api/users")
-      .then((r) => r.json())
-      .then(setUsers)
-      .catch(() => {});
-    fetch("/api/consignees")
-      .then((r) => r.json())
-      .then(setConsignees)
-      .catch(() => {});
-    fetch("/api/locations")
-      .then((r) => r.json())
-      .then(setLocations)
-      .catch(() => {});
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const [
+          loadsList,
+          shipsList,
+          palletsList,
+          usersList,
+          consigneesList,
+          locationsList,
+        ] = await Promise.all([
+          fetchAllLoads(),
+          fetchAllShips(),
+          fetchAllPallets(),
+          fetchAllUsers(),
+          fetchAllConsignees(),
+          fetchAllLocations(),
+        ]);
+        if (!mounted) return;
+        const normalize = (x) => ({
+          ...x,
+          _id: x?._id || x?.id,
+          id: x?.id || x?._id,
+        });
+        setLoadDocs(loadsList.map(normalize));
+        setShips(shipsList.map(normalize));
+        setPallets(palletsList.map(normalize));
+        setUsers(usersList.map(normalize));
+        setConsignees(consigneesList.map(normalize));
+        setLocations(locationsList.map(normalize));
+      } catch {
+        if (!mounted) return;
+        setLoadDocs([]);
+        setShips([]);
+        setPallets([]);
+        setUsers([]);
+        setConsignees([]);
+        setLocations([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const role = getCurrentRole();
@@ -233,22 +266,23 @@ export default function Loads() {
         estado_viaje: form.estado_viaje,
         creado_por: getCurrentUser()?.name || "Testing",
       };
-      const res = await fetch("/api/loads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      const created = await createLoad(payload);
+      if (!created) {
         setSnack({
           open: true,
-          message: err.error || "Error creando carga",
+          message: "Error creando carga",
           type: "error",
         });
         return;
       }
-      const created = await res.json();
-      setLoadDocs((prev) => [...prev, created]);
+      setLoadDocs((prev) => [
+        ...prev,
+        {
+          ...created,
+          _id: created._id || created.id,
+          id: created.id || created._id,
+        },
+      ]);
       setOpen(false);
       setForm({
         barco: "",
@@ -268,9 +302,10 @@ export default function Loads() {
       });
       setSnack({ open: true, message: "Carga creada", type: "success" });
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red creando carga",
+        message: msg || "Error de red creando carga",
         type: "error",
       });
     }
@@ -286,32 +321,34 @@ export default function Loads() {
         });
         return;
       }
-      const res = await fetch("/api/ships", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...shipForm,
-          creado_por: getCurrentUser()?.name || "Testing",
-        }),
+      const created = await createShipFirebase({
+        ...shipForm,
+        creado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      if (!created) {
         setSnack({
           open: true,
-          message: err.error || "Error creando barco",
+          message: "Error creando barco",
           type: "error",
         });
         return;
       }
-      const created = await res.json();
-      setShips((prev) => [...prev, created]);
+      setShips((prev) => [
+        ...prev,
+        {
+          ...created,
+          _id: created._id || created.id,
+          id: created.id || created._id,
+        },
+      ]);
       setOpenCreateShip(false);
       setShipForm({ nombre_del_barco: "", empresa: "" });
       setSnack({ open: true, message: "Barco creado", type: "success" });
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red creando barco",
+        message: msg || "Error de red creando barco",
         type: "error",
       });
     }
@@ -340,32 +377,42 @@ export default function Loads() {
         name: userForm.name,
         email: userForm.email,
         role: userForm.role,
-        creado_por: getCurrentUser()?.name || "Testing",
       };
       if (userForm.password) body.password = userForm.password;
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      const created = await createUserFirebase(body);
+      if (!created) {
         setSnack({
           open: true,
-          message: err.error || "Error creando usuario",
+          message: "Error creando usuario",
           type: "error",
         });
         return;
       }
-      const created = await res.json();
-      setUsers((prev) => [...prev, created]);
+      setUsers((prev) => [
+        ...prev,
+        {
+          ...created,
+          _id: created._id || created.id,
+          id: created.id || created._id,
+        },
+      ]);
       setOpenCreateUser(false);
       setUserForm({ name: "", email: "", password: "", role: "consignee" });
       setSnack({ open: true, message: "Usuario creado", type: "success" });
     } catch (e) {
+      const code = String(e?.code || "");
+      const msg = String(e?.message || "");
+      const friendly =
+        code === "auth/email-already-in-use"
+          ? "El email ya está en uso"
+          : code === "auth/invalid-email"
+          ? "Email inválido"
+          : code === "auth/weak-password"
+          ? "Contraseña demasiado débil"
+          : msg;
       setSnack({
         open: true,
-        message: "Error de red creando usuario",
+        message: friendly || "Error creando usuario",
         type: "error",
       });
     }
@@ -381,32 +428,34 @@ export default function Loads() {
         });
         return;
       }
-      const res = await fetch("/api/pallets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...palletForm,
-          creado_por: getCurrentUser()?.name || "Testing",
-        }),
+      const created = await createPalletFirebase({
+        ...palletForm,
+        creado_por: getCurrentUser()?.name || "Testing",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      if (!created) {
         setSnack({
           open: true,
-          message: err.error || "Error creando palet",
+          message: "Error creando palet",
           type: "error",
         });
         return;
       }
-      const created = await res.json();
-      setPallets((prev) => [...prev, created]);
+      setPallets((prev) => [
+        ...prev,
+        {
+          ...created,
+          _id: created._id || created.id,
+          id: created.id || created._id,
+        },
+      ]);
       setOpenCreatePallet(false);
       setPalletForm({ numero_palet: "", tipo: "Seco", base: "Europeo" });
       setSnack({ open: true, message: "Palet creado", type: "success" });
     } catch (e) {
+      const msg = String(e?.message || "");
       setSnack({
         open: true,
-        message: "Error de red creando palet",
+        message: msg || "Error creando palet",
         type: "error",
       });
     }
@@ -445,6 +494,20 @@ export default function Loads() {
 
   // Derivar filas con todos los campos y conteo correcto de palets
   const rows = useMemo(() => {
+    const shipById = new Map(
+      ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0])
+    );
+    const userById = new Map(
+      users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0])
+    );
+    const consigneeById = new Map(
+      consignees
+        .map((c) => [String(c._id || c.id || ""), c])
+        .filter((p) => p[0])
+    );
+    const locationById = new Map(
+      locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0])
+    );
     return loadDocs.map((l) => {
       const paletsArray = Array.isArray(l.palets) ? l.palets : [];
       const byRelation = pallets.filter(
@@ -455,19 +518,43 @@ export default function Loads() {
         ...byRelation.map((p) => String(p._id)),
       ]);
       const totalPalets = uniqueIds.size;
+
+      const barcoId = String(l.barco?._id || l.barco || "");
+      const choferId = String(l.chofer?._id || l.chofer || "");
+      const consignatarioId = String(
+        l.consignatario?._id || l.consignatario || ""
+      );
+      const terminalId = String(
+        l.terminal_entrega?._id || l.terminal_entrega || ""
+      );
+
+      const ship = shipById.get(barcoId) || null;
+      const chofer = userById.get(choferId) || null;
+      const consignatario = consigneeById.get(consignatarioId) || null;
+      const terminal = locationById.get(terminalId) || null;
+
+      const requiredPresent = [
+        l.fecha_de_carga,
+        barcoId,
+        Array.isArray(l.entrega) ? l.entrega.length > 0 : !!l.entrega,
+        choferId,
+        consignatarioId,
+        l.estado_viaje,
+      ].every(Boolean);
+      const estadoCarga = requiredPresent && totalPalets > 0 ? "Sí" : "No";
+
       return {
         id: l._id,
         nombre: l.nombre || "",
-        barco: l.barco?.nombre_del_barco || "",
+        barco: ship?.nombre_del_barco || l.barco?.nombre_del_barco || "",
         entrega: Array.isArray(l.entrega)
           ? l.entrega.join(", ")
           : l.entrega || "",
-        chofer: l.chofer?.name || "",
-        consignatario: l.consignatario?.nombre || "",
+        chofer: chofer?.name || l.chofer?.name || "",
+        consignatario: consignatario?.nombre || l.consignatario?.nombre || "",
         terminal_entrega:
-          (l.terminal_entrega?.puerto
-            ? `${l.terminal_entrega.puerto} · `
-            : "") + (l.terminal_entrega?.nombre || ""),
+          (terminal?.puerto ? `${terminal.puerto} · ` : "") +
+          (terminal?.nombre || ""),
         carga: Array.isArray(l.carga) ? l.carga.join(", ") : l.carga || "",
         total_palets: totalPalets,
         estado_viaje: l.estado_viaje || "Preparando",
@@ -482,10 +569,10 @@ export default function Loads() {
         fecha_de_descarga_group:
           toIsoDateKey(l.fecha_de_descarga) || "Sin fecha",
         hora_de_descarga: l.hora_de_descarga || "",
-        estado_carga: l.estado_carga ? "Sí" : "No",
+        estado_carga: estadoCarga,
       };
     });
-  }, [loadDocs, pallets]);
+  }, [loadDocs, pallets, ships, users, consignees, locations]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1321,7 +1408,6 @@ export default function Loads() {
           >
             <option value="consignee">Consignatario</option>
             <option value="driver">Chofer</option>
-            <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="dispatcher">Dispatcher</option>
           </select>

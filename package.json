@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:dev": "vite build --mode development",
     "build": "vite build",
+    "firebase": "XDG_CONFIG_HOME=.firebase-config npx -y firebase-tools",
+    "firebase:login": "npm run firebase -- login",
+    "firebase:use": "npm run firebase -- use",
+    "deploy:dev": "npm run build:dev && npm run firebase -- deploy --only hosting,firestore:rules --project dev",
+    "deploy:prod": "npm run build && npm run firebase -- deploy --only hosting,firestore:rules --project prod",
     "lint": "eslint .",
     "preview": "vite preview"
   },

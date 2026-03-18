@@ -16,8 +16,18 @@ import {
 
 export default function Messages() {
   const navigate = useNavigate();
+  const buildCuerpoPreview = (value) => {
+    const normalized = String(value || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalized) return "-";
+    const max = 120;
+    return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized;
+  };
+
   const columns = [
     { key: "titulo", header: "Título" },
+    { key: "cuerpo_preview", header: "Cuerpo" },
     { key: "roles", header: "Roles" },
     { key: "acciones", header: "Acciones" },
   ];
@@ -89,9 +99,23 @@ export default function Messages() {
         if (!mounted) return;
         const rowFromMessage = (m) => {
           const rowId = m?._id || m?.id;
+          const cuerpoPreviewText = buildCuerpoPreview(m?.cuerpo);
           return {
             id: rowId,
             titulo: m?.titulo || "",
+            cuerpo_preview: (
+              <div
+                style={{
+                  maxWidth: 420,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={String(m?.cuerpo || "").trim()}
+              >
+                {cuerpoPreviewText}
+              </div>
+            ),
             roles:
               Array.isArray(m?.roles) && m.roles.length > 0
                 ? m.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
@@ -175,10 +199,24 @@ export default function Messages() {
         return;
       }
       const createdId = created._id || created.id;
+      const cuerpoPreviewText = buildCuerpoPreview(created?.cuerpo);
       setRows((prev) => [
         {
           id: createdId,
           titulo: created.titulo || "",
+          cuerpo_preview: (
+            <div
+              style={{
+                maxWidth: 420,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={String(created?.cuerpo || "").trim()}
+            >
+              {cuerpoPreviewText}
+            </div>
+          ),
           roles:
             Array.isArray(created.roles) && created.roles.length > 0
               ? created.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
@@ -254,6 +292,19 @@ export default function Messages() {
             ? {
                 ...r,
                 titulo: updated.titulo,
+                cuerpo_preview: (
+                  <div
+                    style={{
+                      maxWidth: 420,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={String(updated?.cuerpo || "").trim()}
+                  >
+                    {buildCuerpoPreview(updated?.cuerpo)}
+                  </div>
+                ),
                 roles:
                   Array.isArray(updated.roles) && updated.roles.length > 0
                     ? updated.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
@@ -381,6 +432,7 @@ export default function Messages() {
           <div className="label">Cuerpo</div>
           <textarea
             className="input"
+            style={{ width: "100%", resize: "vertical", minHeight: 140 }}
             value={form.cuerpo}
             onChange={(e) => setForm({ ...form, cuerpo: e.target.value })}
             placeholder="Contenido del mensaje"
@@ -432,6 +484,7 @@ export default function Messages() {
           <div className="label">Cuerpo</div>
           <textarea
             className="input"
+            style={{ width: "100%", resize: "vertical", minHeight: 140 }}
             value={editForm.cuerpo}
             onChange={(e) =>
               setEditForm({ ...editForm, cuerpo: e.target.value })

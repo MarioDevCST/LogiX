@@ -17,10 +17,12 @@ import {
   createShip as createShipFirebase,
   createPallet as createPalletFirebase,
   createUser as createUserFirebase,
+  fetchAllCompanies,
   fetchAllConsignees,
   fetchAllLoads,
   fetchAllLocations,
   fetchAllPallets,
+  fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
 } from "../firebase/auth.js";
@@ -65,6 +67,7 @@ export default function Loads() {
     barco: "",
     entrega: [],
     chofer: "",
+    responsable: "",
     consignatario: "",
     terminal_entrega: "",
     palets: [],
@@ -78,10 +81,13 @@ export default function Loads() {
     estado_viaje: "Preparando",
   });
   const [ships, setShips] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [pallets, setPallets] = useState([]);
   const [users, setUsers] = useState([]);
+  const [responsables, setResponsables] = useState([]);
   const [consignees, setConsignees] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [responsableQuery, setResponsableQuery] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -90,6 +96,30 @@ export default function Loads() {
     message: "",
     type: "success",
   });
+  const stageRaw =
+    import.meta.env.VITE_APP_STAGE ||
+    (import.meta.env.MODE || "").toUpperCase();
+  const stage = String(stageRaw || "").toUpperCase();
+  const isDev =
+    !!import.meta.env.DEV || stage === "DEV" || stage === "DEVELOPMENT";
+  const debugOverride = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      if (params.get("debugPerms") === "1") return true;
+    } catch {
+      void 0;
+    }
+    try {
+      return localStorage.getItem("debugPerms") === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+  const debugEnabled = isDev || debugOverride;
+  const [openDebug, setOpenDebug] = useState(false);
+  useEffect(() => {
+    if (debugOverride) setOpenDebug(true);
+  }, [debugOverride]);
 
   // Filtros y agrupación
   const [estadoFilter, setEstadoFilter] = useState("");
@@ -159,6 +189,7 @@ export default function Loads() {
   const [shipForm, setShipForm] = useState({
     nombre_del_barco: "",
     empresa: "",
+    enlace: "",
   });
   const [openCreateUser, setOpenCreateUser] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -179,21 +210,29 @@ export default function Loads() {
     const run = async () => {
       try {
         setLoading(true);
+        const results = await Promise.allSettled([
+          fetchAllLoads(),
+          fetchAllShips(),
+          fetchAllPallets(),
+          fetchAllUsers(),
+          fetchAllCompanies(),
+          fetchAllConsignees(),
+          fetchAllLocations(),
+          fetchAllResponsables(),
+        ]);
+        const values = results.map((r) =>
+          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
+        );
         const [
           loadsList,
           shipsList,
           palletsList,
           usersList,
+          companiesList,
           consigneesList,
           locationsList,
-        ] = await Promise.all([
-          fetchAllLoads(),
-          fetchAllShips(),
-          fetchAllPallets(),
-          fetchAllUsers(),
-          fetchAllConsignees(),
-          fetchAllLocations(),
-        ]);
+          responsablesList,
+        ] = values;
         if (!mounted) return;
         const normalize = (x) => ({
           ...x,
@@ -204,16 +243,20 @@ export default function Loads() {
         setShips(shipsList.map(normalize));
         setPallets(palletsList.map(normalize));
         setUsers(usersList.map(normalize));
+        setCompanies(companiesList.map(normalize));
         setConsignees(consigneesList.map(normalize));
         setLocations(locationsList.map(normalize));
+        setResponsables(responsablesList.map(normalize));
       } catch {
         if (!mounted) return;
         setLoadDocs([]);
         setShips([]);
         setPallets([]);
         setUsers([]);
+        setCompanies([]);
         setConsignees([]);
         setLocations([]);
+        setResponsables([]);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -224,8 +267,43 @@ export default function Loads() {
     };
   }, []);
 
-  const role = getCurrentRole();
-  const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS);
+  const role = getCurrentRole() || getCurrentUser()?.role || null;
+  const canManageLoads =
+    hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
+    String(role || "")
+      .trim()
+      .toLowerCase() === "dispatcher";
+  const debugInfo = useMemo(() => {
+    if (!openDebug) return null;
+    const authRaw = String(localStorage.getItem("auth") || "");
+    let authParsed = null;
+    try {
+      authParsed = JSON.parse(authRaw || "{}");
+    } catch {
+      authParsed = { parse_error: true };
+    }
+    const currentUser = getCurrentUser();
+    const roleRaw = currentUser?.role ?? null;
+    const roleResolved = role;
+    const permissions = Object.values(PERMISSIONS).reduce((acc, p) => {
+      acc[p] = hasPermission(roleResolved, p);
+      return acc;
+    }, {});
+    return {
+      env: {
+        MODE: import.meta.env.MODE,
+        DEV: !!import.meta.env.DEV,
+        VITE_APP_STAGE: import.meta.env.VITE_APP_STAGE,
+      },
+      authRaw,
+      authParsed,
+      user: currentUser,
+      roleRaw,
+      roleResolved,
+      permissions,
+      canManageLoads,
+    };
+  }, [openDebug, role, canManageLoads]);
 
   const onCreate = () => {
     if (!canManageLoads) {
@@ -236,6 +314,7 @@ export default function Loads() {
       });
       return;
     }
+    setResponsableQuery("");
     setOpen(true);
   };
 
@@ -253,6 +332,7 @@ export default function Loads() {
         barco: form.barco,
         entrega: form.entrega,
         chofer: form.chofer || undefined,
+        responsable: form.responsable || undefined,
         consignatario: form.consignatario || undefined,
         terminal_entrega: form.terminal_entrega || undefined,
         palets: form.palets,
@@ -288,6 +368,7 @@ export default function Loads() {
         barco: "",
         entrega: [],
         chofer: "",
+        responsable: "",
         consignatario: "",
         terminal_entrega: "",
         palets: [],
@@ -321,8 +402,12 @@ export default function Loads() {
         });
         return;
       }
+      const company = companies.find(
+        (c) => String(c._id || c.id) === String(shipForm.empresa)
+      );
       const created = await createShipFirebase({
         ...shipForm,
+        empresa_nombre: company?.nombre || "",
         creado_por: getCurrentUser()?.name || "Testing",
       });
       if (!created) {
@@ -342,7 +427,7 @@ export default function Loads() {
         },
       ]);
       setOpenCreateShip(false);
-      setShipForm({ nombre_del_barco: "", empresa: "" });
+      setShipForm({ nombre_del_barco: "", empresa: "", enlace: "" });
       setSnack({ open: true, message: "Barco creado", type: "success" });
     } catch (e) {
       const msg = String(e?.message || "");
@@ -859,6 +944,24 @@ export default function Loads() {
           >
             <span className="material-symbols-outlined">event_note</span>
           </button>
+          {canManageLoads && (
+            <button
+              className="icon-button"
+              title="Crear carga"
+              onClick={onCreate}
+            >
+              <span className="material-symbols-outlined">add_box</span>
+            </button>
+          )}
+          {debugEnabled && (
+            <button
+              className="icon-button"
+              title="Debug permisos"
+              onClick={() => setOpenDebug(true)}
+            >
+              <span className="material-symbols-outlined">bug_report</span>
+            </button>
+          )}
           {view === "calendar" && (
             <button
               className="icon-button"
@@ -1047,6 +1150,116 @@ export default function Loads() {
       />
 
       <Modal
+        open={openDebug}
+        title="Debug permisos"
+        onClose={() => setOpenDebug(false)}
+        onSubmit={() => setOpenDebug(false)}
+        submitLabel="Cerrar"
+        width={760}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Env</div>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "#0b1020",
+                color: "#e5e7eb",
+                overflowX: "auto",
+              }}
+            >
+              {JSON.stringify(debugInfo?.env || {}, null, 2)}
+            </pre>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Auth (raw)</div>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "#0b1020",
+                color: "#e5e7eb",
+                overflowX: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {debugInfo?.authRaw || ""}
+            </pre>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Auth (parsed)</div>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "#0b1020",
+                color: "#e5e7eb",
+                overflowX: "auto",
+              }}
+            >
+              {JSON.stringify(debugInfo?.authParsed || {}, null, 2)}
+            </pre>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Usuario</div>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "#0b1020",
+                color: "#e5e7eb",
+                overflowX: "auto",
+              }}
+            >
+              {JSON.stringify(
+                {
+                  id: debugInfo?.user?.id || debugInfo?.user?._id || null,
+                  name: debugInfo?.user?.name || "",
+                  email: debugInfo?.user?.email || "",
+                  roleRaw: debugInfo?.roleRaw,
+                  roleResolved: debugInfo?.roleResolved,
+                  canManageLoads: !!debugInfo?.canManageLoads,
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Permisos</div>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "#0b1020",
+                color: "#e5e7eb",
+                overflowX: "auto",
+              }}
+            >
+              {JSON.stringify(debugInfo?.permissions || {}, null, 2)}
+            </pre>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={open}
         title="Crear carga"
         onClose={() => setOpen(false)}
@@ -1155,6 +1368,46 @@ export default function Loads() {
           </div>
 
           {/* Personas */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Responsable</div>
+            <input
+              className="input"
+              value={responsableQuery}
+              onChange={(e) => setResponsableQuery(e.target.value)}
+              placeholder="Buscar responsable por nombre"
+            />
+            <select
+              className="input"
+              value={form.responsable}
+              onChange={(e) =>
+                setForm({ ...form, responsable: e.target.value })
+              }
+            >
+              <option value="">Sin responsable</option>
+              {responsables
+                .filter((r) => {
+                  const q = String(responsableQuery || "")
+                    .trim()
+                    .toLowerCase();
+                  if (!q) return true;
+                  return String(r.nombre || "")
+                    .toLowerCase()
+                    .includes(q);
+                })
+                .sort((a, b) =>
+                  String(a.nombre || "").localeCompare(
+                    String(b.nombre || ""),
+                    "es"
+                  )
+                )
+                .map((r) => (
+                  <option key={r._id} value={r._id}>
+                    {r.nombre}
+                    {r.email ? ` (${r.email})` : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Chofer</div>
             <select
@@ -1360,14 +1613,23 @@ export default function Loads() {
             }
           >
             <option value="">Sin empresa</option>
-            {ships.map((s) =>
-              s.empresa ? (
-                <option key={s.empresa._id} value={s.empresa._id}>
-                  {s.empresa.nombre}
-                </option>
-              ) : null
-            )}
+            {companies.map((c) => (
+              <option key={c._id || c.id} value={c._id || c.id}>
+                {c.nombre}
+              </option>
+            ))}
           </select>
+        </div>
+        <div>
+          <div className="label">Enlace (opcional)</div>
+          <input
+            className="input"
+            value={shipForm.enlace}
+            onChange={(e) =>
+              setShipForm({ ...shipForm, enlace: e.target.value })
+            }
+            placeholder="https://..."
+          />
         </div>
       </Modal>
 

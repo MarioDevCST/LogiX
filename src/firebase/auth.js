@@ -55,41 +55,47 @@ function generateRandomPassword() {
   }
 }
 
-async function getDefaultActive() {
-  if (!firebaseDb) throw new Error("Firestore no está configurado");
-  const snap = await getDocs(query(collection(firebaseDb, "user"), limit(1)));
-  return snap.empty;
-}
-
 async function ensureUserDocument({ uid, email, name, role, active }) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const ref = doc(firebaseDb, "user", uid);
-  const existing = await getDoc(ref);
+  const existing = await withTimeout(getDoc(ref), 5000);
   const isNew = !existing.exists();
+  const existingActive = existing.exists()
+    ? existing.data()?.active
+    : undefined;
   const resolvedActive =
     typeof active === "boolean"
       ? active
-      : await getDefaultActive().catch(() => false);
+      : typeof existingActive === "boolean"
+      ? existingActive
+      : false;
   const resolvedRole = role || existing.data()?.role || "dispatcher";
 
-  await setDoc(
-    ref,
-    {
-      id: uid,
-      name: name || "",
-      email: email || "",
-      role: resolvedRole,
-      active: resolvedActive,
-      ...(isNew ? { createdAt: serverTimestamp() } : {}),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
+  await withTimeout(
+    setDoc(
+      ref,
+      {
+        id: uid,
+        name: name || "",
+        email: email || "",
+        role: resolvedRole,
+        active: resolvedActive,
+        ...(isNew ? { createdAt: serverTimestamp() } : {}),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ),
+    5000
   );
 }
 
 async function withTimeout(promise, ms) {
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("Firestore write timeout")), ms);
+    setTimeout(() => {
+      const err = new Error("Firestore timeout");
+      err.code = "firestore/timeout";
+      reject(err);
+    }, ms);
   });
   return Promise.race([promise, timeoutPromise]);
 }
@@ -160,10 +166,10 @@ export async function firebaseLogout() {
 export async function getOrCreateUserProfile({ uid, email, name }) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const ref = doc(firebaseDb, "user", uid);
-  const snap = await getDoc(ref);
+  const snap = await withTimeout(getDoc(ref), 5000);
   if (!snap.exists()) {
-    await ensureUserDocument({ uid, email, name });
-    const snap2 = await getDoc(ref);
+    await withTimeout(ensureUserDocument({ uid, email, name }), 5000);
+    const snap2 = await withTimeout(getDoc(ref), 5000);
     const data = snap2.data() || {};
     return {
       id: uid,
@@ -239,6 +245,25 @@ export async function updateUserById(id, updates) {
     ).catch(() => {});
   }
   return updated;
+}
+
+export async function deleteUserById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const current = await fetchUserById(id).catch(() => null);
+  const ref = doc(firebaseDb, "user", String(id));
+  await deleteDoc(ref);
+  if (current) {
+    queueInteraction({
+      type: "user_deleted",
+      target: {
+        id: current.id,
+        name: current.name || "",
+        email: current.email || "",
+      },
+      details: { entity: "user" },
+    });
+  }
+  return { ok: true };
 }
 
 export async function createUser(payload) {
@@ -347,6 +372,7 @@ export async function fetchAllLoads() {
     barco: data.barco || "",
     entrega: Array.isArray(data.entrega) ? data.entrega : [],
     chofer: data.chofer || "",
+    responsable: data.responsable || "",
     palets: Array.isArray(data.palets) ? data.palets : [],
     carga: Array.isArray(data.carga) ? data.carga : [],
     consignatario: data.consignatario || "",
@@ -373,6 +399,7 @@ export async function fetchLoadById(id) {
     barco: data.barco || "",
     entrega: Array.isArray(data.entrega) ? data.entrega : [],
     chofer: data.chofer || "",
+    responsable: data.responsable || "",
     palets: Array.isArray(data.palets) ? data.palets : [],
     carga: Array.isArray(data.carga) ? data.carga : [],
     consignatario: data.consignatario || "",
@@ -418,6 +445,7 @@ export async function createLoad(payload) {
     barco,
     entrega,
     chofer: String(payload?.chofer || ""),
+    responsable: String(payload?.responsable || ""),
     palets,
     carga,
     consignatario: String(payload?.consignatario || ""),
@@ -446,19 +474,22 @@ export async function createLoad(payload) {
     );
   }
   if (created) {
-    queueInteraction({
-      type: "load_created",
-      target: { id: created.id, name: created.nombre || "" },
-      details: {
-        entity: "load",
-        snapshot: {
-          nombre: created.nombre || "",
-          barco: created.barco || "",
-          fecha_de_carga: created.fecha_de_carga || "",
-          estado_viaje: created.estado_viaje || "",
+    await withTimeout(
+      logInteraction({
+        type: "load_created",
+        target: { id: created.id, name: created.nombre || "" },
+        details: {
+          entity: "load",
+          snapshot: {
+            nombre: created.nombre || "",
+            barco: created.barco || "",
+            fecha_de_carga: created.fecha_de_carga || "",
+            estado_viaje: created.estado_viaje || "",
+          },
         },
-      },
-    });
+      }),
+      5000
+    ).catch(() => {});
   }
   return created;
 }
@@ -558,11 +589,14 @@ export async function updateLoadById(id, updates) {
     }
   }
   if (updated) {
-    queueInteraction({
-      type: "load_updated",
-      target: { id: updated.id, name: updated.nombre || "" },
-      details: { entity: "load", updates: updates || {} },
-    });
+    await withTimeout(
+      logInteraction({
+        type: "load_updated",
+        target: { id: updated.id, name: updated.nombre || "" },
+        details: { entity: "load", updates: updates || {} },
+      }),
+      5000
+    ).catch(() => {});
   }
   return updated;
 }
@@ -580,11 +614,14 @@ export async function deleteLoadById(id) {
     );
   }
   if (current) {
-    queueInteraction({
-      type: "load_deleted",
-      target: { id: current.id, name: current.nombre || "" },
-      details: { entity: "load" },
-    });
+    await withTimeout(
+      logInteraction({
+        type: "load_deleted",
+        target: { id: current.id, name: current.nombre || "" },
+        details: { entity: "load" },
+      }),
+      5000
+    ).catch(() => {});
   }
   return { ok: true };
 }
@@ -854,6 +891,7 @@ export async function fusePallets({
 
   await updateDoc(doc(firebaseDb, "pallets", String(targetId)), {
     productos: productosMerged,
+    nombre: numeroMerged || target.nombre || target.numero_palet,
     numero_palet: numeroMerged || target.numero_palet,
     modificado_por: resolvedModificadoPor,
     fecha_modificacion: serverTimestamp(),
@@ -1123,6 +1161,125 @@ export async function deleteConsigneeById(id) {
   return { ok: true };
 }
 
+export async function fetchAllResponsables() {
+  const docs = await getAllDocsOrdered({
+    collectionName: "responsables",
+    orderField: "fecha_creacion",
+  });
+  return docs.map(({ docId, data }) => ({
+    ...mapCommonAudit(data, docId),
+    nombre: data.nombre || "",
+    email: data.email || "",
+    telefono: data.telefono || "",
+  }));
+}
+
+export async function fetchResponsableById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "responsables", String(id));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() || {};
+  return {
+    ...mapCommonAudit(data, snap.id),
+    nombre: data.nombre || "",
+    email: data.email || "",
+    telefono: data.telefono || "",
+  };
+}
+
+export async function createResponsable(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const nombre = String(payload?.nombre || "").trim();
+  if (!nombre) throw new Error("nombre es obligatorio");
+
+  const email = String(payload?.email || "")
+    .trim()
+    .toLowerCase();
+  const telefono = String(payload?.telefono || "").trim();
+
+  const ref = doc(collection(firebaseDb, "responsables"));
+  const id = ref.id;
+  await setDoc(ref, {
+    id,
+    nombre,
+    email,
+    telefono,
+    creado_por: String(payload?.creado_por || "Testing"),
+    modificado_por: "",
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const created = await fetchResponsableById(id);
+  if (created) {
+    queueInteraction({
+      type: "responsable_created",
+      target: { id: created.id, name: created.nombre || "" },
+      details: {
+        entity: "responsable",
+        snapshot: {
+          nombre: created.nombre || "",
+          email: created.email || "",
+          telefono: created.telefono || "",
+        },
+      },
+    });
+  }
+  return created;
+}
+
+export async function updateResponsableById(id, updates) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "responsables", String(id));
+  const current = await fetchResponsableById(id);
+  if (!current) return null;
+
+  const patch = { ...updates };
+  if (typeof updates?.email !== "undefined") {
+    patch.email = String(updates?.email || "")
+      .trim()
+      .toLowerCase();
+  }
+  if (typeof updates?.telefono !== "undefined") {
+    patch.telefono = String(updates?.telefono || "").trim();
+  }
+  if (typeof updates?.nombre !== "undefined") {
+    patch.nombre = String(updates?.nombre || "").trim();
+  }
+
+  await updateDoc(ref, {
+    ...patch,
+    fecha_modificacion: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const updated = await fetchResponsableById(id);
+  if (updated) {
+    queueInteraction({
+      type: "responsable_updated",
+      target: { id: updated.id, name: updated.nombre || "" },
+      details: { entity: "responsable", updates: patch || {} },
+    });
+  }
+  return updated;
+}
+
+export async function deleteResponsableById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const current = await fetchResponsableById(id).catch(() => null);
+  const ref = doc(firebaseDb, "responsables", String(id));
+  await deleteDoc(ref);
+  if (current) {
+    queueInteraction({
+      type: "responsable_deleted",
+      target: { id: current.id, name: current.nombre || "" },
+      details: { entity: "responsable" },
+    });
+  }
+  return { ok: true };
+}
+
 export async function fetchAllCompanies() {
   const docs = await getAllDocsOrdered({
     collectionName: "companies",
@@ -1218,16 +1375,50 @@ export async function fetchAllShips() {
     collectionName: "ships",
     orderField: "fecha_creacion",
   });
-  return docs.map(({ docId, data }) => ({
-    ...mapCommonAudit(data, docId),
-    nombre_del_barco: data.nombre_del_barco || "",
-    tipo: data.tipo || "",
-    empresa: data.empresa || "",
-    empresa_nombre: data.empresa_nombre || "",
-    responsable: data.responsable || "",
-    responsable_nombre: data.responsable_nombre || "",
-    responsable_email: data.responsable_email || "",
-  }));
+  return docs.map(({ docId, data }) => {
+    const rawEmpresa = data.empresa;
+    const empresaObj =
+      rawEmpresa && typeof rawEmpresa === "object" ? rawEmpresa : null;
+    const empresaId =
+      (empresaObj &&
+        String(empresaObj._id || empresaObj.id || empresaObj.docId || "")) ||
+      String(rawEmpresa || "");
+    const empresaNombre =
+      String(data.empresa_nombre || "") ||
+      (empresaObj ? String(empresaObj.nombre || empresaObj.name || "") : "");
+
+    const rawResponsable = data.responsable;
+    const responsableObj =
+      rawResponsable && typeof rawResponsable === "object"
+        ? rawResponsable
+        : null;
+    const responsableId =
+      (responsableObj &&
+        String(
+          responsableObj._id || responsableObj.id || responsableObj.docId || ""
+        )) ||
+      String(rawResponsable || "");
+    const responsableNombre =
+      String(data.responsable_nombre || "") ||
+      (responsableObj
+        ? String(responsableObj.nombre || responsableObj.name || "")
+        : "");
+    const responsableEmail =
+      String(data.responsable_email || "") ||
+      (responsableObj ? String(responsableObj.email || "") : "");
+
+    return {
+      ...mapCommonAudit(data, docId),
+      nombre_del_barco: data.nombre_del_barco || "",
+      enlace: data.enlace || "",
+      tipo: data.tipo || "",
+      empresa: empresaId,
+      empresa_nombre: empresaNombre,
+      responsable: responsableId,
+      responsable_nombre: responsableNombre,
+      responsable_email: responsableEmail,
+    };
+  });
 }
 
 export async function fetchShipById(id) {
@@ -1236,15 +1427,46 @@ export async function fetchShipById(id) {
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
   const data = snap.data() || {};
+  const rawEmpresa = data.empresa;
+  const empresaObj =
+    rawEmpresa && typeof rawEmpresa === "object" ? rawEmpresa : null;
+  const empresaId =
+    (empresaObj &&
+      String(empresaObj._id || empresaObj.id || empresaObj.docId || "")) ||
+    String(rawEmpresa || "");
+  const empresaNombre =
+    String(data.empresa_nombre || "") ||
+    (empresaObj ? String(empresaObj.nombre || empresaObj.name || "") : "");
+
+  const rawResponsable = data.responsable;
+  const responsableObj =
+    rawResponsable && typeof rawResponsable === "object"
+      ? rawResponsable
+      : null;
+  const responsableId =
+    (responsableObj &&
+      String(
+        responsableObj._id || responsableObj.id || responsableObj.docId || ""
+      )) ||
+    String(rawResponsable || "");
+  const responsableNombre =
+    String(data.responsable_nombre || "") ||
+    (responsableObj
+      ? String(responsableObj.nombre || responsableObj.name || "")
+      : "");
+  const responsableEmail =
+    String(data.responsable_email || "") ||
+    (responsableObj ? String(responsableObj.email || "") : "");
   return {
     ...mapCommonAudit(data, snap.id),
     nombre_del_barco: data.nombre_del_barco || "",
+    enlace: data.enlace || "",
     tipo: data.tipo || "",
-    empresa: data.empresa || "",
-    empresa_nombre: data.empresa_nombre || "",
-    responsable: data.responsable || "",
-    responsable_nombre: data.responsable_nombre || "",
-    responsable_email: data.responsable_email || "",
+    empresa: empresaId,
+    empresa_nombre: empresaNombre,
+    responsable: responsableId,
+    responsable_nombre: responsableNombre,
+    responsable_email: responsableEmail,
   };
 }
 
@@ -1256,21 +1478,55 @@ export async function createShip(payload) {
   const ref = doc(collection(firebaseDb, "ships"));
   const id = ref.id;
 
-  const empresa = String(payload?.empresa || "").trim();
-  const responsable = String(payload?.responsable || "").trim();
+  const empresaInput = payload?.empresa;
+  const empresaObj =
+    empresaInput && typeof empresaInput === "object" ? empresaInput : null;
+  const empresa = String(
+    empresaObj?.id || empresaObj?._id || empresaObj?.docId || empresaInput || ""
+  ).trim();
+  const empresa_nombre = String(
+    payload?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || ""
+  ).trim();
+
+  const responsableInput = payload?.responsable;
+  const responsableObj =
+    responsableInput && typeof responsableInput === "object"
+      ? responsableInput
+      : null;
+  const responsable = String(
+    responsableObj?.id ||
+      responsableObj?._id ||
+      responsableObj?.docId ||
+      responsableInput ||
+      ""
+  ).trim();
+  const responsable_nombre = String(
+    payload?.responsable_nombre ||
+      responsableObj?.nombre ||
+      responsableObj?.name ||
+      ""
+  ).trim();
+  const responsable_email = String(
+    payload?.responsable_email || responsableObj?.email || ""
+  ).trim();
+
+  const enlace = String(payload?.enlace || "").trim();
   const tipo = String(payload?.tipo || "").trim();
+  const creado_por = String(payload?.creado_por || "Testing");
+  const modificado_por = String(payload?.modificado_por || creado_por);
 
   await setDoc(ref, {
     id,
     nombre_del_barco,
+    enlace,
     tipo,
     empresa,
-    empresa_nombre: String(payload?.empresa_nombre || ""),
+    empresa_nombre,
     responsable,
-    responsable_nombre: String(payload?.responsable_nombre || ""),
-    responsable_email: String(payload?.responsable_email || ""),
-    creado_por: String(payload?.creado_por || "Testing"),
-    modificado_por: "",
+    responsable_nombre,
+    responsable_email,
+    creado_por,
+    modificado_por,
     fecha_creacion: serverTimestamp(),
     fecha_modificacion: serverTimestamp(),
     createdAt: serverTimestamp(),
@@ -1286,6 +1542,7 @@ export async function createShip(payload) {
         entity: "ship",
         snapshot: {
           nombre_del_barco: created.nombre_del_barco || "",
+          enlace: created.enlace || "",
           tipo: created.tipo || "",
           empresa: created.empresa || "",
           empresa_nombre: created.empresa_nombre || "",
@@ -1305,8 +1562,72 @@ export async function updateShipById(id, updates) {
   const current = await fetchShipById(id);
   if (!current) return null;
 
+  const patch = { ...updates };
+  if (typeof updates?.modificado_por === "undefined") {
+    const actorName = getActorFromLocalStorage()?.name || "";
+    if (actorName) patch.modificado_por = actorName;
+  } else {
+    patch.modificado_por = String(updates?.modificado_por || "").trim();
+  }
+  if (typeof updates?.empresa !== "undefined") {
+    const empresaInput = updates?.empresa;
+    const empresaObj =
+      empresaInput && typeof empresaInput === "object" ? empresaInput : null;
+    patch.empresa = String(
+      empresaObj?.id ||
+        empresaObj?._id ||
+        empresaObj?.docId ||
+        empresaInput ||
+        ""
+    ).trim();
+    patch.empresa_nombre = String(
+      updates?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || ""
+    ).trim();
+    if (!patch.empresa) patch.empresa_nombre = "";
+  }
+
+  if (typeof updates?.responsable !== "undefined") {
+    const responsableInput = updates?.responsable;
+    const responsableObj =
+      responsableInput && typeof responsableInput === "object"
+        ? responsableInput
+        : null;
+    patch.responsable = String(
+      responsableObj?.id ||
+        responsableObj?._id ||
+        responsableObj?.docId ||
+        responsableInput ||
+        ""
+    ).trim();
+    patch.responsable_nombre = String(
+      updates?.responsable_nombre ||
+        responsableObj?.nombre ||
+        responsableObj?.name ||
+        ""
+    ).trim();
+    patch.responsable_email = String(
+      updates?.responsable_email || responsableObj?.email || ""
+    ).trim();
+    if (!patch.responsable) {
+      patch.responsable_nombre = "";
+      patch.responsable_email = "";
+    }
+  }
+
+  if (typeof updates?.tipo !== "undefined") {
+    patch.tipo = String(updates?.tipo || "").trim();
+  }
+
+  if (typeof updates?.enlace !== "undefined") {
+    patch.enlace = String(updates?.enlace || "").trim();
+  }
+
+  if (typeof updates?.nombre_del_barco !== "undefined") {
+    patch.nombre_del_barco = String(updates?.nombre_del_barco || "").trim();
+  }
+
   await updateDoc(ref, {
-    ...updates,
+    ...patch,
     fecha_modificacion: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -1316,7 +1637,7 @@ export async function updateShipById(id, updates) {
     queueInteraction({
       type: "ship_updated",
       target: { id: updated.id, name: updated.nombre_del_barco || "" },
-      details: { entity: "ship", updates: updates || {} },
+      details: { entity: "ship", updates: patch || {} },
     });
   }
   return updated;

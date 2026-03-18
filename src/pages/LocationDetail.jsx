@@ -3,13 +3,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import { getCurrentUser } from "../utils/roles.js";
-import { fetchLocationById, updateLocationById } from "../firebase/auth.js";
+import {
+  deleteLocationById,
+  fetchLocationById,
+  updateLocationById,
+} from "../firebase/auth.js";
 
 export default function LocationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [location, setLocation] = useState(null);
   const [open, setOpen] = useState(false);
+  const current = getCurrentUser();
+  const canDeleteLocation =
+    current?.role === "dispatcher" || current?.role === "admin";
   const [form, setForm] = useState({
     nombre: "",
     ciudad: "",
@@ -71,6 +78,31 @@ export default function LocationDetail() {
       setSnack({
         open: true,
         message: "Error actualizando localización",
+        type: "error",
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!location) return;
+    const label = location.nombre || location.id || "";
+    if (
+      !window.confirm(`¿Seguro que deseas borrar la localización "${label}"?`)
+    )
+      return;
+    try {
+      await deleteLocationById(id);
+      setOpen(false);
+      setSnack({
+        open: true,
+        message: "Localización borrada",
+        type: "success",
+      });
+      navigate("/app/admin/localizaciones");
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error borrando localización",
         type: "error",
       });
     }
@@ -153,6 +185,19 @@ export default function LocationDetail() {
             onChange={(e) => setForm({ ...form, coordenadas: e.target.value })}
           />
         </div>
+        {canDeleteLocation && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              className="secondary-button"
+              style={{ borderColor: "#d93025", color: "#d93025" }}
+              onClick={handleDelete}
+              type="button"
+              title="Eliminar localización"
+            >
+              Eliminar localización
+            </button>
+          </div>
+        )}
       </Modal>
 
       <Snackbar

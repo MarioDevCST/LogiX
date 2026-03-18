@@ -1,79 +1,336 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import Modal from '../components/Modal.jsx'
-import Snackbar from '../components/Snackbar.jsx'
-import { getCurrentUser } from '../utils/roles.js'
-import { fetchShipById, updateShipById } from '../firebase/auth.js'
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import Modal from "../components/Modal.jsx";
+import Snackbar from "../components/Snackbar.jsx";
+import { getCurrentUser } from "../utils/roles.js";
+import {
+  deleteShipById,
+  fetchAllCompanies,
+  fetchAllResponsables,
+  fetchShipById,
+  updateShipById,
+} from "../firebase/auth.js";
+
+const SHIP_TYPE_OPTIONS = ["Mercante", "Ferry", "Crucero"];
+
+const normalizeExternalUrl = (raw) => {
+  const input = String(raw || "").trim();
+  if (!input) return "";
+  const withProto = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(input)
+    ? input
+    : `https://${input}`;
+  try {
+    const url = new URL(withProto);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+};
+
+const truncateText = (raw, maxChars = 20) => {
+  const text = String(raw || "");
+  const max = Math.max(1, Number(maxChars) || 1);
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(1, max - 1))}…`;
+};
 
 export default function ShipDetail() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [ship, setShip] = useState(null)
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ nombre_del_barco: '' })
-  const [snack, setSnack] = useState({ open: false, message: '', type: 'success' })
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [ship, setShip] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const current = getCurrentUser();
+  const canDeleteShip = current?.role === "dispatcher";
+  const [companies, setCompanies] = useState([]);
+  const [responsables, setResponsables] = useState([]);
+  const [form, setForm] = useState({
+    nombre_del_barco: "",
+    empresa: "",
+    responsable: "",
+    tipo: "Mercante",
+    enlace: "",
+  });
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
 
   useEffect(() => {
-    let mounted = true
+    let mounted = true;
     const run = async () => {
       try {
-        const s = await fetchShipById(id)
-        if (!mounted) return
-        setShip(s)
-        setForm({ nombre_del_barco: s?.nombre_del_barco || '' })
+        setLoading(true);
+        const results = await Promise.allSettled([
+          fetchShipById(id),
+          fetchAllCompanies(),
+          fetchAllResponsables(),
+        ]);
+        const s = results[0].status === "fulfilled" ? results[0].value : null;
+        const companiesList =
+          results[1].status === "fulfilled" && Array.isArray(results[1].value)
+            ? results[1].value
+            : [];
+        const responsablesList =
+          results[2].status === "fulfilled" && Array.isArray(results[2].value)
+            ? results[2].value
+            : [];
+        if (!mounted) return;
+        setShip(s);
+        setCompanies(
+          (companiesList || []).map((c) => ({
+            ...c,
+            id: c.id || c._id,
+            _id: c._id || c.id,
+          }))
+        );
+        setResponsables(
+          (responsablesList || []).map((r) => ({
+            ...r,
+            id: r.id || r._id,
+            _id: r._id || r.id,
+          }))
+        );
+        setForm({
+          nombre_del_barco: s?.nombre_del_barco || "",
+          empresa: s?.empresa || "",
+          responsable: s?.responsable || "",
+          tipo: s?.tipo || "Mercante",
+          enlace: s?.enlace || "",
+        });
       } catch {
-        if (!mounted) return
-        setShip(null)
+        if (!mounted) return;
+        setShip(null);
+      } finally {
+        if (mounted) setLoading(false);
       }
-    }
-    run()
-    return () => { mounted = false }
-  }, [id])
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
 
   const submit = async () => {
     try {
-      const updated = await updateShipById(id, { ...form, modificado_por: (getCurrentUser()?.name || 'Testing') })
-      if (!updated) {
-        setSnack({ open: true, message: 'Barco no encontrado', type: 'error' })
-        return
+      if (!form.nombre_del_barco) {
+        setSnack({
+          open: true,
+          message: "El nombre del barco es obligatorio",
+          type: "error",
+        });
+        return;
       }
-      setShip(updated)
-      setOpen(false)
-      setSnack({ open: true, message: 'Barco actualizado', type: 'success' })
+      const company = companies.find(
+        (c) => String(c._id || c.id) === String(form.empresa)
+      );
+      const responsable = responsables.find(
+        (r) => String(r._id || r.id) === String(form.responsable)
+      );
+      const updated = await updateShipById(id, {
+        ...form,
+        empresa: form.empresa || "",
+        empresa_nombre: company?.nombre || "",
+        responsable: form.responsable || "",
+        responsable_nombre: responsable?.nombre || "",
+        responsable_email: responsable?.email || "",
+        modificado_por: getCurrentUser()?.name || "Testing",
+      });
+      if (!updated) {
+        setSnack({ open: true, message: "Barco no encontrado", type: "error" });
+        return;
+      }
+      setShip(updated);
+      setOpen(false);
+      setSnack({ open: true, message: "Barco actualizado", type: "success" });
     } catch (e) {
-      setSnack({ open: true, message: 'Error actualizando barco', type: 'error' })
+      setSnack({
+        open: true,
+        message: "Error actualizando barco",
+        type: "error",
+      });
     }
-  }
+  };
 
-  if (!ship) return <p>Cargando...</p>
+  const companyName =
+    ship?.empresa_nombre ||
+    companies.find((c) => String(c._id || c.id) === String(ship?.empresa))
+      ?.nombre ||
+    String(ship?.empresa || "") ||
+    "";
+  const responsableName =
+    ship?.responsable_nombre ||
+    responsables.find(
+      (r) => String(r._id || r.id) === String(ship?.responsable)
+    )?.nombre ||
+    String(ship?.responsable || "") ||
+    "";
+  const enlaceHref = normalizeExternalUrl(ship?.enlace);
+  const enlaceLabel = truncateText(String(ship?.enlace || "").trim(), 20);
+
+  const handleDelete = async () => {
+    if (!ship) return;
+    const label = ship.nombre_del_barco || ship.id || "";
+    if (!window.confirm(`¿Seguro que deseas borrar el barco "${label}"?`))
+      return;
+    try {
+      await deleteShipById(id);
+      setOpen(false);
+      setSnack({ open: true, message: "Barco borrado", type: "success" });
+      navigate("/app/admin/barcos");
+    } catch {
+      setSnack({ open: true, message: "Error borrando barco", type: "error" });
+    }
+  };
+
+  if (loading) return <p>Cargando...</p>;
+  if (!ship) return <p>Barco no disponible.</p>;
 
   return (
     <section className="card">
       <div className="card-header">
         <h2 className="card-title">Detalle barco</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="icon-button" onClick={() => setOpen(true)} title="Modificar">
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="icon-button"
+            onClick={() => setOpen(true)}
+            title="Modificar"
+          >
             <span className="material-symbols-outlined">edit</span>
           </button>
-          <button className="icon-button" onClick={() => navigate(-1)} title="Atrás">
+          <button
+            className="icon-button"
+            onClick={() => navigate(-1)}
+            title="Atrás"
+          >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
         </div>
       </div>
       <div style={{ padding: 16 }}>
-        <p><strong>Nombre:</strong> {ship.nombre_del_barco}</p>
-        <p><strong>Empresa:</strong> {ship.empresa_nombre || '-'}</p>
-        <p><strong>Responsable:</strong> {ship.responsable_nombre || '-'}</p>
+        <p>
+          <strong>Nombre:</strong> {ship.nombre_del_barco}
+        </p>
+        <p>
+          <strong>Empresa:</strong> {companyName || "-"}
+        </p>
+        <p>
+          <strong>Responsable:</strong> {responsableName || "-"}
+        </p>
+        <p>
+          <strong>Tipo:</strong> {ship.tipo || "-"}
+        </p>
+        <p>
+          <strong>Enlace:</strong>{" "}
+          {enlaceHref ? (
+            <a
+              href={enlaceHref}
+              target="_blank"
+              rel="noreferrer"
+              title={String(ship.enlace || "").trim() || enlaceHref}
+            >
+              {enlaceLabel || truncateText(enlaceHref, 20)}
+            </a>
+          ) : (
+            "-"
+          )}
+        </p>
       </div>
 
-      <Modal open={open} title="Modificar barco" onClose={() => setOpen(false)} onSubmit={submit} submitLabel="Guardar">
+      <Modal
+        open={open}
+        title="Modificar barco"
+        onClose={() => setOpen(false)}
+        onSubmit={submit}
+        submitLabel="Guardar"
+      >
         <div>
           <div className="label">Nombre del barco</div>
-          <input className="input" value={form.nombre_del_barco} onChange={e => setForm({ ...form, nombre_del_barco: e.target.value })} />
+          <input
+            className="input"
+            value={form.nombre_del_barco}
+            onChange={(e) =>
+              setForm({ ...form, nombre_del_barco: e.target.value })
+            }
+          />
         </div>
+        <div>
+          <div className="label">Empresa</div>
+          <select
+            className="input"
+            value={form.empresa}
+            onChange={(e) => setForm({ ...form, empresa: e.target.value })}
+          >
+            <option value="">Sin empresa</option>
+            {companies.map((c) => (
+              <option key={c._id || c.id} value={c._id || c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="label">Responsable</div>
+          <select
+            className="input"
+            value={form.responsable}
+            onChange={(e) => setForm({ ...form, responsable: e.target.value })}
+          >
+            <option value="">Sin responsable</option>
+            {responsables.map((r) => (
+              <option key={r._id || r.id} value={r._id || r.id}>
+                {r.nombre}
+                {r.email ? ` (${r.email})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="label">Tipo</div>
+          <select
+            className="select"
+            value={form.tipo}
+            onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+          >
+            {SHIP_TYPE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="label">Enlace (opcional)</div>
+          <input
+            className="input"
+            value={form.enlace}
+            onChange={(e) => setForm({ ...form, enlace: e.target.value })}
+            placeholder="https://..."
+          />
+        </div>
+        {canDeleteShip && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              className="secondary-button"
+              style={{ borderColor: "#d93025", color: "#d93025" }}
+              onClick={handleDelete}
+              type="button"
+              title="Eliminar barco"
+            >
+              Eliminar barco
+            </button>
+          </div>
+        )}
       </Modal>
 
-      <Snackbar open={snack.open} message={snack.message} type={snack.type} onClose={() => setSnack(s => ({ ...s, open: false }))} />
+      <Snackbar
+        open={snack.open}
+        message={snack.message}
+        type={snack.type}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+      />
     </section>
-  )
+  );
 }

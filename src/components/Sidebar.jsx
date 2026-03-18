@@ -14,6 +14,7 @@ export default function Sidebar({ collapsed }) {
   const canViewAdmin = role
     ? hasPermission(role, PERMISSIONS.MANAGE_USERS)
     : false;
+  const canViewInteractions = canViewAdmin && role !== ROLES.OFICINA;
 
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
@@ -119,7 +120,7 @@ export default function Sidebar({ collapsed }) {
           </>
         )}
 
-        {canViewAdmin && (
+        {canViewInteractions && (
           <>
             <div className="nav-section">Admin</div>
             <NavLink

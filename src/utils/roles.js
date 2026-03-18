@@ -1,54 +1,65 @@
 // Definición de roles, permisos y utilidades de UI
 
 export const ROLES = {
-  ADMIN: 'admin',
-  OFICINA: 'dispatcher',
-  CONDUCTOR: 'driver',
-  ALMACEN: 'warehouse',
-  CONSIGNATARIO: 'consignee',
-  LOGISTICA: 'logistic',
-}
+  ADMIN: "admin",
+  OFICINA: "dispatcher",
+  MANAGER: "manager",
+  CONDUCTOR: "driver",
+  ALMACEN: "warehouse",
+  CONSIGNATARIO: "consignee",
+  LOGISTICA: "logistic",
+};
 
 export const ROLE_LABELS = {
-  [ROLES.ADMIN]: 'Administrador',
-  [ROLES.OFICINA]: 'Oficina',
-  [ROLES.CONDUCTOR]: 'Conductor',
-  [ROLES.ALMACEN]: 'Almacén',
-  [ROLES.CONSIGNATARIO]: 'Consignatario',
-  [ROLES.LOGISTICA]: 'Logistica',
-}
+  [ROLES.ADMIN]: "Administrador",
+  [ROLES.OFICINA]: "Oficina",
+  [ROLES.MANAGER]: "Manager",
+  [ROLES.CONDUCTOR]: "Conductor",
+  [ROLES.ALMACEN]: "Almacén",
+  [ROLES.CONSIGNATARIO]: "Consignatario",
+  [ROLES.LOGISTICA]: "Logistica",
+};
 
 // Colores para UI (avatar, badges, etc.)
 export const ROLE_COLORS = {
-  [ROLES.ADMIN]: '#e53935', // rojo
-  [ROLES.OFICINA]: '#1e88e5', // azul
-  [ROLES.CONDUCTOR]: '#8e24aa', // morado
-  [ROLES.ALMACEN]: '#fb8c00', // naranja
-  [ROLES.CONSIGNATARIO]: '#6d4c41', // marrón
-  [ROLES.LOGISTICA]: '#43a047', // verde
-}
+  [ROLES.ADMIN]: "#e53935", // rojo
+  [ROLES.OFICINA]: "#1e88e5", // azul
+  [ROLES.MANAGER]: "#3949ab", // índigo
+  [ROLES.CONDUCTOR]: "#8e24aa", // morado
+  [ROLES.ALMACEN]: "#fb8c00", // naranja
+  [ROLES.CONSIGNATARIO]: "#6d4c41", // marrón
+  [ROLES.LOGISTICA]: "#43a047", // verde
+};
 
 // Permisos de alto nivel (se pueden granular más según necesidad)
 export const PERMISSIONS = {
-  VIEW_DASHBOARD: 'view_dashboard',
-  MANAGE_USERS: 'manage_users',
-  MANAGE_COMPANIES: 'manage_companies',
-  MANAGE_SHIPS: 'manage_ships',
-  MANAGE_LOCATIONS: 'manage_locations',
-  VIEW_LOGISTICS: 'view_logistics',
-  MANAGE_LOADS: 'manage_loads',
-  MANAGE_PALLETS: 'manage_pallets',
-}
+  VIEW_DASHBOARD: "view_dashboard",
+  MANAGE_USERS: "manage_users",
+  MANAGE_COMPANIES: "manage_companies",
+  MANAGE_SHIPS: "manage_ships",
+  MANAGE_LOCATIONS: "manage_locations",
+  VIEW_LOGISTICS: "view_logistics",
+  MANAGE_LOADS: "manage_loads",
+  MANAGE_PALLETS: "manage_pallets",
+};
 
 // Matriz de permisos por rol (ajustable según negocio)
 export const ROLE_PERMISSIONS = {
   [ROLES.ADMIN]: Object.values(PERMISSIONS),
   [ROLES.OFICINA]: [
     PERMISSIONS.VIEW_DASHBOARD,
+    PERMISSIONS.VIEW_LOGISTICS,
+    PERMISSIONS.MANAGE_LOADS,
+    PERMISSIONS.MANAGE_PALLETS,
     PERMISSIONS.MANAGE_USERS,
     PERMISSIONS.MANAGE_COMPANIES,
     PERMISSIONS.MANAGE_SHIPS,
     PERMISSIONS.MANAGE_LOCATIONS,
+  ],
+  [ROLES.MANAGER]: [
+    PERMISSIONS.VIEW_DASHBOARD,
+    PERMISSIONS.VIEW_LOGISTICS,
+    PERMISSIONS.MANAGE_LOADS,
   ],
   [ROLES.LOGISTICA]: [
     PERMISSIONS.VIEW_DASHBOARD,
@@ -57,39 +68,62 @@ export const ROLE_PERMISSIONS = {
     PERMISSIONS.MANAGE_PALLETS,
     PERMISSIONS.MANAGE_USERS,
   ],
-  [ROLES.CONDUCTOR]: [
-    PERMISSIONS.VIEW_LOGISTICS,
-  ],
-  [ROLES.ALMACEN]: [
-    PERMISSIONS.MANAGE_PALLETS,
-  ],
-  [ROLES.CONSIGNATARIO]: [
-    PERMISSIONS.VIEW_LOGISTICS,
-  ],
+  [ROLES.CONDUCTOR]: [PERMISSIONS.VIEW_LOGISTICS],
+  [ROLES.ALMACEN]: [PERMISSIONS.MANAGE_PALLETS],
+  [ROLES.CONSIGNATARIO]: [PERMISSIONS.VIEW_LOGISTICS],
+};
+
+export function normalizeRole(role) {
+  const raw = String(role || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return null;
+  if (raw === "oficina" || raw === "office") return ROLES.OFICINA;
+  if (raw === "almacen" || raw === "almacén") return ROLES.ALMACEN;
+  if (raw === "logistica" || raw === "logística" || raw === "logistics")
+    return ROLES.LOGISTICA;
+  if (raw === "conductor") return ROLES.CONDUCTOR;
+  if (raw === "consignatario") return ROLES.CONSIGNATARIO;
+  if (raw === "administrador") return ROLES.ADMIN;
+  if (raw === "dispatch") return ROLES.OFICINA;
+  return raw;
 }
 
 export function getRoleColor(role) {
-  return ROLE_COLORS[role] || '#9e9e9e'
+  return ROLE_COLORS[normalizeRole(role)] || "#9e9e9e";
 }
 
 export function getRoleLabel(role) {
-  return ROLE_LABELS[role] || role
+  const normalized = normalizeRole(role);
+  return ROLE_LABELS[normalized] || normalized;
 }
 
 export function hasPermission(role, permission) {
-  const perms = ROLE_PERMISSIONS[role] || []
-  return perms.includes(permission)
+  const perms = ROLE_PERMISSIONS[normalizeRole(role)] || [];
+  return perms.includes(permission);
 }
 
 export function getCurrentUser() {
   try {
-    return JSON.parse(localStorage.getItem('auth') || '{}').user || null
+    const raw = localStorage.getItem("auth");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed) return null;
+    if (parsed.user && typeof parsed.user === "object") return parsed.user;
+    if (parsed.currentUser && typeof parsed.currentUser === "object")
+      return parsed.currentUser;
+    if (
+      typeof parsed === "object" &&
+      (parsed.email || parsed.role || parsed.id || parsed._id)
+    )
+      return parsed;
+    return null;
   } catch {
-    return null
+    return null;
   }
 }
 
 export function getCurrentRole() {
-  const user = getCurrentUser()
-  return user?.role || null
+  const user = getCurrentUser();
+  return normalizeRole(user?.role) || null;
 }

@@ -112,7 +112,14 @@ export default function MessageDetail() {
         </div>
         <div>
           <div className="label">Cuerpo</div>
-          <textarea className="input" value={editForm.cuerpo} onChange={e => setEditForm({ ...editForm, cuerpo: e.target.value })} placeholder="Contenido del mensaje" rows={6} />
+          <textarea
+            className="input"
+            style={{ width: '100%', resize: 'vertical', minHeight: 140 }}
+            value={editForm.cuerpo}
+            onChange={e => setEditForm({ ...editForm, cuerpo: e.target.value })}
+            placeholder="Contenido del mensaje"
+            rows={6}
+          />
         </div>
         <div>
           <div className="label">Roles destinatarios</div>

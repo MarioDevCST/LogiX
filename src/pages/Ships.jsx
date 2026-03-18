@@ -11,8 +11,30 @@ import {
   createShip,
   fetchAllCompanies,
   fetchAllShips,
-  fetchAllUsers,
+  fetchAllResponsables,
 } from "../firebase/auth.js";
+
+const normalizeExternalUrl = (raw) => {
+  const input = String(raw || "").trim();
+  if (!input) return "";
+  const withProto = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(input)
+    ? input
+    : `https://${input}`;
+  try {
+    const url = new URL(withProto);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+};
+
+const truncateText = (raw, maxChars = 20) => {
+  const text = String(raw || "");
+  const max = Math.max(1, Number(maxChars) || 1);
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(1, max - 1))}…`;
+};
 
 export default function Ships() {
   const columns = [
@@ -20,6 +42,7 @@ export default function Ships() {
     { key: "empresa", header: "Empresa" },
     { key: "responsable", header: "Responsable" },
     { key: "tipo", header: "Tipo" },
+    { key: "enlace", header: "Enlace" },
   ];
 
   const navigate = useNavigate();
@@ -32,9 +55,10 @@ export default function Ships() {
     empresa: "",
     responsable: "",
     tipo: "Mercante",
+    enlace: "",
   });
   const [companies, setCompanies] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [responsables, setResponsables] = useState([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -53,32 +77,54 @@ export default function Ships() {
     const run = async () => {
       try {
         setLoading(true);
-        const [shipsList, companiesList, usersList] = await Promise.all([
+        const results = await Promise.allSettled([
           fetchAllShips(),
           fetchAllCompanies(),
-          fetchAllUsers(),
+          fetchAllResponsables(),
         ]);
+        const values = results.map((r) =>
+          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
+        );
+        const [shipsList, companiesList, responsablesList] = values;
         if (!mounted) return;
         const companyNameById = new Map(
           companiesList.map((c) => [String(c.id || c._id), c.nombre || ""])
         );
-        const userById = new Map(
-          usersList.map((u) => [String(u.id || u._id), u])
+        const companyNameByName = new Map(
+          companiesList
+            .map((c) => [String(c.nombre || "").toLowerCase(), c.nombre || ""])
+            .filter((p) => p[0] && p[1])
+        );
+        const responsableById = new Map(
+          responsablesList.map((r) => [String(r.id || r._id), r])
+        );
+        const responsableByEmail = new Map(
+          responsablesList
+            .map((r) => [String(r.email || "").toLowerCase(), r])
+            .filter((p) => p[0])
         );
 
         const mapped = shipsList.map((s) => {
+          const rawEmpresa = String(s.empresa || "");
           const companyName =
             s.empresa_nombre ||
-            companyNameById.get(String(s.empresa || "")) ||
+            companyNameById.get(rawEmpresa) ||
+            companyNameByName.get(rawEmpresa.toLowerCase()) ||
+            rawEmpresa ||
             "";
-          const u = userById.get(String(s.responsable || ""));
-          const responsableName = s.responsable_nombre || u?.name || "";
+          const rawResponsable = String(s.responsable || "");
+          const r =
+            responsableById.get(rawResponsable) ||
+            responsableByEmail.get(rawResponsable.toLowerCase());
+          const responsableName =
+            s.responsable_nombre || r?.nombre || rawResponsable || "";
           return {
             id: s.id || s._id,
             nombre: s.nombre_del_barco,
             empresa: companyName,
             responsable: responsableName,
             tipo: s.tipo || "",
+            enlace: s.enlace || "",
           };
         });
         setRows(mapped);
@@ -89,11 +135,11 @@ export default function Ships() {
             id: c.id || c._id,
           }))
         );
-        setUsers(
-          usersList.map((u) => ({
-            ...u,
-            _id: u._id || u.id,
-            id: u.id || u._id,
+        setResponsables(
+          responsablesList.map((r) => ({
+            ...r,
+            _id: r._id || r.id,
+            id: r.id || r._id,
           }))
         );
       } catch {
@@ -124,16 +170,16 @@ export default function Ships() {
       const company = companies.find(
         (c) => String(c._id || c.id) === String(form.empresa)
       );
-      const user = users.find(
-        (u) => String(u._id || u.id) === String(form.responsable)
+      const responsable = responsables.find(
+        (r) => String(r._id || r.id) === String(form.responsable)
       );
       const payload = {
         ...form,
         empresa: form.empresa || "",
         empresa_nombre: company?.nombre || "",
         responsable: form.responsable || "",
-        responsable_nombre: user?.name || "",
-        responsable_email: user?.email || "",
+        responsable_nombre: responsable?.nombre || "",
+        responsable_email: responsable?.email || "",
         creado_por: getCurrentUser()?.name || "Testing",
       };
       const created = await createShip(payload);
@@ -147,8 +193,9 @@ export default function Ships() {
           id: created._id || created.id,
           nombre: created.nombre_del_barco,
           empresa: created.empresa_nombre || company?.nombre || "",
-          responsable: created.responsable_nombre || user?.name || "",
+          responsable: created.responsable_nombre || responsable?.nombre || "",
           tipo: created.tipo || "",
+          enlace: created.enlace || form.enlace || "",
         },
       ]);
       setOpen(false);
@@ -157,6 +204,7 @@ export default function Ships() {
         empresa: "",
         responsable: "",
         tipo: "Mercante",
+        enlace: "",
       });
       setSnack({ open: true, message: "Barco creado", type: "success" });
     } catch (e) {
@@ -180,7 +228,10 @@ export default function Ships() {
         r.nombre.toLowerCase().includes(q) ||
         r.empresa.toLowerCase().includes(q) ||
         r.responsable.toLowerCase().includes(q) ||
-        r.tipo.toLowerCase().includes(q)
+        r.tipo.toLowerCase().includes(q) ||
+        String(r.enlace || "")
+          .toLowerCase()
+          .includes(q)
     );
   }, [rows, query]);
 
@@ -189,6 +240,29 @@ export default function Ships() {
     const end = start + pageSize;
     return filtered.slice(start, end);
   }, [filtered, page, pageSize]);
+
+  const paginatedForTable = useMemo(() => {
+    return paginated.map((r) => {
+      const href = normalizeExternalUrl(r.enlace);
+      if (!href) return { ...r, enlace: "" };
+      const rawLabel = String(r.enlace || "").trim();
+      const label = truncateText(rawLabel || href, 20);
+      return {
+        ...r,
+        enlace: (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            title={rawLabel || href}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {label}
+          </a>
+        ),
+      };
+    });
+  }, [paginated]);
 
   useEffect(() => {
     setPage(1);
@@ -233,7 +307,7 @@ export default function Ships() {
         <DataTable
           title="Barcos"
           columns={columns}
-          data={paginated}
+          data={paginatedForTable}
           loading={loading}
           createLabel="Crear barco"
           onCreate={onCreate}
@@ -331,9 +405,10 @@ export default function Ships() {
             onChange={(e) => setForm({ ...form, responsable: e.target.value })}
           >
             <option value="">Sin responsable</option>
-            {users.map((u) => (
-              <option key={u._id || u.id} value={u._id || u.id}>
-                {u.name} ({u.email})
+            {responsables.map((r) => (
+              <option key={r._id || r.id} value={r._id || r.id}>
+                {r.nombre}
+                {r.email ? ` (${r.email})` : ""}
               </option>
             ))}
           </select>
@@ -349,6 +424,15 @@ export default function Ships() {
             <option value="Ferry">Ferry</option>
             <option value="Crucero">Crucero</option>
           </select>
+        </div>
+        <div>
+          <div className="label">Enlace (opcional)</div>
+          <input
+            className="input"
+            value={form.enlace}
+            onChange={(e) => setForm({ ...form, enlace: e.target.value })}
+            placeholder="https://..."
+          />
         </div>
       </Modal>
 

@@ -22,6 +22,15 @@ export default function Modal({
     };
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">

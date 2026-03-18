@@ -23,3 +23,27 @@ La app lee la configuración de Firebase desde variables `VITE_FIREBASE_*`. Para
 - `npm run dev`
 - `npm run lint`
 - `npm run build`
+- `npm run build:dev`
+- `npm run deploy:dev`
+- `npm run deploy:prod`
+
+## Despliegue (Firebase Hosting)
+
+Este repo tiene dos scripts de despliegue:
+
+- `npm run deploy:dev`: compila con `--mode development` y despliega al proyecto `dev`
+- `npm run deploy:prod`: compila en producción y despliega al proyecto `prod`
+
+Notas:
+
+- El workflow de CI solo hace `lint` + `build`; no despliega automáticamente.
+- Para poder desplegar desde local necesitas tener sesión iniciada en Firebase CLI:
+  - `npm run firebase:login`
+  - `npm run deploy:dev` o `npm run deploy:prod`
+
+## Debug de permisos (solo para diagnóstico)
+
+En la pantalla de Cargas se puede abrir un modal de debug para inspeccionar `localStorage` y permisos.
+
+- En dev server: aparece el icono de bug en el header.
+- En cualquier entorno: abre `/app/logistica/cargas?debugPerms=1` (o pon `localStorage.debugPerms = "1"` y recarga).

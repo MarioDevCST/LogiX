@@ -68,9 +68,14 @@ export default function Pallets() {
     productos: "",
   });
 
-  const role = getCurrentRole();
-  const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS);
+  const role = getCurrentRole() || getCurrentUser()?.role || null;
+  const canManagePallets =
+    hasPermission(role, PERMISSIONS.MANAGE_PALLETS) ||
+    String(role || "")
+      .trim()
+      .toLowerCase() === "dispatcher";
   const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS);
+  const canCreatePallets = canManagePallets || canManageLoads;
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -148,7 +153,17 @@ export default function Pallets() {
     }
   }, [location.state]);
 
-  const onCreate = () => setOpen(true);
+  const onCreate = () => {
+    if (!canCreatePallets) {
+      setSnack({
+        open: true,
+        message: "No tienes permiso para crear palets",
+        type: "error",
+      });
+      return;
+    }
+    setOpen(true);
+  };
 
   const submit = async () => {
     try {
@@ -279,10 +294,10 @@ export default function Pallets() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {canManagePallets && (
+          {canCreatePallets && (
             <button
               className="icon-button"
-              onClick={() => setOpen(true)}
+              onClick={onCreate}
               title="Crear palet"
             >
               <span className="material-symbols-outlined">add_box</span>
@@ -329,8 +344,8 @@ export default function Pallets() {
           columns={columns}
           data={paginated}
           loading={loading}
-          createLabel={canManagePallets ? "Crear palet" : undefined}
-          onCreate={canManagePallets ? onCreate : undefined}
+          createLabel={canCreatePallets ? "Crear palet" : undefined}
+          onCreate={canCreatePallets ? onCreate : undefined}
           onRowClick={goDetail}
         />
       ) : view === "cards" ? (
@@ -342,8 +357,8 @@ export default function Pallets() {
             subtitle: i.tipo,
           }))}
           loading={loading}
-          onCreate={canManagePallets ? onCreate : undefined}
-          createLabel={canManagePallets ? "Crear palet" : undefined}
+          onCreate={canCreatePallets ? onCreate : undefined}
+          createLabel={canCreatePallets ? "Crear palet" : undefined}
           onCardClick={goDetail}
         />
       ) : (

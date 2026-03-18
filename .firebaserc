@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "logix-prod",
+    "dev": "logix-dev-2af94",
+    "prod": "logix-prod"
+  }
+}

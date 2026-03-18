@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
-import { fetchUserById, updateUserById } from "../firebase/auth.js";
+import {
+  deleteUserById,
+  fetchUserById,
+  updateUserById,
+} from "../firebase/auth.js";
 import { getCurrentUser } from "../utils/roles.js";
 
 const ROLE_OPTIONS = [
@@ -19,6 +23,12 @@ export default function UserDetail() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const current = getCurrentUser();
+  const currentId = current?.id || current?._id || "";
+  const canDeleteUser =
+    current?.role === "dispatcher" || current?.role === "admin";
+  const isSelf = currentId && String(currentId) === String(id);
+  const canDeleteThisUser = canDeleteUser && !isSelf && user?.role !== "admin";
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -90,7 +100,6 @@ export default function UserDetail() {
         return;
       }
       setUser(updated);
-      const current = getCurrentUser();
       if (current && (current.id === id || current._id === id)) {
         localStorage.setItem(
           "auth",
@@ -103,6 +112,25 @@ export default function UserDetail() {
       setSnack({
         open: true,
         message: "Error actualizando usuario",
+        type: "error",
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user) return;
+    const label = user.name || user.email || user.id || "";
+    if (!window.confirm(`¿Seguro que deseas borrar el usuario "${label}"?`))
+      return;
+    try {
+      await deleteUserById(id);
+      setOpen(false);
+      setSnack({ open: true, message: "Usuario borrado", type: "success" });
+      navigate("/app/admin/usuarios");
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error borrando usuario",
         type: "error",
       });
     }
@@ -230,6 +258,19 @@ export default function UserDetail() {
             </select>
           </div>
         </div>
+        {canDeleteThisUser && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              className="secondary-button"
+              style={{ borderColor: "#d93025", color: "#d93025" }}
+              onClick={handleDelete}
+              type="button"
+              title="Eliminar usuario"
+            >
+              Eliminar usuario
+            </button>
+          </div>
+        )}
       </Modal>
 
       <Snackbar

@@ -10,15 +10,20 @@ import {
   createCompany,
   createConsignee,
   createLocation,
+  createResponsable,
   deleteCompanyById,
   deleteConsigneeById,
+  deleteResponsableById,
   fetchAllCompanies,
   fetchAllConsignees,
   fetchAllLocations,
+  fetchAllResponsables,
   fetchCompanyById,
   fetchConsigneeById,
+  fetchResponsableById,
   updateCompanyById,
   updateConsigneeById,
+  updateResponsableById,
 } from "../firebase/auth.js";
 
 function toDate(value) {
@@ -1160,6 +1165,461 @@ function CompaniesTab() {
   );
 }
 
+function ResponsablesTab() {
+  const columns = [
+    { key: "nombre", header: "Nombre" },
+    { key: "email", header: "E-mail" },
+    { key: "telefono", header: "Teléfono" },
+    { key: "acciones", header: "Acciones" },
+  ];
+
+  const [view, setView] = useState("table");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ nombre: "", email: "", telefono: "" });
+
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    nombre: "",
+    email: "",
+    telefono: "",
+  });
+
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const startEdit = async (id) => {
+    try {
+      const r = await fetchResponsableById(id);
+      if (!r) return;
+      setEditingId(id);
+      setEditForm({
+        nombre: r.nombre || "",
+        email: r.email || "",
+        telefono: r.telefono || "",
+      });
+      setOpenEdit(true);
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error de red cargando responsable",
+        type: "error",
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Seguro que deseas borrar este responsable?")) return;
+    try {
+      await deleteResponsableById(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      setSnack({ open: true, message: "Responsable borrado", type: "success" });
+    } catch {
+      setSnack({
+        open: true,
+        message: "Error de red borrando responsable",
+        type: "error",
+      });
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllResponsables();
+        if (!mounted) return;
+        const mapped = list.map((r) => {
+          const id = r._id || r.id;
+          return {
+            id,
+            nombre: r.nombre || "",
+            email: r.email || "",
+            telefono: r.telefono || "",
+            acciones: (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="icon-button"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Borrar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ),
+          };
+        });
+        setRows(mapped);
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (q === "") return true;
+      return (
+        String(r.nombre || "").toLowerCase().includes(q) ||
+        String(r.email || "").toLowerCase().includes(q) ||
+        String(r.telefono || "").toLowerCase().includes(q)
+      );
+    });
+  }, [rows, query]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filtered.slice(start, end);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const getFirestoreMessage = (e) => {
+    const code = String(e?.code || "").trim();
+    if (code === "permission-denied") {
+      return "Permiso denegado en Firestore. Revisa las reglas";
+    }
+    if (code === "unauthenticated") {
+      return "Sesión no válida. Vuelve a iniciar sesión";
+    }
+    if (code === "unavailable") {
+      return "Firestore no disponible. Revisa la conexión";
+    }
+    if (code === "failed-precondition") {
+      return "Firestore no está listo o la API no está habilitada";
+    }
+    if (code === "firestore/timeout") {
+      return "Firestore no responde (timeout)";
+    }
+    if (code) return `Error en Firestore (${code})`;
+    const msg = String(e?.message || "").trim();
+    if (msg) return msg;
+    return "";
+  };
+
+  const onCreate = () => setOpen(true);
+
+  const submit = async () => {
+    try {
+      if (!String(form.nombre || "").trim()) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const created = await createResponsable({
+        nombre: form.nombre,
+        email: form.email,
+        telefono: form.telefono,
+        creado_por: getCurrentUser()?.name || "Testing",
+      });
+      const id = created?._id || created?.id;
+      setRows((prev) => [
+        ...prev,
+        {
+          id,
+          nombre: created?.nombre || "",
+          email: created?.email || "",
+          telefono: created?.telefono || "",
+          acciones: (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="icon-button"
+                title="Editar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEdit(id);
+                }}
+              >
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+              <button
+                className="icon-button"
+                title="Borrar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(id);
+                }}
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          ),
+        },
+      ]);
+      setOpen(false);
+      setForm({ nombre: "", email: "", telefono: "" });
+      setSnack({ open: true, message: "Responsable creado", type: "success" });
+    } catch (e) {
+      const firestoreMessage = getFirestoreMessage(e);
+      const message =
+        e?.message === "nombre es obligatorio"
+          ? "El nombre es obligatorio"
+          : firestoreMessage || "Error creando responsable";
+      setSnack({ open: true, message, type: "error" });
+    }
+  };
+
+  const submitEdit = async () => {
+    try {
+      if (!editingId) return;
+      if (!String(editForm.nombre || "").trim()) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const updated = await updateResponsableById(editingId, {
+        nombre: editForm.nombre,
+        email: editForm.email,
+        telefono: editForm.telefono,
+        modificado_por: getCurrentUser()?.name || "Testing",
+      });
+      if (!updated) {
+        setSnack({
+          open: true,
+          message: "Responsable no encontrado",
+          type: "error",
+        });
+        return;
+      }
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === editingId
+            ? {
+                ...r,
+                nombre: updated.nombre || "",
+                email: updated.email || "",
+                telefono: updated.telefono || "",
+              }
+            : r
+        )
+      );
+      setOpenEdit(false);
+      setEditingId(null);
+      setSnack({
+        open: true,
+        message: "Responsable actualizado",
+        type: "success",
+      });
+    } catch (e) {
+      const firestoreMessage = getFirestoreMessage(e);
+      setSnack({
+        open: true,
+        message: firestoreMessage || "Error actualizando responsable",
+        type: "error",
+      });
+    }
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            className="input"
+            style={{ width: 280 }}
+            placeholder="Buscar por nombre, e-mail o teléfono"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button
+            className="icon-button"
+            onClick={onCreate}
+            title="Crear responsable"
+          >
+            <span className="material-symbols-outlined">add_box</span>
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="icon-button"
+            title="Vista tabla"
+            onClick={() => setView("table")}
+          >
+            <span className="material-symbols-outlined">table</span>
+          </button>
+          <button
+            className="icon-button"
+            title="Vista tarjetas"
+            onClick={() => setView("cards")}
+          >
+            <span className="material-symbols-outlined">view_agenda</span>
+          </button>
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <DataTable
+          title="Responsables"
+          columns={columns}
+          data={paginated}
+          loading={loading}
+          createLabel={"Crear responsable"}
+          onCreate={onCreate}
+        />
+      ) : (
+        <CardGrid
+          title="Responsables"
+          items={paginated.map((i) => ({
+            ...i,
+            name: i.nombre,
+            email: i.email,
+            subtitle: i.telefono,
+          }))}
+          loading={loading}
+          createLabel={"Crear responsable"}
+          onCreate={onCreate}
+        />
+      )}
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={filtered.length}
+        onPageChange={(p) => setPage(Math.max(1, p))}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+
+      <Modal
+        open={open}
+        title="Crear responsable"
+        onClose={() => setOpen(false)}
+        onSubmit={submit}
+        submitLabel="Crear"
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div>
+            <div className="label">Nombre</div>
+            <input
+              className="input"
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              placeholder="Nombre"
+            />
+          </div>
+          <div>
+            <div className="label">E-mail</div>
+            <input
+              className="input"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="email@..."
+            />
+          </div>
+          <div>
+            <div className="label">Teléfono</div>
+            <input
+              className="input"
+              value={form.telefono}
+              onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+              placeholder="Teléfono"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openEdit}
+        title="Editar responsable"
+        onClose={() => setOpenEdit(false)}
+        onSubmit={submitEdit}
+        submitLabel="Guardar"
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div>
+            <div className="label">Nombre</div>
+            <input
+              className="input"
+              value={editForm.nombre}
+              onChange={(e) =>
+                setEditForm({ ...editForm, nombre: e.target.value })
+              }
+              placeholder="Nombre"
+            />
+          </div>
+          <div>
+            <div className="label">E-mail</div>
+            <input
+              className="input"
+              value={editForm.email}
+              onChange={(e) =>
+                setEditForm({ ...editForm, email: e.target.value })
+              }
+              placeholder="email@..."
+            />
+          </div>
+          <div>
+            <div className="label">Teléfono</div>
+            <input
+              className="input"
+              value={editForm.telefono}
+              onChange={(e) =>
+                setEditForm({ ...editForm, telefono: e.target.value })
+              }
+              placeholder="Teléfono"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <Snackbar
+        open={snack.open}
+        message={snack.message}
+        type={snack.type}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+      />
+    </>
+  );
+}
+
 export default function Collections({ initialTab = "locations" }) {
   const [tab, setTab] = useState(initialTab);
 
@@ -1201,6 +1661,13 @@ export default function Collections({ initialTab = "locations" }) {
           >
             Empresas
           </button>
+          <button
+            type="button"
+            className={`tab-button ${tab === "responsables" ? "active" : ""}`}
+            onClick={() => setTab("responsables")}
+          >
+            Responsables
+          </button>
         </div>
       </div>
 
@@ -1212,6 +1679,9 @@ export default function Collections({ initialTab = "locations" }) {
       </div>
       <div style={{ display: tab === "companies" ? "block" : "none" }}>
         <CompaniesTab />
+      </div>
+      <div style={{ display: tab === "responsables" ? "block" : "none" }}>
+        <ResponsablesTab />
       </div>
     </>
   );

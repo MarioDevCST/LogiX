@@ -407,6 +407,9 @@ body {
 .sidebar.collapsed .nav-label {
   display: none;
 }
+.sidebar.collapsed .nav-section {
+  display: none;
+}
 .sidebar.collapsed .nav-item {
   justify-content: center;
 }

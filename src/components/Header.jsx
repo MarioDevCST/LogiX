@@ -14,7 +14,8 @@ export default function Header({ onToggleSidebar }) {
     import.meta.env.VITE_APP_STAGE ||
     (import.meta.env.MODE || "").toUpperCase();
   const stage = String(stageRaw || "").toUpperCase();
-  const isDev = stage === "DEV" || stage === "DEVELOPMENT";
+  const isDev =
+    !!import.meta.env.DEV || stage === "DEV" || stage === "DEVELOPMENT";
 
   const logout = async () => {
     if (user?.id || user?._id) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Snackbar from "../components/Snackbar.jsx";
+import EnvBadge from "../components/EnvBadge.jsx";
 import {
   firebaseLogin,
   firebaseRegister,
@@ -18,6 +19,36 @@ export default function Login() {
     type: "success",
   });
   const [loading, setLoading] = useState(false);
+
+  const getFirebaseAuthMessage = (code) => {
+    return code === "auth/invalid-credential"
+      ? "Credenciales inválidas"
+      : code === "auth/user-not-found"
+      ? "Usuario no encontrado"
+      : code === "auth/wrong-password"
+      ? "Contraseña incorrecta"
+      : code === "auth/email-already-in-use"
+      ? "Ese email ya está registrado"
+      : code === "auth/weak-password"
+      ? "La contraseña es demasiado débil"
+      : code === "auth/invalid-email"
+      ? "Email inválido"
+      : code === "auth/operation-not-allowed"
+      ? "En este proyecto no está habilitado Email/Contraseña en Firebase Auth"
+      : code === "auth/unauthorized-domain"
+      ? "Este dominio no está autorizado en Firebase Auth"
+      : code === "auth/invalid-api-key"
+      ? "API key inválida en la configuración de Firebase"
+      : code === "auth/network-request-failed"
+      ? "Error de red conectando con Firebase"
+      : code === "firestore/timeout"
+      ? "Firestore no responde (timeout). Revisa si Firestore está creado y las reglas"
+      : code === "permission-denied"
+      ? "Permiso denegado en Firestore. Revisa las reglas"
+      : code === "failed-precondition"
+      ? "Firestore no está listo o la API no está habilitada"
+      : "";
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -79,19 +110,10 @@ export default function Login() {
     } catch (e) {
       const code = e?.code || "";
       const message =
-        code === "auth/invalid-credential"
-          ? "Credenciales inválidas"
-          : code === "auth/user-not-found"
-          ? "Usuario no encontrado"
-          : code === "auth/wrong-password"
-          ? "Contraseña incorrecta"
-          : code === "auth/email-already-in-use"
-          ? "Ese email ya está registrado"
-          : code === "auth/weak-password"
-          ? "La contraseña es demasiado débil"
-          : code === "auth/invalid-email"
-          ? "Email inválido"
-          : "Error autenticando en Firebase";
+        getFirebaseAuthMessage(code) ||
+        (code
+          ? `Error autenticando en Firebase (${code})`
+          : "Error autenticando en Firebase");
       setSnack({
         open: true,
         message,
@@ -107,6 +129,9 @@ export default function Login() {
       <div className="card auth-card">
         <div className="auth-logo-wrap">
           <img className="auth-logo" src="/logo.png" alt="LogiX" />
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <EnvBadge />
         </div>
         <div className="card-header auth-card-header">
           <h2 className="card-title">

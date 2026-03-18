@@ -12,8 +12,10 @@ import {
   fetchAllConsignees,
   fetchAllLocations,
   fetchAllPallets,
+  fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
+  deleteLoadById,
   fetchLoadById,
   fusePallets,
   updateLoadById,
@@ -80,15 +82,19 @@ export default function LoadDetail() {
   const navigate = useNavigate();
   const [load, setLoad] = useState(null);
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [ships, setShips] = useState([]);
   const [pallets, setPallets] = useState([]);
   const [users, setUsers] = useState([]);
+  const [responsables, setResponsables] = useState([]);
   const [consignees, setConsignees] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [responsableQuery, setResponsableQuery] = useState("");
   const [form, setForm] = useState({
     barco: "",
     entrega: [],
     chofer: "",
+    responsable: "",
     consignatario: "",
     terminal_entrega: "",
     palets: [],
@@ -132,6 +138,7 @@ export default function LoadDetail() {
           barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
           chofer: String(l.chofer || ""),
+          responsable: String(l.responsable || ""),
           consignatario: String(l.consignatario || ""),
           terminal_entrega: String(l.terminal_entrega || ""),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
@@ -160,19 +167,25 @@ export default function LoadDetail() {
     let mounted = true;
     const run = async () => {
       try {
+        const results = await Promise.allSettled([
+          fetchAllShips(),
+          fetchAllPallets(),
+          fetchAllUsers(),
+          fetchAllConsignees(),
+          fetchAllLocations(),
+          fetchAllResponsables(),
+        ]);
+        const values = results.map((r) =>
+          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
+        );
         const [
           shipsList,
           palletsList,
           usersList,
           consigneesList,
           locationsList,
-        ] = await Promise.all([
-          fetchAllShips(),
-          fetchAllPallets(),
-          fetchAllUsers(),
-          fetchAllConsignees(),
-          fetchAllLocations(),
-        ]);
+          responsablesList,
+        ] = values;
         if (!mounted) return;
         const normalize = (x) => ({
           ...x,
@@ -184,6 +197,7 @@ export default function LoadDetail() {
         setUsers(usersList.map(normalize));
         setConsignees(consigneesList.map(normalize));
         setLocations(locationsList.map(normalize));
+        setResponsables(responsablesList.map(normalize));
       } catch {
         if (!mounted) return;
         setShips([]);
@@ -191,6 +205,7 @@ export default function LoadDetail() {
         setUsers([]);
         setConsignees([]);
         setLocations([]);
+        setResponsables([]);
       }
     };
     run();
@@ -199,9 +214,49 @@ export default function LoadDetail() {
     };
   }, []);
 
-  const role = getCurrentRole();
-  const canManageLoads = hasPermission(role, PERMISSIONS.MANAGE_LOADS);
-  const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS);
+  const currentUser = getCurrentUser();
+  const role = getCurrentRole() || currentUser?.role || null;
+  const canManageLoads =
+    hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
+    String(role || "")
+      .trim()
+      .toLowerCase() === "dispatcher";
+  const canManagePallets =
+    hasPermission(role, PERMISSIONS.MANAGE_PALLETS) ||
+    canManageLoads ||
+    String(role || "")
+      .trim()
+      .toLowerCase() === "dispatcher";
+  const canDeleteLoad =
+    String(role || "")
+      .trim()
+      .toLowerCase() === "dispatcher";
+
+  const handleDelete = async () => {
+    if (deleting) return;
+    if (!load) return;
+    const label = String(load.nombre || "").trim();
+    if (
+      !window.confirm(
+        `¿Seguro que deseas borrar la carga "${label || String(id || "")}"?`
+      )
+    )
+      return;
+    try {
+      setDeleting(true);
+      await deleteLoadById(String(load?._id || load?.id || id));
+      navigate("/app/logistica/cargas");
+    } catch (e) {
+      const msg = String(e?.message || "");
+      setSnack({
+        open: true,
+        message: msg || "Error borrando carga",
+        type: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const submit = async () => {
     try {
@@ -209,6 +264,7 @@ export default function LoadDetail() {
         barco: form.barco || undefined,
         entrega: form.entrega,
         chofer: form.chofer || undefined,
+        responsable: form.responsable || undefined,
         palets: form.palets,
         carga: form.carga,
         consignatario: form.consignatario || undefined,
@@ -378,6 +434,7 @@ export default function LoadDetail() {
           barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
           chofer: String(l.chofer || ""),
+          responsable: String(l.responsable || ""),
           consignatario: String(l.consignatario || ""),
           terminal_entrega: String(l.terminal_entrega || ""),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
@@ -457,6 +514,7 @@ export default function LoadDetail() {
           barco: String(l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
           chofer: String(l.chofer || ""),
+          responsable: String(l.responsable || ""),
           consignatario: String(l.consignatario || ""),
           terminal_entrega: String(l.terminal_entrega || ""),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
@@ -500,7 +558,10 @@ export default function LoadDetail() {
           {canManageLoads && (
             <button
               className="icon-button"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                setResponsableQuery("");
+                setOpen(true);
+              }}
               title="Modificar"
             >
               <span className="material-symbols-outlined">edit</span>
@@ -524,6 +585,16 @@ export default function LoadDetail() {
           >
             <span className="material-symbols-outlined">add_box</span>
           </button>
+          {canDeleteLoad && (
+            <button
+              className="icon-button"
+              onClick={handleDelete}
+              title="Borrar carga"
+              disabled={deleting}
+            >
+              <span className="material-symbols-outlined">delete</span>
+            </button>
+          )}
           <button
             className="icon-button"
             onClick={() => navigate(-1)}
@@ -646,6 +717,16 @@ export default function LoadDetail() {
                   const isDisabled = isDragging && !isSource && !isDroppable;
                   const isOver =
                     isDroppable && idStr === String(dragOverPalletId);
+                  const nombre = String(p.nombre || "").trim();
+                  const numero = String(p.numero_palet || "").trim();
+                  const nombreMostrado = (() => {
+                    if (!nombre) return numero;
+                    if (!numero) return nombre;
+                    if (nombre.startsWith(numero)) return nombre;
+                    const idx = nombre.indexOf(" - ");
+                    if (idx === -1) return numero;
+                    return `${numero}${nombre.slice(idx)}`;
+                  })();
 
                   return (
                     <div
@@ -716,7 +797,7 @@ export default function LoadDetail() {
                         }}
                       >
                         <div style={{ fontSize: 18, lineHeight: "22px" }}>
-                          <strong>{p.nombre || p.numero_palet}</strong>
+                          <strong>{nombreMostrado}</strong>
                         </div>
                         <div style={{ color: "var(--text-secondary)" }}>
                           {p.tipo}
@@ -1049,6 +1130,46 @@ export default function LoadDetail() {
           </div>
 
           {/* Personas */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <div className="label">Responsable</div>
+            <input
+              className="input"
+              value={responsableQuery}
+              onChange={(e) => setResponsableQuery(e.target.value)}
+              placeholder="Buscar responsable por nombre"
+            />
+            <select
+              className="input"
+              value={form.responsable}
+              onChange={(e) =>
+                setForm({ ...form, responsable: e.target.value })
+              }
+            >
+              <option value="">Sin responsable</option>
+              {responsables
+                .filter((r) => {
+                  const q = String(responsableQuery || "")
+                    .trim()
+                    .toLowerCase();
+                  if (!q) return true;
+                  return String(r.nombre || "")
+                    .toLowerCase()
+                    .includes(q);
+                })
+                .sort((a, b) =>
+                  String(a.nombre || "").localeCompare(
+                    String(b.nombre || ""),
+                    "es"
+                  )
+                )
+                .map((r) => (
+                  <option key={r._id} value={r._id}>
+                    {r.nombre}
+                    {r.email ? ` (${r.email})` : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Chofer</div>
             <select

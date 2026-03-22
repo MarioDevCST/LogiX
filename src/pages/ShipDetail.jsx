@@ -5,6 +5,7 @@ import Snackbar from "../components/Snackbar.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import {
   deleteShipById,
+  fetchAllCargoTypes,
   fetchAllCompanies,
   fetchAllResponsables,
   fetchShipById,
@@ -45,11 +46,15 @@ export default function ShipDetail() {
   const canDeleteShip = current?.role === "dispatcher";
   const [companies, setCompanies] = useState([]);
   const [responsables, setResponsables] = useState([]);
+  const [cargoTypes, setCargoTypes] = useState([]);
   const [form, setForm] = useState({
     nombre_del_barco: "",
     empresa: "",
     responsable: "",
+    telefono: "",
+    email: "",
     tipo: "Mercante",
+    cargo_type: "",
     enlace: "",
   });
   const [snack, setSnack] = useState({
@@ -67,6 +72,7 @@ export default function ShipDetail() {
           fetchShipById(id),
           fetchAllCompanies(),
           fetchAllResponsables(),
+          fetchAllCargoTypes(),
         ]);
         const s = results[0].status === "fulfilled" ? results[0].value : null;
         const companiesList =
@@ -76,6 +82,10 @@ export default function ShipDetail() {
         const responsablesList =
           results[2].status === "fulfilled" && Array.isArray(results[2].value)
             ? results[2].value
+            : [];
+        const cargoTypesList =
+          results[3].status === "fulfilled" && Array.isArray(results[3].value)
+            ? results[3].value
             : [];
         if (!mounted) return;
         setShip(s);
@@ -93,11 +103,21 @@ export default function ShipDetail() {
             _id: r._id || r.id,
           }))
         );
+        setCargoTypes(
+          (cargoTypesList || []).map((t) => ({
+            ...t,
+            id: t.id || t._id,
+            _id: t._id || t.id,
+          }))
+        );
         setForm({
           nombre_del_barco: s?.nombre_del_barco || "",
           empresa: s?.empresa || "",
           responsable: s?.responsable || "",
+          telefono: String(s?.telefono || ""),
+          email: String(s?.email || ""),
           tipo: s?.tipo || "Mercante",
+          cargo_type: s?.cargo_type || "",
           enlace: s?.enlace || "",
         });
       } catch {
@@ -129,6 +149,9 @@ export default function ShipDetail() {
       const responsable = responsables.find(
         (r) => String(r._id || r.id) === String(form.responsable)
       );
+      const cargoType = cargoTypes.find(
+        (t) => String(t._id || t.id) === String(form.cargo_type)
+      );
       const updated = await updateShipById(id, {
         ...form,
         empresa: form.empresa || "",
@@ -136,6 +159,8 @@ export default function ShipDetail() {
         responsable: form.responsable || "",
         responsable_nombre: responsable?.nombre || "",
         responsable_email: responsable?.email || "",
+        cargo_type: form.cargo_type || "",
+        cargo_type_nombre: cargoType?.nombre || "",
         modificado_por: getCurrentUser()?.name || "Testing",
       });
       if (!updated) {
@@ -166,6 +191,12 @@ export default function ShipDetail() {
       (r) => String(r._id || r.id) === String(ship?.responsable)
     )?.nombre ||
     String(ship?.responsable || "") ||
+    "";
+  const cargoTypeName =
+    ship?.cargo_type_nombre ||
+    cargoTypes.find((t) => String(t._id || t.id) === String(ship?.cargo_type))
+      ?.nombre ||
+    String(ship?.cargo_type || "") ||
     "";
   const enlaceHref = normalizeExternalUrl(ship?.enlace);
   const enlaceLabel = truncateText(String(ship?.enlace || "").trim(), 20);
@@ -220,7 +251,16 @@ export default function ShipDetail() {
           <strong>Responsable:</strong> {responsableName || "-"}
         </p>
         <p>
+          <strong>Teléfono:</strong> {ship.telefono || "-"}
+        </p>
+        <p>
+          <strong>Email:</strong> {ship.email || "-"}
+        </p>
+        <p>
           <strong>Tipo:</strong> {ship.tipo || "-"}
+        </p>
+        <p>
+          <strong>Tipo de carga:</strong> {cargoTypeName || "-"}
         </p>
         <p>
           <strong>Enlace:</strong>{" "}
@@ -288,6 +328,24 @@ export default function ShipDetail() {
           </select>
         </div>
         <div>
+          <div className="label">Teléfono (opcional)</div>
+          <input
+            className="input"
+            value={form.telefono}
+            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+            placeholder="+34..."
+          />
+        </div>
+        <div>
+          <div className="label">Email (opcional)</div>
+          <input
+            className="input"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="correo@ejemplo.com"
+          />
+        </div>
+        <div>
           <div className="label">Tipo</div>
           <select
             className="select"
@@ -299,6 +357,29 @@ export default function ShipDetail() {
                 {opt}
               </option>
             ))}
+          </select>
+        </div>
+        <div>
+          <div className="label">Tipo de carga</div>
+          <select
+            className="input"
+            value={form.cargo_type}
+            onChange={(e) => setForm({ ...form, cargo_type: e.target.value })}
+          >
+            <option value="">Sin tipo</option>
+            {cargoTypes
+              .slice()
+              .sort((a, b) =>
+                String(a?.nombre || "").localeCompare(
+                  String(b?.nombre || ""),
+                  "es"
+                )
+              )
+              .map((t) => (
+                <option key={t._id || t.id} value={t._id || t.id}>
+                  {t.nombre}
+                </option>
+              ))}
           </select>
         </div>
         <div>

@@ -23,12 +23,34 @@ import {
 
 const ESTADO_VIAJE_OPTIONS = [
   "Preparando",
-  "En Proceso",
-  "Cancelado",
+  "Cargando",
+  "Viajando",
   "Entregado",
+  "Cancelado",
 ];
-const CARGA_OPTIONS = ["Seco", "Refrigerado", "Congelado", "Técnico"];
-const ENTREGA_OPTIONS = ["Provisión", "Alimentación", "Repuesto", "Técnico"];
+const CARGA_OPTIONS = [
+  "Seco",
+  "Refrigerado",
+  "Congelado",
+  "Técnico",
+  "Fruta y verdura",
+  "Repuestos",
+];
+const ENTREGA_OPTIONS = ["Provisión", "Repuesto", "Técnico"];
+
+function getTipoColors(tipo) {
+  const t = String(tipo || "")
+    .trim()
+    .toLowerCase();
+  if (t === "seco") return { color: "#f59e0b", strong: "#b45309" };
+  if (t === "refrigerado") return { color: "#22c55e", strong: "#15803d" };
+  if (t === "congelado") return { color: "#3b82f6", strong: "#1d4ed8" };
+  if (t === "técnico" || t === "tecnico")
+    return { color: "#a78bfa", strong: "#6d28d9" };
+  if (t === "fruta y verdura") return { color: "#14b8a6", strong: "#0f766e" };
+  if (t === "repuestos") return { color: "#ef4444", strong: "#991b1b" };
+  return { color: "#9ca3af", strong: "#374151" };
+}
 
 function toDateInput(value) {
   if (!value) return "";
@@ -118,12 +140,14 @@ export default function LoadDetail() {
   const [fuseSourceIds, setFuseSourceIds] = useState([]);
   const [fuseNumbers, setFuseNumbers] = useState("");
   const [fuseSubmitting, setFuseSubmitting] = useState(false);
+  const [fuseBaseChoice, setFuseBaseChoice] = useState("");
   const [dragPalletId, setDragPalletId] = useState("");
   const [dragPalletTipo, setDragPalletTipo] = useState("");
   const [dragOverPalletId, setDragOverPalletId] = useState("");
   const [openFuseDnD, setOpenFuseDnD] = useState(false);
   const [fuseDnDSourceId, setFuseDnDSourceId] = useState("");
   const [fuseDnDTargetId, setFuseDnDTargetId] = useState("");
+  const [fuseDnDBaseChoice, setFuseDnDBaseChoice] = useState("");
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -135,12 +159,14 @@ export default function LoadDetail() {
         setLoad(l);
         if (!l) return;
         setForm({
-          barco: String(l.barco || ""),
+          barco: String(l.barco?._id || l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
-          chofer: String(l.chofer || ""),
-          responsable: String(l.responsable || ""),
-          consignatario: String(l.consignatario || ""),
-          terminal_entrega: String(l.terminal_entrega || ""),
+          chofer: String(l.chofer?._id || l.chofer || ""),
+          responsable: String(l.responsable?._id || l.responsable || ""),
+          consignatario: String(l.consignatario?._id || l.consignatario || ""),
+          terminal_entrega: String(
+            l.terminal_entrega?._id || l.terminal_entrega || ""
+          ),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
           fecha_de_carga: toDateInput(l.fecha_de_carga),
@@ -327,6 +353,17 @@ export default function LoadDetail() {
     acc[t] = (acc[t] || 0) + 1;
     return acc;
   }, {});
+  const baseCounts = palletsInLoad.reduce(
+    (acc, p) => {
+      const b = String(p?.base || "")
+        .trim()
+        .toLowerCase();
+      if (b === "europeo") acc.europeo += 1;
+      if (b === "americano") acc.americano += 1;
+      return acc;
+    },
+    { europeo: 0, americano: 0 }
+  );
 
   const fuseTarget = palletsInLoad.find(
     (p) => String(p._id) === String(fuseTargetId)
@@ -362,6 +399,7 @@ export default function LoadDetail() {
     setFuseNumbers("");
     setFuseSourceIds([]);
     setFuseTargetId(String(palletsInLoad[0]?._id || ""));
+    setFuseBaseChoice(String(palletsInLoad[0]?.base || "").trim());
     setOpenFuse(true);
   };
 
@@ -405,6 +443,41 @@ export default function LoadDetail() {
       });
       return;
     }
+
+    const normalizeBase = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const lower = raw.toLowerCase();
+      if (lower === "europeo") return "Europeo";
+      if (lower === "americano") return "Americano";
+      return raw;
+    };
+    const selectedSources = isSelectMode
+      ? palletsInLoad.filter((p) =>
+          fuseSourceIds.some((sid) => String(sid) === String(p?._id))
+        )
+      : fuseMatchedByNumbers;
+    const baseCandidates = Array.from(
+      new Set(
+        [
+          normalizeBase(fuseTarget?.base),
+          ...selectedSources.map((p) => normalizeBase(p?.base)),
+        ]
+          .map((v) => String(v || "").trim())
+          .filter(Boolean)
+      )
+    );
+    const needsBaseChoice = baseCandidates.length > 1;
+    const effectiveBaseChoice = normalizeBase(fuseBaseChoice);
+    if (needsBaseChoice && !effectiveBaseChoice) {
+      setSnack({
+        open: true,
+        message: `Elige base (${baseCandidates.join(" o ")}) para fusionar`,
+        type: "error",
+      });
+      return;
+    }
+
     if (!window.confirm("¿Seguro que quieres fusionar estos palets?")) return;
 
     try {
@@ -414,6 +487,7 @@ export default function LoadDetail() {
         targetPalletId: targetId,
         sourcePalletIds: isSelectMode ? sourceIds : undefined,
         sourcePalletNumbers: !isSelectMode ? sourceNumbers : undefined,
+        baseChoice: needsBaseChoice ? effectiveBaseChoice : undefined,
         modificado_por: getCurrentUser()?.name || "Testing",
       });
 
@@ -431,12 +505,14 @@ export default function LoadDetail() {
       );
       if (l) {
         setForm({
-          barco: String(l.barco || ""),
+          barco: String(l.barco?._id || l.barco || ""),
           entrega: Array.isArray(l.entrega) ? l.entrega : [],
-          chofer: String(l.chofer || ""),
-          responsable: String(l.responsable || ""),
-          consignatario: String(l.consignatario || ""),
-          terminal_entrega: String(l.terminal_entrega || ""),
+          chofer: String(l.chofer?._id || l.chofer || ""),
+          responsable: String(l.responsable?._id || l.responsable || ""),
+          consignatario: String(l.consignatario?._id || l.consignatario || ""),
+          terminal_entrega: String(
+            l.terminal_entrega?._id || l.terminal_entrega || ""
+          ),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
           fecha_de_carga: toDateInput(l.fecha_de_carga),
@@ -474,6 +550,7 @@ export default function LoadDetail() {
     setOpenFuseDnD(false);
     setFuseDnDSourceId("");
     setFuseDnDTargetId("");
+    setFuseDnDBaseChoice("");
     setDragPalletId("");
     setDragPalletTipo("");
     setDragOverPalletId("");
@@ -488,12 +565,39 @@ export default function LoadDetail() {
       return;
     }
 
+    const normalizeBase = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const lower = raw.toLowerCase();
+      if (lower === "europeo") return "Europeo";
+      if (lower === "americano") return "Americano";
+      return raw;
+    };
+    const baseCandidates = Array.from(
+      new Set(
+        [normalizeBase(fuseDnDSource?.base), normalizeBase(fuseDnDTarget?.base)]
+          .map((v) => String(v || "").trim())
+          .filter(Boolean)
+      )
+    );
+    const needsBaseChoice = baseCandidates.length > 1;
+    const effectiveBaseChoice = normalizeBase(fuseDnDBaseChoice);
+    if (needsBaseChoice && !effectiveBaseChoice) {
+      setSnack({
+        open: true,
+        message: `Elige base (${baseCandidates.join(" o ")}) para fusionar`,
+        type: "error",
+      });
+      return;
+    }
+
     try {
       setFuseSubmitting(true);
       await fusePallets({
         mode: "ids",
         targetPalletId: targetId,
         sourcePalletIds: [sourceId],
+        baseChoice: needsBaseChoice ? effectiveBaseChoice : undefined,
         modificado_por: getCurrentUser()?.name || "Testing",
       });
 
@@ -549,6 +653,45 @@ export default function LoadDetail() {
   const fuseDnDTarget = palletsInLoad.find(
     (p) => String(p._id) === String(fuseDnDTargetId)
   );
+
+  const shipById = new Map(
+    ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0])
+  );
+  const userById = new Map(
+    users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0])
+  );
+  const consigneeById = new Map(
+    consignees.map((c) => [String(c._id || c.id || ""), c]).filter((p) => p[0])
+  );
+  const locationById = new Map(
+    locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0])
+  );
+
+  const barcoId = String(load?.barco?._id || load?.barco || "");
+  const choferId = String(load?.chofer?._id || load?.chofer || "");
+  const consignatarioId = String(
+    load?.consignatario?._id || load?.consignatario || ""
+  );
+  const terminalEntregaId = String(
+    load?.terminal_entrega?._id || load?.terminal_entrega || ""
+  );
+
+  const barcoObj =
+    shipById.get(barcoId) ||
+    (load?.barco && typeof load.barco === "object" ? load.barco : null);
+  const choferObj =
+    userById.get(choferId) ||
+    (load?.chofer && typeof load.chofer === "object" ? load.chofer : null);
+  const consignatarioObj =
+    consigneeById.get(consignatarioId) ||
+    (load?.consignatario && typeof load.consignatario === "object"
+      ? load.consignatario
+      : null);
+  const terminalEntregaObj =
+    locationById.get(terminalEntregaId) ||
+    (load?.terminal_entrega && typeof load.terminal_entrega === "object"
+      ? load.terminal_entrega
+      : null);
 
   return (
     <section className="card">
@@ -615,23 +758,25 @@ export default function LoadDetail() {
           }}
         >
           <div>
-            <strong>Barco:</strong> {load.barco?.nombre_del_barco || "-"}
+            <strong>Barco:</strong> {barcoObj?.nombre_del_barco || "-"}
           </div>
           <div>
             <strong>Entrega:</strong>{" "}
             {Array.isArray(load.entrega) ? load.entrega.join(", ") : ""}
           </div>
           <div>
-            <strong>Chofer:</strong> {load.chofer?.name || "-"}
+            <strong>Chofer:</strong> {choferObj?.name || "-"}
           </div>
           <div>
-            <strong>Consignatario:</strong> {load.consignatario?.nombre || "-"}
+            <strong>Consignatario:</strong> {consignatarioObj?.nombre || "-"}
           </div>
           <div>
             <strong>Terminal entrega:</strong>{" "}
-            {(load.terminal_entrega?.puerto
-              ? `${load.terminal_entrega.puerto} · `
-              : "") + (load.terminal_entrega?.nombre || "-")}
+            {terminalEntregaObj
+              ? (terminalEntregaObj.puerto
+                  ? `${terminalEntregaObj.puerto} · `
+                  : "") + (terminalEntregaObj.nombre || "-")
+              : "-"}
           </div>
           <div>
             <strong>Palets de carga:</strong> {totalPallets}
@@ -654,173 +799,211 @@ export default function LoadDetail() {
           </div>
         </div>
 
-        {/* Resumen por tipo y listado de palets */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-            marginTop: 12,
-          }}
-        >
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Resumen palets</h3>
-            </div>
-            <div style={{ padding: 12 }}>
-              <p>
-                <strong>Total palets:</strong> {totalPallets}
-              </p>
-              {Object.keys(tipoCounts).length > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    flexWrap: "wrap",
-                    marginTop: 6,
-                  }}
-                >
-                  {Object.entries(tipoCounts).map(([tipo, count]) => (
-                    <span
-                      key={tipo}
-                      style={{
-                        background: "#eef2f7",
-                        borderRadius: 6,
-                        padding: "4px 8px",
-                      }}
-                    >
-                      {tipo}: {count}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ color: "var(--text-secondary)" }}>Sin tipos</p>
-              )}
-            </div>
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="card-header">
+            <h3 className="card-title">Resumen palets</h3>
           </div>
+          <div style={{ padding: 12 }}>
+            <p>
+              <strong>Total palets:</strong> {totalPallets}
+            </p>
+            {Object.keys(tipoCounts).length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginTop: 6,
+                }}
+              >
+                {Object.entries(tipoCounts).map(([tipo, count]) => (
+                  <span
+                    key={tipo}
+                    style={{
+                      background: "#eef2f7",
+                      borderRadius: 6,
+                      padding: "4px 8px",
+                    }}
+                  >
+                    {tipo}: {count}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: "var(--text-secondary)" }}>Sin tipos</p>
+            )}
 
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Palets de la carga</h3>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+                marginTop: 8,
+              }}
+            >
+              <span
+                style={{
+                  background: "#eef2f7",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                }}
+              >
+                Europeo: {baseCounts.europeo}
+              </span>
+              <span
+                style={{
+                  background: "#eef2f7",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                }}
+              >
+                Americano: {baseCounts.americano}
+              </span>
             </div>
-            <div style={{ padding: 12 }}>
+
+            <div style={{ marginTop: 14 }}>
               {palletsInLoad.length === 0 ? (
                 <div style={{ color: "var(--text-secondary)" }}>
                   Sin palets asociados
                 </div>
               ) : (
-                palletsInLoad.map((p) => {
-                  const idStr = String(p._id);
-                  const isDragging = !!dragPalletId;
-                  const isSource = isDragging && idStr === String(dragPalletId);
-                  const isDroppable = isDragging && canDnDFuseTo(p);
-                  const isDisabled = isDragging && !isSource && !isDroppable;
-                  const isOver =
-                    isDroppable && idStr === String(dragOverPalletId);
-                  const nombre = String(p.nombre || "").trim();
-                  const numero = String(p.numero_palet || "").trim();
-                  const nombreMostrado = (() => {
-                    if (!nombre) return numero;
-                    if (!numero) return nombre;
-                    if (nombre.startsWith(numero)) return nombre;
-                    const idx = nombre.indexOf(" - ");
-                    if (idx === -1) return numero;
-                    return `${numero}${nombre.slice(idx)}`;
-                  })();
-
-                  return (
-                    <div
-                      key={p._id}
-                      className="calendar-item"
-                      draggable={canManagePallets}
-                      style={{
-                        padding: "10px 12px",
-                        minHeight: 56,
-                        marginBottom: 8,
-                        cursor: isDragging
-                          ? isSource
-                            ? "grabbing"
-                            : isDroppable
-                            ? "copy"
-                            : "not-allowed"
-                          : "pointer",
-                        background: isOver ? "var(--hover)" : "#f8fafc",
-                        borderLeft: `4px solid ${
-                          isOver ? "var(--brand-blue)" : "#9ca3af"
-                        }`,
-                        display: "flex",
-                        alignItems: "center",
-                        opacity: isDisabled ? 0.45 : 1,
-                        filter: isDisabled ? "grayscale(1)" : "none",
-                      }}
-                      onDragStart={(e) => {
-                        if (!canManagePallets) return;
-                        e.dataTransfer.effectAllowed = "copy";
-                        setDragPalletId(idStr);
-                        setDragPalletTipo(String(p.tipo || ""));
-                        setDragOverPalletId("");
-                      }}
-                      onDragEnd={() => {
-                        setDragPalletId("");
-                        setDragPalletTipo("");
-                        setDragOverPalletId("");
-                      }}
-                      onDragOver={(e) => {
-                        if (!canManagePallets) return;
-                        if (!canDnDFuseTo(p)) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "copy";
-                        if (dragOverPalletId !== idStr)
-                          setDragOverPalletId(idStr);
-                      }}
-                      onDrop={(e) => {
-                        if (!canManagePallets) return;
-                        if (!canDnDFuseTo(p)) return;
-                        e.preventDefault();
-                        setFuseDnDSourceId(String(dragPalletId));
-                        setFuseDnDTargetId(idStr);
-                        setOpenFuseDnD(true);
-                        setDragPalletId("");
-                        setDragPalletTipo("");
-                        setDragOverPalletId("");
-                      }}
-                      onClick={() => {
-                        if (dragPalletId) return;
-                        navigate(`/app/palets/${p._id}`);
-                      }}
-                    >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 12,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {palletsInLoad.map((p) => {
+                    const pid = String(p?._id || p?.id || "");
+                    const idStr = pid;
+                    const isDragging = !!dragPalletId;
+                    const isSource =
+                      isDragging &&
+                      idStr &&
+                      String(idStr) === String(dragPalletId);
+                    const isDroppable = isDragging && canDnDFuseTo(p);
+                    const isDisabled = isDragging && !isSource && !isDroppable;
+                    const isOver =
+                      isDroppable &&
+                      idStr &&
+                      String(idStr) === String(dragOverPalletId);
+                    const numero = String(p?.numero_palet || "").trim();
+                    const nombre = String(p?.nombre || "").trim();
+                    const tipo = String(p?.tipo || "").trim();
+                    const base = String(p?.base || "").trim();
+                    const isAmericano =
+                      base.trim().toLowerCase() === "americano";
+                    const colors = getTipoColors(tipo);
+                    const accent = isAmericano ? colors.strong : colors.color;
+                    const avatarText = (() => {
+                      if (nombre && !nombre.includes(" - ")) return nombre;
+                      if (numero) return numero;
+                      if (nombre) return nombre.split(" - ")[0];
+                      return "?";
+                    })();
+                    const title = (() => {
+                      const n = String(p?.nombre || "").trim();
+                      if (n) return n;
+                      if (numero) return numero;
+                      return "Palet";
+                    })();
+                    const subtitle = [tipo, base].filter(Boolean).join(" · ");
+                    return (
                       <div
+                        key={pid || `${numero || nombre}`}
+                        className="card-item"
+                        draggable={canManagePallets}
                         style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "center",
+                          cursor: isDragging
+                            ? isSource
+                              ? "grabbing"
+                              : isDroppable
+                              ? "copy"
+                              : "not-allowed"
+                            : "pointer",
+                          borderLeft: `${
+                            isAmericano ? 10 : 6
+                          }px solid ${accent}`,
+                          width: "fit-content",
+                          minWidth: 210,
+                          maxWidth: 320,
+                          opacity: isDisabled ? 0.45 : 1,
+                          filter: isDisabled ? "grayscale(1)" : "none",
+                          background: isOver ? "var(--hover)" : undefined,
                         }}
+                        onDragStart={(e) => {
+                          if (!canManagePallets) return;
+                          if (!idStr) return;
+                          e.dataTransfer.effectAllowed = "copy";
+                          setDragPalletId(String(idStr));
+                          setDragPalletTipo(String(tipo || ""));
+                          setDragOverPalletId("");
+                        }}
+                        onDragEnd={() => {
+                          setDragPalletId("");
+                          setDragPalletTipo("");
+                          setDragOverPalletId("");
+                        }}
+                        onDragOver={(e) => {
+                          if (!canManagePallets) return;
+                          if (!canDnDFuseTo(p)) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "copy";
+                          if (dragOverPalletId !== idStr)
+                            setDragOverPalletId(idStr);
+                        }}
+                        onDrop={(e) => {
+                          if (!canManagePallets) return;
+                          if (!canDnDFuseTo(p)) return;
+                          e.preventDefault();
+                          setFuseDnDSourceId(String(dragPalletId));
+                          setFuseDnDTargetId(String(idStr));
+                          setFuseDnDBaseChoice(String(base || "").trim());
+                          setOpenFuseDnD(true);
+                          setDragPalletId("");
+                          setDragPalletTipo("");
+                          setDragOverPalletId("");
+                        }}
+                        onClick={() =>
+                          dragPalletId
+                            ? undefined
+                            : navigate(`/app/palets/${pid}`)
+                        }
                       >
-                        <div style={{ fontSize: 18, lineHeight: "22px" }}>
-                          <strong>{nombreMostrado}</strong>
-                        </div>
-                        <div style={{ color: "var(--text-secondary)" }}>
-                          {p.tipo}
-                          {p.createdAt || p.fecha_creacion
-                            ? ` · ${formatDateLabel(
-                                p.createdAt || p.fecha_creacion
-                              )}`
-                            : ""}
-                        </div>
-                        {p.contenedor && (
+                        <div className="card-item-header">
                           <div
+                            className="avatar"
                             style={{
-                              marginTop: 4,
-                              color: "var(--text-secondary)",
+                              fontSize: String(avatarText).length > 3 ? 12 : 16,
+                              padding: 4,
+                              textAlign: "center",
+                              lineHeight: "14px",
                             }}
                           >
-                            Contenedor: {p.contenedor}
+                            {avatarText}
                           </div>
-                        )}
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              className="card-item-title"
+                              style={{ fontSize: 16, lineHeight: "20px" }}
+                            >
+                              {title}
+                            </div>
+                            <div className="card-item-sub">
+                              {subtitle || " "}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="card-item-meta">
+                          {tipo && <span className="chip">{tipo}</span>}
+                          {base && <span className="chip">{base}</span>}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -840,6 +1023,48 @@ export default function LoadDetail() {
           ¿Desea fusionar los palets {fuseDnDSource?.numero_palet || "-"} y{" "}
           {fuseDnDTarget?.numero_palet || "-"}?
         </div>
+        {(() => {
+          const normalizeBase = (value) => {
+            const raw = String(value || "").trim();
+            if (!raw) return "";
+            const lower = raw.toLowerCase();
+            if (lower === "europeo") return "Europeo";
+            if (lower === "americano") return "Americano";
+            return raw;
+          };
+          const baseCandidates = Array.from(
+            new Set(
+              [
+                normalizeBase(fuseDnDSource?.base),
+                normalizeBase(fuseDnDTarget?.base),
+              ]
+                .map((v) => String(v || "").trim())
+                .filter(Boolean)
+            )
+          );
+          if (baseCandidates.length <= 1) return null;
+          const value =
+            normalizeBase(fuseDnDBaseChoice) ||
+            normalizeBase(fuseDnDTarget?.base) ||
+            baseCandidates[0] ||
+            "";
+          return (
+            <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
+              <div className="label">Base final</div>
+              <select
+                className="select"
+                value={value}
+                onChange={(e) => setFuseDnDBaseChoice(e.target.value)}
+              >
+                {baseCandidates.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
       </Modal>
 
       <Modal
@@ -920,6 +1145,55 @@ export default function LoadDetail() {
               : ""}
           </div>
         </div>
+
+        {(() => {
+          const normalizeBase = (value) => {
+            const raw = String(value || "").trim();
+            if (!raw) return "";
+            const lower = raw.toLowerCase();
+            if (lower === "europeo") return "Europeo";
+            if (lower === "americano") return "Americano";
+            return raw;
+          };
+          const selectedSources =
+            fuseMode === "seleccion"
+              ? palletsInLoad.filter((p) =>
+                  fuseSourceIds.some((sid) => String(sid) === String(p?._id))
+                )
+              : fuseMatchedByNumbers;
+          const baseCandidates = Array.from(
+            new Set(
+              [
+                normalizeBase(fuseTarget?.base),
+                ...selectedSources.map((p) => normalizeBase(p?.base)),
+              ]
+                .map((v) => String(v || "").trim())
+                .filter(Boolean)
+            )
+          );
+          if (baseCandidates.length <= 1) return null;
+          const value =
+            normalizeBase(fuseBaseChoice) ||
+            normalizeBase(fuseTarget?.base) ||
+            baseCandidates[0] ||
+            "";
+          return (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div className="label">Base final</div>
+              <select
+                className="select"
+                value={value}
+                onChange={(e) => setFuseBaseChoice(e.target.value)}
+              >
+                {baseCandidates.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
 
         {fuseMode === "seleccion" ? (
           <div style={{ display: "grid", gap: 8 }}>
@@ -1326,9 +1600,9 @@ export default function LoadDetail() {
             </div>
           </div>
 
-          {/* Estado del viaje */}
+          {/* Estado de carga */}
           <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Estado del viaje</div>
+            <div className="label">Estado de Carga</div>
             <select
               className="select"
               value={form.estado_viaje}

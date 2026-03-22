@@ -29,12 +29,199 @@ import {
 
 const ESTADO_VIAJE_OPTIONS = [
   "Preparando",
-  "En Proceso",
-  "Cancelado",
+  "Cargando",
+  "Viajando",
   "Entregado",
+  "Cancelado",
 ];
-const CARGA_OPTIONS = ["Seco", "Refrigerado", "Congelado", "Técnico"];
-const ENTREGA_OPTIONS = ["Provisión", "Alimentación", "Repuesto", "Técnico"];
+const CARGA_OPTIONS = [
+  "Seco",
+  "Refrigerado",
+  "Congelado",
+  "Técnico",
+  "Fruta y verdura",
+  "Repuestos",
+];
+const ENTREGA_OPTIONS = ["Provisión", "Repuesto", "Técnico"];
+
+const esCompare = (a, b) =>
+  String(a || "").localeCompare(String(b || ""), "es", {
+    sensitivity: "base",
+    numeric: true,
+  });
+
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Selecciona",
+  searchPlaceholder = "Buscar...",
+  disabled = false,
+  maxHeight = 260,
+} = {}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef(null);
+
+  const selected = useMemo(() => {
+    const val = String(value ?? "");
+    return (options || []).find((o) => String(o?.value ?? "") === val) || null;
+  }, [options, value]);
+
+  const filtered = useMemo(() => {
+    const q = String(query || "")
+      .trim()
+      .toLowerCase();
+    const list = Array.isArray(options) ? options : [];
+    if (!q) return list;
+    return list.filter((o) =>
+      String(o?.label || "")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [options, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      const el = rootRef.current;
+      if (!el) return;
+      if (el.contains(e.target)) return;
+      setOpen(false);
+      setQuery("");
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("touchstart", onDown, { passive: true });
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("touchstart", onDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="input"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((v) => !v);
+          if (!open) setTimeout(() => {}, 0);
+        }}
+        style={{
+          width: "100%",
+          textAlign: "left",
+          cursor: disabled ? "not-allowed" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span
+          style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+        >
+          {selected ? selected.label : placeholder}
+        </span>
+        <span
+          className="material-symbols-outlined"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          expand_more
+        </span>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: "#fff",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+            <input
+              className="input"
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setOpen(false);
+                  setQuery("");
+                }
+              }}
+            />
+          </div>
+          <div
+            style={{
+              maxHeight,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+            }}
+          >
+            {filtered.length === 0 ? (
+              <div style={{ padding: 12, color: "var(--text-secondary)" }}>
+                Sin resultados
+              </div>
+            ) : (
+              filtered.map((o) => {
+                const val = String(o?.value ?? "");
+                const isSelected = val === String(value ?? "");
+                return (
+                  <button
+                    key={val || o?.label}
+                    type="button"
+                    onClick={() => {
+                      onChange?.(val);
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      border: "none",
+                      background: isSelected ? "var(--hover)" : "#fff",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                    }}
+                  >
+                    <span
+                      style={{
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {o?.label}
+                    </span>
+                    {isSelected && (
+                      <span className="material-symbols-outlined">check</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Loads() {
   const allColumns = useMemo(
@@ -60,9 +247,23 @@ export default function Loads() {
   );
 
   const navigate = useNavigate();
+  const todayIso = useMemo(() => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
   const [view, setView] = useState("table");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [openExportAgenda, setOpenExportAgenda] = useState(false);
+  const [exportStep, setExportStep] = useState("config");
+  const [exportStart, setExportStart] = useState(todayIso);
+  const [exportEnd, setExportEnd] = useState(todayIso);
+  const [exportUseCurrentFilters, setExportUseCurrentFilters] = useState(true);
+  const [exportMode, setExportMode] = useState("all");
+  const [exportSelectedIds, setExportSelectedIds] = useState([]);
   const [form, setForm] = useState({
     barco: "",
     entrega: [],
@@ -70,8 +271,6 @@ export default function Loads() {
     responsable: "",
     consignatario: "",
     terminal_entrega: "",
-    palets: [],
-    carga: [],
     fecha_de_carga: "",
     hora_de_carga: "",
     fecha_de_descarga: "",
@@ -87,7 +286,6 @@ export default function Loads() {
   const [responsables, setResponsables] = useState([]);
   const [consignees, setConsignees] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [responsableQuery, setResponsableQuery] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -268,6 +466,11 @@ export default function Loads() {
   }, []);
 
   const role = getCurrentRole() || getCurrentUser()?.role || null;
+  const roleNormalized = String(role || "")
+    .trim()
+    .toLowerCase();
+  const canExportAgenda =
+    roleNormalized === "admin" || roleNormalized === "dispatcher";
   const canManageLoads =
     hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
     String(role || "")
@@ -305,6 +508,116 @@ export default function Loads() {
     };
   }, [openDebug, role, canManageLoads]);
 
+  const openExportAgendaModal = () => {
+    if (!canExportAgenda) {
+      setSnack({
+        open: true,
+        message: "No tienes permiso para exportar la agenda",
+        type: "error",
+      });
+      return;
+    }
+    setExportStart(todayIso);
+    setExportEnd(todayIso);
+    setExportUseCurrentFilters(true);
+    setExportMode("all");
+    setExportSelectedIds([]);
+    setExportStep("config");
+    setOpenExportAgenda(true);
+  };
+
+  const closeExportAgendaModal = () => {
+    setOpenExportAgenda(false);
+    setExportStep("config");
+  };
+
+  const goExportPreview = () => {
+    const startKey = String(exportStart || "").trim();
+    const endKeyRaw = String(exportEnd || exportStart || "").trim();
+    if (!startKey) {
+      setSnack({
+        open: true,
+        message: "Selecciona una fecha de inicio",
+        type: "error",
+      });
+      return;
+    }
+    const startMsRaw = new Date(`${startKey}T00:00:00`).getTime();
+    const endMsRaw = new Date(`${endKeyRaw}T00:00:00`).getTime();
+    if (Number.isNaN(startMsRaw) || Number.isNaN(endMsRaw)) {
+      setSnack({
+        open: true,
+        message: "Rango de fechas inválido",
+        type: "error",
+      });
+      return;
+    }
+    const startMs = Math.min(startMsRaw, endMsRaw);
+    const endMs = Math.max(startMsRaw, endMsRaw);
+    const effectiveStartKey =
+      startMsRaw <= endMsRaw ? startKey : endKeyRaw || startKey;
+    const effectiveEndKey =
+      startMsRaw <= endMsRaw ? endKeyRaw || startKey : startKey;
+
+    if (effectiveStartKey !== startKey || effectiveEndKey !== endKeyRaw) {
+      setExportStart(effectiveStartKey);
+      setExportEnd(effectiveEndKey);
+    }
+
+    const base = exportUseCurrentFilters ? filtered : rows;
+    const candidates = base.filter((r) => {
+      const k = String(r.fecha_de_carga_group || "");
+      if (!k || k === "Sin fecha") return false;
+      const ms = new Date(`${k}T00:00:00`).getTime();
+      if (Number.isNaN(ms)) return false;
+      if (ms < startMs) return false;
+      if (ms > endMs) return false;
+      return true;
+    });
+
+    if (candidates.length === 0) {
+      setSnack({
+        open: true,
+        message: "No hay cargas en el rango seleccionado",
+        type: "warning",
+      });
+      return;
+    }
+
+    if (exportMode === "select") {
+      const selectedSet = new Set(exportSelectedIds.map((v) => String(v)));
+      const selectedCount = candidates.reduce((acc, r) => {
+        return acc + (selectedSet.has(String(r.id)) ? 1 : 0);
+      }, 0);
+      if (selectedCount === 0) {
+        setSnack({
+          open: true,
+          message: "Selecciona al menos una carga",
+          type: "error",
+        });
+        return;
+      }
+    }
+    setExportStep("preview");
+  };
+
+  const submitExportAgendaModal = () => {
+    if (exportStep === "config") {
+      goExportPreview();
+      return;
+    }
+    if (exportPreviewRows.length === 0) {
+      setSnack({
+        open: true,
+        message: "No hay cargas para exportar",
+        type: "warning",
+      });
+      return;
+    }
+    printExportAgenda();
+    closeExportAgendaModal();
+  };
+
   const onCreate = () => {
     if (!canManageLoads) {
       setSnack({
@@ -314,7 +627,6 @@ export default function Loads() {
       });
       return;
     }
-    setResponsableQuery("");
     setOpen(true);
   };
 
@@ -335,8 +647,6 @@ export default function Loads() {
         responsable: form.responsable || undefined,
         consignatario: form.consignatario || undefined,
         terminal_entrega: form.terminal_entrega || undefined,
-        palets: form.palets,
-        carga: form.carga,
         fecha_de_carga: form.fecha_de_carga || undefined,
         hora_de_carga: form.hora_de_carga || undefined,
         fecha_de_descarga: form.fecha_de_descarga || undefined,
@@ -676,6 +986,245 @@ export default function Loads() {
     });
   }, [rows, query, estadoFilter, entregaFilter, barcoFilter]);
 
+  const exportCandidates = useMemo(() => {
+    const base = exportUseCurrentFilters ? filtered : rows;
+    const startKey = String(exportStart || "").trim();
+    const endKey = String(exportEnd || exportStart || "").trim();
+    const startMs = startKey
+      ? new Date(`${startKey}T00:00:00`).getTime()
+      : null;
+    const endMs = endKey ? new Date(`${endKey}T00:00:00`).getTime() : null;
+    return base.filter((r) => {
+      const k = String(r.fecha_de_carga_group || "");
+      if (!k || k === "Sin fecha") return false;
+      const ms = new Date(`${k}T00:00:00`).getTime();
+      if (Number.isNaN(ms)) return false;
+      if (typeof startMs === "number" && ms < startMs) return false;
+      if (typeof endMs === "number" && ms > endMs) return false;
+      return true;
+    });
+  }, [exportUseCurrentFilters, filtered, rows, exportStart, exportEnd]);
+
+  const exportCandidateIdSet = useMemo(() => {
+    return new Set(exportCandidates.map((r) => String(r.id)));
+  }, [exportCandidates]);
+
+  useEffect(() => {
+    if (exportMode !== "select") return;
+    setExportSelectedIds((prev) =>
+      prev.map((v) => String(v)).filter((id) => exportCandidateIdSet.has(id))
+    );
+  }, [exportMode, exportCandidateIdSet]);
+
+  const exportSelected = useMemo(() => {
+    if (exportMode === "all") return exportCandidates;
+    const selectedSet = new Set(exportSelectedIds.map((v) => String(v)));
+    return exportCandidates.filter((r) => selectedSet.has(String(r.id)));
+  }, [exportMode, exportCandidates, exportSelectedIds]);
+
+  const exportPreviewRows = useMemo(() => {
+    return exportSelected.slice().sort((a, b) => {
+      const d = String(a.fecha_de_carga_group || "").localeCompare(
+        String(b.fecha_de_carga_group || ""),
+        "es"
+      );
+      if (d !== 0) return d;
+      const t = String(a.hora_de_carga || "").localeCompare(
+        String(b.hora_de_carga || ""),
+        "es"
+      );
+      if (t !== 0) return t;
+      return String(a.barco || "").localeCompare(String(b.barco || ""), "es");
+    });
+  }, [exportSelected]);
+
+  const exportSummary = useMemo(() => {
+    const totalCargas = exportPreviewRows.length;
+    const totalPalets = exportPreviewRows.reduce(
+      (acc, r) => acc + (Number(r.total_palets) || 0),
+      0
+    );
+    const porEstado = exportPreviewRows.reduce((acc, r) => {
+      const k = String(r.estado_viaje || "Sin estado");
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    return { totalCargas, totalPalets, porEstado };
+  }, [exportPreviewRows]);
+
+  const printExportAgenda = () => {
+    const escapeHtml = (value) =>
+      String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const startKey = String(exportStart || "").trim();
+    const endKey = String(exportEnd || exportStart || "").trim();
+    const titleRange =
+      startKey && endKey && startKey !== endKey
+        ? `${startKey} → ${endKey}`
+        : startKey || endKey || "";
+    const generatedAt = new Intl.DateTimeFormat("es-ES", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date());
+
+    const filtrosLabel = exportUseCurrentFilters
+      ? `Filtros: estado=${estadoFilter || "Todos"}, entrega=${
+          entregaFilter || "Todas"
+        }, barco=${barcoFilter || "Todos"}, búsqueda=${
+          query ? `"${query}"` : "—"
+        }`
+      : "Filtros: sin filtros de pantalla";
+
+    const estadosHtml = Object.entries(exportSummary.porEstado || {})
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "es"))
+      .map(
+        ([k, v]) =>
+          `<span class="pill">${escapeHtml(k)}: ${escapeHtml(v)}</span>`
+      )
+      .join("");
+
+    const loadsHtml = exportPreviewRows
+      .map((r, idx) => {
+        const entrega = String(r.entrega || "").trim();
+        const carga = String(r.carga || "").trim();
+        return `
+          <section class="load">
+            <div class="load-head">
+              <div class="load-title">${escapeHtml(
+                r.nombre || `Carga ${idx + 1}`
+              )}</div>
+              <div class="load-meta">
+                <span class="pill">${escapeHtml(r.estado_viaje || "")}</span>
+                <span class="pill">${escapeHtml(
+                  r.fecha_de_carga || ""
+                )} ${escapeHtml(r.hora_de_carga || "")}</span>
+                <span class="pill">${escapeHtml(r.barco || "")}</span>
+              </div>
+            </div>
+            <div class="grid">
+              <div>
+                <div class="label">Entrega</div>
+                <div class="value">${escapeHtml(entrega || "—")}</div>
+              </div>
+              <div>
+                <div class="label">Terminal entrega</div>
+                <div class="value">${escapeHtml(
+                  r.terminal_entrega || "—"
+                )}</div>
+              </div>
+              <div>
+                <div class="label">Consignatario</div>
+                <div class="value">${escapeHtml(r.consignatario || "—")}</div>
+              </div>
+              <div>
+                <div class="label">Chofer</div>
+                <div class="value">${escapeHtml(r.chofer || "—")}</div>
+              </div>
+              <div>
+                <div class="label">Tipo de carga</div>
+                <div class="value">${escapeHtml(carga || "—")}</div>
+              </div>
+              <div>
+                <div class="label">Palets</div>
+                <div class="value">${escapeHtml(r.total_palets || 0)}</div>
+              </div>
+              <div>
+                <div class="label">Descarga</div>
+                <div class="value">${escapeHtml(
+                  r.fecha_de_descarga || ""
+                )} ${escapeHtml(r.hora_de_descarga || "")}</div>
+              </div>
+            </div>
+            <div class="tasks">
+              <div class="label">Checklist del día</div>
+              <div class="taskline"></div>
+              <div class="taskline"></div>
+              <div class="taskline"></div>
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    const html = `<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Agenda ${escapeHtml(titleRange)}</title>
+          <style>
+            :root { color-scheme: light; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; color: #111827; }
+            h1 { font-size: 20px; margin: 0 0 6px 0; }
+            .sub { color: #6b7280; font-size: 12px; margin-bottom: 14px; }
+            .summary { display: grid; grid-template-columns: 1fr; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 16px; }
+            .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+            .pill { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid #e5e7eb; border-radius: 999px; font-size: 12px; background: #fff; }
+            .load { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 0 0 12px 0; break-inside: avoid; page-break-inside: avoid; }
+            .load-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+            .load-title { font-weight: 700; font-size: 14px; }
+            .load-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+            .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; }
+            .value { font-size: 13px; }
+            .tasks { margin-top: 12px; }
+            .taskline { height: 14px; border-bottom: 1px solid #d1d5db; margin-top: 10px; }
+            @media print {
+              body { margin: 12mm; }
+              .load { break-inside: avoid; page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Agenda diaria ${escapeHtml(titleRange)}</h1>
+          <div class="sub">${escapeHtml(filtrosLabel)} · Generado: ${escapeHtml(
+      generatedAt
+    )}</div>
+          <div class="summary">
+            <div class="row">
+              <span class="pill">Cargas: ${escapeHtml(
+                exportSummary.totalCargas
+              )}</span>
+              <span class="pill">Palets: ${escapeHtml(
+                exportSummary.totalPalets
+              )}</span>
+            </div>
+            <div class="row">${estadosHtml}</div>
+          </div>
+          ${loadsHtml || "<div>No hay cargas para exportar.</div>"}
+          <script>
+            window.addEventListener('load', () => {
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 50);
+            });
+          </script>
+        </body>
+      </html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) {
+      setSnack({
+        open: true,
+        message: "El navegador bloqueó la ventana emergente para exportar",
+        type: "error",
+      });
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
@@ -765,11 +1314,13 @@ export default function Loads() {
             aria-label="Filtrar por estado"
           >
             <option value="">Todos los estados</option>
-            {ESTADO_VIAJE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {ESTADO_VIAJE_OPTIONS.slice()
+              .sort(esCompare)
+              .map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
           </select>
           <select
             className="select"
@@ -793,6 +1344,7 @@ export default function Loads() {
             <option value="">Todos los barcos</option>
             {Array.from(new Set(rows.map((r) => r.barco)))
               .filter(Boolean)
+              .sort(esCompare)
               .map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -944,6 +1496,15 @@ export default function Loads() {
           >
             <span className="material-symbols-outlined">event_note</span>
           </button>
+          {canExportAgenda && (
+            <button
+              className="icon-button"
+              title="Exportar agenda (PDF)"
+              onClick={openExportAgendaModal}
+            >
+              <span className="material-symbols-outlined">picture_as_pdf</span>
+            </button>
+          )}
           {canManageLoads && (
             <button
               className="icon-button"
@@ -1150,6 +1711,302 @@ export default function Loads() {
       />
 
       <Modal
+        open={openExportAgenda}
+        title={
+          exportStep === "preview"
+            ? "Vista previa · Exportar agenda"
+            : "Exportar agenda"
+        }
+        onClose={closeExportAgendaModal}
+        onSubmit={submitExportAgendaModal}
+        submitLabel={exportStep === "preview" ? "Exportar PDF" : "Vista previa"}
+        width={920}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        {exportStep === "config" ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <div className="label">Rango de fechas (fecha de carga)</div>
+              <div className="form-row">
+                <div>
+                  <div className="label">Desde</div>
+                  <input
+                    type="date"
+                    className="input"
+                    value={exportStart}
+                    onChange={(e) => setExportStart(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <div className="label">Hasta</div>
+                  <input
+                    type="date"
+                    className="input"
+                    value={exportEnd}
+                    onChange={(e) => setExportEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={exportUseCurrentFilters}
+                onChange={(e) => setExportUseCurrentFilters(e.target.checked)}
+              />
+              Usar filtros actuales de la pantalla
+            </label>
+
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: 10,
+                background: "var(--bg)",
+              }}
+            >
+              <div className="label">Filtros</div>
+              <div style={{ fontSize: 13 }}>
+                {exportUseCurrentFilters ? (
+                  <>
+                    Estado: {estadoFilter || "Todos"} · Entrega:{" "}
+                    {entregaFilter || "Todas"} · Barco: {barcoFilter || "Todos"}{" "}
+                    · Búsqueda: {query ? `"${query}"` : "—"}
+                  </>
+                ) : (
+                  <>Sin filtros</>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 6 }}>
+              <div className="label">Qué cargas incluir</div>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <label className="checkbox-row">
+                  <input
+                    type="radio"
+                    name="exportMode"
+                    checked={exportMode === "all"}
+                    onChange={() => setExportMode("all")}
+                  />
+                  Todas las cargas del rango
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="radio"
+                    name="exportMode"
+                    checked={exportMode === "select"}
+                    onChange={() => setExportMode("select")}
+                  />
+                  Elegir cargas
+                </label>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                Candidatas en rango: {exportCandidates.length}
+              </div>
+            </div>
+
+            {exportMode === "select" && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 8 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      exportCandidates.length > 0 &&
+                      exportSelectedIds.length === exportCandidates.length
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setExportSelectedIds(
+                          exportCandidates.map((r) => String(r.id))
+                        );
+                      } else {
+                        setExportSelectedIds([]);
+                      }
+                    }}
+                  />
+                  Seleccionar todos
+                </label>
+                <div
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: 10,
+                    maxHeight: "45vh",
+                    overflowY: "auto",
+                    scrollbarGutter: "stable",
+                    overscrollBehavior: "contain",
+                    WebkitOverflowScrolling: "touch",
+                    touchAction: "pan-y",
+                  }}
+                >
+                  {exportCandidates.length === 0 ? (
+                    <div style={{ color: "var(--text-secondary)" }}>
+                      No hay cargas en el rango seleccionado.
+                    </div>
+                  ) : (
+                    exportCandidates
+                      .slice()
+                      .sort((a, b) => {
+                        const d = String(
+                          a.fecha_de_carga_group || ""
+                        ).localeCompare(
+                          String(b.fecha_de_carga_group || ""),
+                          "es"
+                        );
+                        if (d !== 0) return d;
+                        const t = String(a.hora_de_carga || "").localeCompare(
+                          String(b.hora_de_carga || ""),
+                          "es"
+                        );
+                        if (t !== 0) return t;
+                        return String(a.barco || "").localeCompare(
+                          String(b.barco || ""),
+                          "es"
+                        );
+                      })
+                      .map((r) => {
+                        const id = String(r.id);
+                        const checked = exportSelectedIds.some(
+                          (v) => String(v) === id
+                        );
+                        return (
+                          <label
+                            key={id}
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              padding: "8px 0",
+                              borderBottom: "1px solid #f1f3f4",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div style={{ display: "flex", gap: 10 }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setExportSelectedIds((prev) => {
+                                    const set = new Set(
+                                      prev.map((x) => String(x))
+                                    );
+                                    if (set.has(id)) set.delete(id);
+                                    else set.add(id);
+                                    return Array.from(set);
+                                  });
+                                }}
+                              />
+                              <div style={{ display: "grid", gap: 2 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>
+                                  {r.barco || "—"} · {r.fecha_de_carga || "—"}{" "}
+                                  {r.hora_de_carga || ""}
+                                </div>
+                                <div style={{ fontSize: 13 }}>
+                                  Entrega: {r.entrega || "—"} · Palets:{" "}
+                                  {Number(r.total_palets) || 0} · Estado:{" "}
+                                  {r.estado_viaje || "—"}
+                                </div>
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setExportStep("config")}
+              >
+                Volver
+              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="chip">
+                  Cargas: {exportSummary.totalCargas}
+                </span>
+                <span className="chip">
+                  Palets: {exportSummary.totalPalets}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Object.entries(exportSummary.porEstado || {})
+                .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "es"))
+                .map(([k, v]) => (
+                  <span key={k} className="chip">
+                    {k}: {v}
+                  </span>
+                ))}
+            </div>
+
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: 10,
+                maxHeight: "45vh",
+                overflowY: "auto",
+                scrollbarGutter: "stable",
+              }}
+            >
+              {exportPreviewRows.length === 0 ? (
+                <div style={{ color: "var(--text-secondary)" }}>
+                  No hay cargas para exportar.
+                </div>
+              ) : (
+                exportPreviewRows.map((r) => (
+                  <div
+                    key={String(r.id)}
+                    style={{
+                      display: "grid",
+                      gap: 4,
+                      padding: "10px 0",
+                      borderBottom: "1px solid #f1f3f4",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span className="chip">{r.estado_viaje || "—"}</span>
+                      <span className="chip">
+                        {r.fecha_de_carga || "—"} {r.hora_de_carga || ""}
+                      </span>
+                      <span className="chip">{r.barco || "—"}</span>
+                    </div>
+                    <div style={{ fontSize: 13 }}>
+                      Entrega: {r.entrega || "—"} · Consignatario:{" "}
+                      {r.consignatario || "—"} · Terminal:{" "}
+                      {r.terminal_entrega || "—"}
+                    </div>
+                    <div style={{ fontSize: 13 }}>
+                      Tipo: {r.carga || "—"} · Palets:{" "}
+                      {Number(r.total_palets) || 0} · Descarga:{" "}
+                      {r.fecha_de_descarga || ""} {r.hora_de_descarga || ""}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              Al exportar se abrirá el diálogo de impresión del navegador para
+              guardar como PDF.
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={openDebug}
         title="Debug permisos"
         onClose={() => setOpenDebug(false)}
@@ -1272,18 +2129,27 @@ export default function Loads() {
           {/* Datos básicos */}
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Barco</div>
-            <select
-              className="input"
+            <SearchableSelect
               value={form.barco}
-              onChange={(e) => setForm({ ...form, barco: e.target.value })}
-            >
-              <option value="">Selecciona barco</option>
-              {ships.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {s.nombre_del_barco}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setForm({ ...form, barco: val })}
+              placeholder="Selecciona barco"
+              searchPlaceholder="Buscar barco..."
+              options={[
+                { value: "", label: "Selecciona barco" },
+                ...ships
+                  .slice()
+                  .sort((a, b) =>
+                    String(a?.nombre_del_barco || "").localeCompare(
+                      String(b?.nombre_del_barco || ""),
+                      "es"
+                    )
+                  )
+                  .map((s) => ({
+                    value: String(s?._id || s?.id || ""),
+                    label: String(s?.nombre_del_barco || "").trim() || "-",
+                  })),
+              ]}
+            />
           </div>
 
           <div style={{ display: "grid", gap: 8 }}>
@@ -1370,167 +2236,119 @@ export default function Loads() {
           {/* Personas */}
           <div style={{ display: "grid", gap: 6 }}>
             <div className="label">Responsable</div>
-            <input
-              className="input"
-              value={responsableQuery}
-              onChange={(e) => setResponsableQuery(e.target.value)}
-              placeholder="Buscar responsable por nombre"
-            />
-            <select
-              className="input"
+            <SearchableSelect
               value={form.responsable}
-              onChange={(e) =>
-                setForm({ ...form, responsable: e.target.value })
-              }
-            >
-              <option value="">Sin responsable</option>
-              {responsables
-                .filter((r) => {
-                  const q = String(responsableQuery || "")
-                    .trim()
-                    .toLowerCase();
-                  if (!q) return true;
-                  return String(r.nombre || "")
-                    .toLowerCase()
-                    .includes(q);
-                })
-                .sort((a, b) =>
-                  String(a.nombre || "").localeCompare(
-                    String(b.nombre || ""),
-                    "es"
+              onChange={(val) => setForm({ ...form, responsable: val })}
+              placeholder="Sin responsable"
+              searchPlaceholder="Buscar responsable..."
+              options={[
+                { value: "", label: "Sin responsable" },
+                ...responsables
+                  .slice()
+                  .sort((a, b) =>
+                    String(a?.nombre || "").localeCompare(
+                      String(b?.nombre || ""),
+                      "es"
+                    )
                   )
-                )
-                .map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.nombre}
-                    {r.email ? ` (${r.email})` : ""}
-                  </option>
-                ))}
-            </select>
+                  .map((r) => ({
+                    value: String(r?._id || r?.id || ""),
+                    label: `${String(r?.nombre || "").trim() || "-"}${
+                      r?.email ? ` (${r.email})` : ""
+                    }`,
+                  })),
+              ]}
+            />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Chofer</div>
-            <select
-              className="input"
+            <SearchableSelect
               value={form.chofer}
-              onChange={(e) => setForm({ ...form, chofer: e.target.value })}
-            >
-              <option value="">Sin chofer</option>
-              {users
-                .filter((u) => u.role === "driver")
-                .map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-            </select>
+              onChange={(val) => setForm({ ...form, chofer: val })}
+              placeholder="Sin chofer"
+              searchPlaceholder="Buscar chofer..."
+              options={[
+                { value: "", label: "Sin chofer" },
+                ...users
+                  .filter((u) => u.role === "driver")
+                  .slice()
+                  .sort((a, b) =>
+                    String(a?.name || "").localeCompare(
+                      String(b?.name || ""),
+                      "es"
+                    )
+                  )
+                  .map((u) => ({
+                    value: String(u?._id || u?.id || ""),
+                    label: `${String(u?.name || "").trim() || "-"}${
+                      u?.email ? ` (${u.email})` : ""
+                    }`,
+                  })),
+              ]}
+            />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Consignatario</div>
-            <select
-              className="input"
+            <SearchableSelect
               value={form.consignatario}
-              onChange={(e) =>
-                setForm({ ...form, consignatario: e.target.value })
-              }
-            >
-              <option value="">Sin consignatario</option>
-              {consignees.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.nombre}
-                  {c.email ? ` (${c.email})` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setForm({ ...form, consignatario: val })}
+              placeholder="Sin consignatario"
+              searchPlaceholder="Buscar consignatario..."
+              options={[
+                { value: "", label: "Sin consignatario" },
+                ...consignees
+                  .slice()
+                  .sort((a, b) =>
+                    String(a?.nombre || "").localeCompare(
+                      String(b?.nombre || ""),
+                      "es"
+                    )
+                  )
+                  .map((c) => ({
+                    value: String(c?._id || c?.id || ""),
+                    label: `${String(c?.nombre || "").trim() || "-"}${
+                      c?.email ? ` (${c.email})` : ""
+                    }`,
+                  })),
+              ]}
+            />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <div className="label">Terminal de entrega</div>
-            <select
-              className="input"
+            <SearchableSelect
               value={form.terminal_entrega}
-              onChange={(e) =>
-                setForm({ ...form, terminal_entrega: e.target.value })
-              }
-            >
-              <option value="">Sin terminal</option>
-              {(() => {
-                const groups = {};
-                locations.forEach((l) => {
-                  const port =
-                    String(l.puerto || "Sin puerto").trim() || "Sin puerto";
-                  if (!groups[port]) groups[port] = [];
-                  groups[port].push(l);
-                });
-                const sortedPorts = Object.keys(groups).sort((a, b) =>
-                  a.localeCompare(b, "es")
-                );
-                return sortedPorts.map((port) => (
-                  <optgroup key={port} label={port}>
-                    {groups[port]
-                      .slice()
-                      .sort((a, b) =>
-                        String(a.nombre || "").localeCompare(
-                          String(b.nombre || ""),
-                          "es"
-                        )
-                      )
-                      .map((l) => (
-                        <option key={l._id} value={l._id}>
-                          {l.nombre}
-                          {l.ciudad ? ` (${l.ciudad})` : ""}
-                        </option>
-                      ))}
-                  </optgroup>
-                ));
-              })()}
-            </select>
-          </div>
-
-          {/* Palets */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Palets</div>
-            <select
-              multiple
-              className="input"
-              value={form.palets}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions).map(
-                  (o) => o.value
-                );
-                setForm({ ...form, palets: selected });
-              }}
-            >
-              {pallets.map((p) => (
-                <option key={p._id} value={p._id}>
-                  {p.numero_palet} ({p.tipo})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Tipo de carga */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Tipo de carga</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {CARGA_OPTIONS.map((opt) => (
-                <label
-                  key={opt}
-                  style={{ display: "flex", alignItems: "center", gap: 4 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.carga.includes(opt)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...form.carga, opt]
-                        : form.carga.filter((v) => v !== opt);
-                      setForm({ ...form, carga: next });
-                    }}
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
+              onChange={(val) => setForm({ ...form, terminal_entrega: val })}
+              placeholder="Sin terminal"
+              searchPlaceholder="Buscar terminal..."
+              options={[
+                { value: "", label: "Sin terminal" },
+                ...locations
+                  .slice()
+                  .sort((a, b) => {
+                    const ap = String(a?.puerto || "").localeCompare(
+                      String(b?.puerto || ""),
+                      "es"
+                    );
+                    if (ap !== 0) return ap;
+                    return String(a?.nombre || "").localeCompare(
+                      String(b?.nombre || ""),
+                      "es"
+                    );
+                  })
+                  .map((l) => {
+                    const puerto = String(l?.puerto || "").trim();
+                    const nombre = String(l?.nombre || "").trim();
+                    const ciudad = String(l?.ciudad || "").trim();
+                    const label = `${puerto ? `${puerto} · ` : ""}${
+                      nombre || "-"
+                    }${ciudad ? ` (${ciudad})` : ""}`;
+                    return {
+                      value: String(l?._id || l?.id || ""),
+                      label,
+                    };
+                  }),
+              ]}
+            />
           </div>
 
           {/* Opciones */}
@@ -1564,9 +2382,9 @@ export default function Loads() {
             </div>
           </div>
 
-          {/* Estado del viaje */}
+          {/* Estado de carga */}
           <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Estado del viaje</div>
+            <div className="label">Estado de Carga</div>
             <select
               className="select"
               value={form.estado_viaje}
@@ -1613,11 +2431,14 @@ export default function Loads() {
             }
           >
             <option value="">Sin empresa</option>
-            {companies.map((c) => (
-              <option key={c._id || c.id} value={c._id || c.id}>
-                {c.nombre}
-              </option>
-            ))}
+            {companies
+              .slice()
+              .sort((a, b) => esCompare(a?.nombre, b?.nombre))
+              .map((c) => (
+                <option key={c._id || c.id} value={c._id || c.id}>
+                  {c.nombre}
+                </option>
+              ))}
           </select>
         </div>
         <div>
@@ -1668,10 +2489,10 @@ export default function Loads() {
             value={userForm.role}
             onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
           >
-            <option value="consignee">Consignatario</option>
             <option value="driver">Chofer</option>
-            <option value="manager">Manager</option>
+            <option value="consignee">Consignatario</option>
             <option value="dispatcher">Dispatcher</option>
+            <option value="manager">Manager</option>
           </select>
         </div>
         {userForm.role !== "consignee" && (
@@ -1718,11 +2539,13 @@ export default function Loads() {
               setPalletForm({ ...palletForm, tipo: e.target.value })
             }
           >
-            {CARGA_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {CARGA_OPTIONS.slice()
+              .sort(esCompare)
+              .map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
           </select>
         </div>
         <div>
@@ -1734,8 +2557,8 @@ export default function Loads() {
               setPalletForm({ ...palletForm, base: e.target.value })
             }
           >
-            <option value="Europeo">Europeo</option>
             <option value="Americano">Americano</option>
+            <option value="Europeo">Europeo</option>
           </select>
         </div>
       </Modal>

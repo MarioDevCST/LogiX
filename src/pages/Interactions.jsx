@@ -33,6 +33,10 @@ const TYPE_LABELS = {
   load_created: "Carga creada",
   load_updated: "Carga modificada",
   load_deleted: "Carga borrada",
+  pallet_created: "Palet creado",
+  pallet_updated: "Palet modificado",
+  pallet_deleted: "Palet borrado",
+  pallets_fused: "Palets fusionados",
   location_created: "Localización creada",
   location_updated: "Localización modificada",
   location_deleted: "Localización borrada",
@@ -42,6 +46,9 @@ const TYPE_LABELS = {
   company_created: "Empresa creada",
   company_updated: "Empresa modificada",
   company_deleted: "Empresa borrada",
+  cargo_type_created: "Tipo de carga creado",
+  cargo_type_updated: "Tipo de carga modificado",
+  cargo_type_deleted: "Tipo de carga borrado",
   ship_created: "Barco creado",
   ship_updated: "Barco modificado",
   ship_deleted: "Barco borrado",
@@ -172,6 +179,10 @@ export default function Interactions() {
             <option value="load_created">Carga creada</option>
             <option value="load_updated">Carga modificada</option>
             <option value="load_deleted">Carga borrada</option>
+            <option value="pallet_created">Palet creado</option>
+            <option value="pallet_updated">Palet modificado</option>
+            <option value="pallet_deleted">Palet borrado</option>
+            <option value="pallets_fused">Palets fusionados</option>
             <option value="location_created">Localización creada</option>
             <option value="location_updated">Localización modificada</option>
             <option value="location_deleted">Localización borrada</option>
@@ -181,6 +192,9 @@ export default function Interactions() {
             <option value="company_created">Empresa creada</option>
             <option value="company_updated">Empresa modificada</option>
             <option value="company_deleted">Empresa borrada</option>
+            <option value="cargo_type_created">Tipo de carga creado</option>
+            <option value="cargo_type_updated">Tipo de carga modificado</option>
+            <option value="cargo_type_deleted">Tipo de carga borrado</option>
             <option value="ship_created">Barco creado</option>
             <option value="ship_updated">Barco modificado</option>
             <option value="ship_deleted">Barco borrado</option>

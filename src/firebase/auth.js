@@ -650,6 +650,7 @@ export async function fetchAllPallets() {
       nombre: data.nombre || "",
       tipo: data.tipo || "Seco",
       base: data.base || "Europeo",
+      estado: typeof data.estado === "boolean" ? data.estado : false,
       carga: data.carga || "",
       carga_nombre: data.carga_nombre || "",
       productos: data.productos || "",
@@ -679,6 +680,7 @@ export async function fetchPalletById(id) {
     nombre: data.nombre || "",
     tipo: data.tipo || "Seco",
     base: data.base || "Europeo",
+    estado: typeof data.estado === "boolean" ? data.estado : false,
     carga: data.carga || "",
     carga_nombre: data.carga_nombre || "",
     productos: data.productos || "",
@@ -705,12 +707,14 @@ export async function createPallet(payload) {
   const cargaLabel = getLoadLabelFromPayload(payload);
   const nombre = `${numero_palet} - ${cargaLabel || "Sin carga"}`;
   const base = payload?.base ? String(payload.base) : "Europeo";
+  const estado = typeof payload?.estado === "boolean" ? payload.estado : false;
 
   await setDoc(ref, {
     id,
     numero_palet,
     tipo,
     base,
+    estado,
     carga: carga || "",
     carga_nombre: cargaLabel || "",
     nombre,
@@ -724,7 +728,24 @@ export async function createPallet(payload) {
     updatedAt: serverTimestamp(),
   });
 
-  return fetchPalletById(id);
+  const created = await fetchPalletById(id);
+  if (created) {
+    queueInteraction({
+      type: "pallet_created",
+      target: { id: created.id, name: created.nombre || "" },
+      details: {
+        entity: "pallet",
+        snapshot: {
+          numero_palet: created.numero_palet || "",
+          tipo: created.tipo || "",
+          base: created.base || "",
+          carga: created.carga || "",
+          carga_nombre: created.carga_nombre || "",
+        },
+      },
+    });
+  }
+  return created;
 }
 
 export async function updatePalletById(id, updates) {
@@ -747,6 +768,14 @@ export async function updatePalletById(id, updates) {
 
   const patch = {
     ...updates,
+    ...(typeof updates?.estado !== "undefined"
+      ? {
+          estado:
+            typeof updates.estado === "boolean"
+              ? updates.estado
+              : !!updates.estado,
+        }
+      : {}),
     ...(shouldUpdateNombre
       ? { nombre: `${nextNumero} - ${nextCargaNombre || "Sin carga"}` }
       : {}),
@@ -755,7 +784,15 @@ export async function updatePalletById(id, updates) {
   };
 
   await updateDoc(ref, patch);
-  return fetchPalletById(id);
+  const updated = await fetchPalletById(id);
+  if (updated) {
+    queueInteraction({
+      type: "pallet_updated",
+      target: { id: updated.id, name: updated.nombre || "" },
+      details: { entity: "pallet", updates: updates || {} },
+    });
+  }
+  return updated;
 }
 
 function mergeProductosText(texts) {
@@ -800,6 +837,7 @@ export async function fusePallets({
   targetPalletId,
   sourcePalletIds,
   sourcePalletNumbers,
+  baseChoice,
   modificado_por,
 } = {}) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
@@ -870,6 +908,44 @@ export async function fusePallets({
     throw new Error("Solo se pueden fusionar palets del mismo tipo");
 
   const sourceIds = sources.map((p) => String(p._id || p.id));
+
+  const normalizeBase = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const lower = raw.toLowerCase();
+    if (lower === "europeo") return "Europeo";
+    if (lower === "americano") return "Americano";
+    return raw;
+  };
+  const baseCandidates = Array.from(
+    new Set(
+      [normalizeBase(target.base), ...sources.map((p) => normalizeBase(p.base))]
+        .map((v) => String(v || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const baseChoiceNormalized = normalizeBase(baseChoice);
+  const mergedBase = (() => {
+    if (baseCandidates.length <= 1)
+      return baseCandidates[0] || normalizeBase(target.base);
+    if (!baseChoiceNormalized)
+      throw new Error(
+        `Debes elegir base (${baseCandidates.join(" o ")}) para fusionar`
+      );
+    const ok = baseCandidates.some(
+      (b) =>
+        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase()
+    );
+    if (!ok)
+      throw new Error(
+        `La base elegida debe ser una de: ${baseCandidates.join(", ")}`
+      );
+    return baseCandidates.find(
+      (b) =>
+        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase()
+    );
+  })();
+
   const productosMerged = mergeProductosText([
     target.productos,
     ...sources.map((p) => p.productos),
@@ -893,6 +969,7 @@ export async function fusePallets({
     productos: productosMerged,
     nombre: numeroMerged || target.nombre || target.numero_palet,
     numero_palet: numeroMerged || target.numero_palet,
+    ...(mergedBase ? { base: mergedBase } : {}),
     modificado_por: resolvedModificadoPor,
     fecha_modificacion: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -920,6 +997,21 @@ export async function fusePallets({
   );
 
   const updatedTarget = await fetchPalletById(targetId);
+  queueInteraction({
+    type: "pallets_fused",
+    target: {
+      id: targetId,
+      name: updatedTarget?.nombre || target.nombre || "",
+    },
+    details: {
+      entity: "pallet",
+      mode: String(mode || ""),
+      sourceIds,
+      deletedIds: sourceIds,
+      baseChoice: baseChoice || "",
+      carga: targetCarga,
+    },
+  });
   return {
     ok: true,
     target: updatedTarget,
@@ -929,8 +1021,19 @@ export async function fusePallets({
 
 export async function deletePalletById(id) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const current = await fetchPalletById(id).catch(() => null);
   const ref = doc(firebaseDb, "pallets", String(id));
   await deleteDoc(ref);
+  if (current) {
+    queueInteraction({
+      type: "pallet_deleted",
+      target: {
+        id: current.id,
+        name: current.nombre || current.numero_palet || "",
+      },
+      details: { entity: "pallet" },
+    });
+  }
   return { ok: true };
 }
 
@@ -1156,6 +1259,102 @@ export async function deleteConsigneeById(id) {
       type: "consignee_deleted",
       target: { id: current.id, name: current.nombre || "" },
       details: { entity: "consignee" },
+    });
+  }
+  return { ok: true };
+}
+
+export async function fetchAllCargoTypes() {
+  const docs = await getAllDocsOrdered({
+    collectionName: "cargo_types",
+    orderField: "fecha_creacion",
+  });
+  return docs.map(({ docId, data }) => ({
+    ...mapCommonAudit(data, docId),
+    nombre: data.nombre || "",
+  }));
+}
+
+export async function fetchCargoTypeById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "cargo_types", String(id));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() || {};
+  return {
+    ...mapCommonAudit(data, snap.id),
+    nombre: data.nombre || "",
+  };
+}
+
+export async function createCargoType(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const nombre = String(payload?.nombre || "").trim();
+  if (!nombre) throw new Error("nombre es obligatorio");
+
+  const ref = doc(collection(firebaseDb, "cargo_types"));
+  const id = ref.id;
+  await setDoc(ref, {
+    id,
+    nombre,
+    creado_por: String(payload?.creado_por || "Testing"),
+    modificado_por: "",
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const created = await fetchCargoTypeById(id);
+  if (created) {
+    queueInteraction({
+      type: "cargo_type_created",
+      target: { id: created.id, name: created.nombre || "" },
+      details: {
+        entity: "cargo_type",
+        snapshot: { nombre: created.nombre || "" },
+      },
+    });
+  }
+  return created;
+}
+
+export async function updateCargoTypeById(id, updates) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "cargo_types", String(id));
+  const current = await fetchCargoTypeById(id);
+  if (!current) return null;
+
+  const patch = { ...updates };
+  if (typeof updates?.nombre !== "undefined") {
+    patch.nombre = String(updates?.nombre || "").trim();
+  }
+
+  await updateDoc(ref, {
+    ...patch,
+    fecha_modificacion: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const updated = await fetchCargoTypeById(id);
+  if (updated) {
+    queueInteraction({
+      type: "cargo_type_updated",
+      target: { id: updated.id, name: updated.nombre || "" },
+      details: { entity: "cargo_type", updates: patch || {} },
+    });
+  }
+  return updated;
+}
+
+export async function deleteCargoTypeById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const current = await fetchCargoTypeById(id).catch(() => null);
+  const ref = doc(firebaseDb, "cargo_types", String(id));
+  await deleteDoc(ref);
+  if (current) {
+    queueInteraction({
+      type: "cargo_type_deleted",
+      target: { id: current.id, name: current.nombre || "" },
+      details: { entity: "cargo_type" },
     });
   }
   return { ok: true };
@@ -1407,9 +1606,26 @@ export async function fetchAllShips() {
       String(data.responsable_email || "") ||
       (responsableObj ? String(responsableObj.email || "") : "");
 
+    const rawCargoType = data.cargo_type;
+    const cargoTypeObj =
+      rawCargoType && typeof rawCargoType === "object" ? rawCargoType : null;
+    const cargo_type =
+      (cargoTypeObj &&
+        String(
+          cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || ""
+        )) ||
+      String(rawCargoType || "");
+    const cargo_type_nombre =
+      String(data.cargo_type_nombre || "") ||
+      (cargoTypeObj
+        ? String(cargoTypeObj.nombre || cargoTypeObj.name || "")
+        : "");
+
     return {
       ...mapCommonAudit(data, docId),
       nombre_del_barco: data.nombre_del_barco || "",
+      telefono: data.telefono || "",
+      email: data.email || "",
       enlace: data.enlace || "",
       tipo: data.tipo || "",
       empresa: empresaId,
@@ -1417,6 +1633,8 @@ export async function fetchAllShips() {
       responsable: responsableId,
       responsable_nombre: responsableNombre,
       responsable_email: responsableEmail,
+      cargo_type,
+      cargo_type_nombre,
     };
   });
 }
@@ -1457,9 +1675,26 @@ export async function fetchShipById(id) {
   const responsableEmail =
     String(data.responsable_email || "") ||
     (responsableObj ? String(responsableObj.email || "") : "");
+
+  const rawCargoType = data.cargo_type;
+  const cargoTypeObj =
+    rawCargoType && typeof rawCargoType === "object" ? rawCargoType : null;
+  const cargo_type =
+    (cargoTypeObj &&
+      String(
+        cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || ""
+      )) ||
+    String(rawCargoType || "");
+  const cargo_type_nombre =
+    String(data.cargo_type_nombre || "") ||
+    (cargoTypeObj
+      ? String(cargoTypeObj.nombre || cargoTypeObj.name || "")
+      : "");
   return {
     ...mapCommonAudit(data, snap.id),
     nombre_del_barco: data.nombre_del_barco || "",
+    telefono: data.telefono || "",
+    email: data.email || "",
     enlace: data.enlace || "",
     tipo: data.tipo || "",
     empresa: empresaId,
@@ -1467,6 +1702,8 @@ export async function fetchShipById(id) {
     responsable: responsableId,
     responsable_nombre: responsableNombre,
     responsable_email: responsableEmail,
+    cargo_type,
+    cargo_type_nombre,
   };
 }
 
@@ -1510,6 +1747,27 @@ export async function createShip(payload) {
     payload?.responsable_email || responsableObj?.email || ""
   ).trim();
 
+  const cargoTypeInput = payload?.cargo_type;
+  const cargoTypeObj =
+    cargoTypeInput && typeof cargoTypeInput === "object"
+      ? cargoTypeInput
+      : null;
+  const cargo_type = String(
+    cargoTypeObj?.id ||
+      cargoTypeObj?._id ||
+      cargoTypeObj?.docId ||
+      cargoTypeInput ||
+      ""
+  ).trim();
+  const cargo_type_nombre = String(
+    payload?.cargo_type_nombre ||
+      cargoTypeObj?.nombre ||
+      cargoTypeObj?.name ||
+      ""
+  ).trim();
+
+  const telefono = String(payload?.telefono || "").trim();
+  const email = String(payload?.email || "").trim();
   const enlace = String(payload?.enlace || "").trim();
   const tipo = String(payload?.tipo || "").trim();
   const creado_por = String(payload?.creado_por || "Testing");
@@ -1518,6 +1776,8 @@ export async function createShip(payload) {
   await setDoc(ref, {
     id,
     nombre_del_barco,
+    telefono,
+    email,
     enlace,
     tipo,
     empresa,
@@ -1525,6 +1785,8 @@ export async function createShip(payload) {
     responsable,
     responsable_nombre,
     responsable_email,
+    cargo_type,
+    cargo_type_nombre,
     creado_por,
     modificado_por,
     fecha_creacion: serverTimestamp(),
@@ -1542,6 +1804,8 @@ export async function createShip(payload) {
         entity: "ship",
         snapshot: {
           nombre_del_barco: created.nombre_del_barco || "",
+          telefono: created.telefono || "",
+          email: created.email || "",
           enlace: created.enlace || "",
           tipo: created.tipo || "",
           empresa: created.empresa || "",
@@ -1549,6 +1813,8 @@ export async function createShip(payload) {
           responsable: created.responsable || "",
           responsable_nombre: created.responsable_nombre || "",
           responsable_email: created.responsable_email || "",
+          cargo_type: created.cargo_type || "",
+          cargo_type_nombre: created.cargo_type_nombre || "",
         },
       },
     });
@@ -1614,6 +1880,28 @@ export async function updateShipById(id, updates) {
     }
   }
 
+  if (typeof updates?.cargo_type !== "undefined") {
+    const cargoTypeInput = updates?.cargo_type;
+    const cargoTypeObj =
+      cargoTypeInput && typeof cargoTypeInput === "object"
+        ? cargoTypeInput
+        : null;
+    patch.cargo_type = String(
+      cargoTypeObj?.id ||
+        cargoTypeObj?._id ||
+        cargoTypeObj?.docId ||
+        cargoTypeInput ||
+        ""
+    ).trim();
+    patch.cargo_type_nombre = String(
+      updates?.cargo_type_nombre ||
+        cargoTypeObj?.nombre ||
+        cargoTypeObj?.name ||
+        ""
+    ).trim();
+    if (!patch.cargo_type) patch.cargo_type_nombre = "";
+  }
+
   if (typeof updates?.tipo !== "undefined") {
     patch.tipo = String(updates?.tipo || "").trim();
   }
@@ -1624,6 +1912,14 @@ export async function updateShipById(id, updates) {
 
   if (typeof updates?.nombre_del_barco !== "undefined") {
     patch.nombre_del_barco = String(updates?.nombre_del_barco || "").trim();
+  }
+
+  if (typeof updates?.telefono !== "undefined") {
+    patch.telefono = String(updates?.telefono || "").trim();
+  }
+
+  if (typeof updates?.email !== "undefined") {
+    patch.email = String(updates?.email || "").trim();
   }
 
   await updateDoc(ref, {

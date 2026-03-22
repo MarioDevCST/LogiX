@@ -7,20 +7,25 @@ import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import {
+  createCargoType,
   createCompany,
   createConsignee,
   createLocation,
   createResponsable,
+  deleteCargoTypeById,
   deleteCompanyById,
   deleteConsigneeById,
   deleteResponsableById,
+  fetchAllCargoTypes,
   fetchAllCompanies,
   fetchAllConsignees,
   fetchAllLocations,
   fetchAllResponsables,
+  fetchCargoTypeById,
   fetchCompanyById,
   fetchConsigneeById,
   fetchResponsableById,
+  updateCargoTypeById,
   updateCompanyById,
   updateConsigneeById,
   updateResponsableById,
@@ -1165,6 +1170,396 @@ function CompaniesTab() {
   );
 }
 
+function CargoTypesTab() {
+  const columns = [
+    { key: "nombre", header: "Nombre" },
+    { key: "acciones", header: "Acciones" },
+  ];
+
+  const [view, setView] = useState("table");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ nombre: "" });
+
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ nombre: "" });
+
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const getFirestoreMessage = (e) => {
+    const code = String(e?.code || "").trim();
+    if (code === "permission-denied") {
+      return "Permiso denegado en Firestore. Revisa las reglas";
+    }
+    if (code === "unauthenticated") {
+      return "Sesión no válida. Vuelve a iniciar sesión";
+    }
+    if (code === "unavailable") {
+      return "Firestore no disponible. Revisa la conexión";
+    }
+    if (code === "failed-precondition") {
+      return "Firestore no está listo o la API no está habilitada";
+    }
+    if (code === "firestore/timeout") {
+      return "Firestore no responde (timeout)";
+    }
+    if (code) return `Error en Firestore (${code})`;
+    const msg = String(e?.message || "").trim();
+    if (msg) return msg;
+    return "";
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        const list = await fetchAllCargoTypes();
+        if (!mounted) return;
+        const mapped = (Array.isArray(list) ? list : []).map((t) => {
+          const id = t._id || t.id;
+          return {
+            id,
+            nombre: t.nombre || "",
+          };
+        });
+        setRows(mapped);
+      } catch (e) {
+        if (!mounted) return;
+        setRows([]);
+        setSnack({
+          open: true,
+          message: getFirestoreMessage(e) || "Error cargando tipos de carga",
+          type: "error",
+        });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const startEdit = async (id) => {
+    try {
+      const t = await fetchCargoTypeById(id);
+      if (!t) return;
+      setEditingId(id);
+      setEditForm({ nombre: t.nombre || "" });
+      setOpenEdit(true);
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: getFirestoreMessage(e) || "Error cargando tipo de carga",
+        type: "error",
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Seguro que deseas borrar este tipo de carga?"))
+      return;
+    try {
+      await deleteCargoTypeById(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      setSnack({
+        open: true,
+        message: "Tipo de carga borrado",
+        type: "success",
+      });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: getFirestoreMessage(e) || "Error borrando tipo de carga",
+        type: "error",
+      });
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => q === "" || r.nombre.toLowerCase().includes(q));
+  }, [rows, query]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filtered.slice(start, end);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const onCreate = () => setOpen(true);
+
+  const submit = async () => {
+    try {
+      if (!form.nombre) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const created = await createCargoType({
+        nombre: form.nombre,
+        creado_por: getCurrentUser()?.name || "Testing",
+      });
+      const id = created?._id || created?.id;
+      setRows((prev) => [
+        ...prev,
+        {
+          id,
+          nombre: created?.nombre || "",
+        },
+      ]);
+      setOpen(false);
+      setForm({ nombre: "" });
+      setSnack({
+        open: true,
+        message: "Tipo de carga creado",
+        type: "success",
+      });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: getFirestoreMessage(e) || "Error creando tipo de carga",
+        type: "error",
+      });
+    }
+  };
+
+  const submitEdit = async () => {
+    try {
+      if (!editingId) return;
+      if (!editForm.nombre) {
+        setSnack({
+          open: true,
+          message: "El nombre es obligatorio",
+          type: "error",
+        });
+        return;
+      }
+      const updated = await updateCargoTypeById(editingId, {
+        nombre: editForm.nombre,
+        modificado_por: getCurrentUser()?.name || "Testing",
+      });
+      if (!updated) return;
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === editingId
+            ? {
+                ...r,
+                nombre: updated.nombre || "",
+              }
+            : r
+        )
+      );
+      setOpenEdit(false);
+      setEditingId(null);
+      setSnack({
+        open: true,
+        message: "Tipo de carga actualizado",
+        type: "success",
+      });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: getFirestoreMessage(e) || "Error actualizando tipo de carga",
+        type: "error",
+      });
+    }
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            className="input"
+            style={{ width: 280 }}
+            placeholder="Buscar por nombre"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button
+            className="icon-button"
+            onClick={onCreate}
+            title="Crear tipo de carga"
+          >
+            <span className="material-symbols-outlined">add_box</span>
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="icon-button"
+            title="Vista tabla"
+            onClick={() => setView("table")}
+          >
+            <span className="material-symbols-outlined">table</span>
+          </button>
+          <button
+            className="icon-button"
+            title="Vista tarjetas"
+            onClick={() => setView("cards")}
+          >
+            <span className="material-symbols-outlined">view_agenda</span>
+          </button>
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <DataTable
+          title="Tipo de Carga"
+          columns={columns}
+          data={paginated.map((r) => ({
+            ...r,
+            acciones: (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="icon-button"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(r.id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Borrar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(r.id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ),
+          }))}
+          loading={loading}
+          createLabel={"Crear tipo de carga"}
+          onCreate={onCreate}
+        />
+      ) : (
+        <CardGrid
+          title="Tipo de Carga"
+          items={paginated.map((i) => ({
+            ...i,
+            name: i.nombre,
+            acciones: (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="icon-button"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(i.id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Borrar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(i.id);
+                  }}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ),
+          }))}
+          loading={loading}
+          createLabel={"Crear tipo de carga"}
+          onCreate={onCreate}
+        />
+      )}
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={filtered.length}
+        onPageChange={(p) => setPage(Math.max(1, p))}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+
+      <Modal
+        open={open}
+        title="Crear tipo de carga"
+        onClose={() => setOpen(false)}
+        onSubmit={submit}
+        submitLabel="Crear"
+      >
+        <div>
+          <div className="label">Nombre</div>
+          <input
+            className="input"
+            value={form.nombre}
+            onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            placeholder="Nombre"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={openEdit}
+        title="Editar tipo de carga"
+        onClose={() => setOpenEdit(false)}
+        onSubmit={submitEdit}
+        submitLabel="Guardar"
+      >
+        <div>
+          <div className="label">Nombre</div>
+          <input
+            className="input"
+            value={editForm.nombre}
+            onChange={(e) =>
+              setEditForm({ ...editForm, nombre: e.target.value })
+            }
+            placeholder="Nombre"
+          />
+        </div>
+      </Modal>
+
+      <Snackbar
+        open={snack.open}
+        message={snack.message}
+        type={snack.type}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+      />
+    </>
+  );
+}
+
 function ResponsablesTab() {
   const columns = [
     { key: "nombre", header: "Nombre" },
@@ -1290,9 +1685,15 @@ function ResponsablesTab() {
     return rows.filter((r) => {
       if (q === "") return true;
       return (
-        String(r.nombre || "").toLowerCase().includes(q) ||
-        String(r.email || "").toLowerCase().includes(q) ||
-        String(r.telefono || "").toLowerCase().includes(q)
+        String(r.nombre || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.email || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.telefono || "")
+          .toLowerCase()
+          .includes(q)
       );
     });
   }, [rows, query]);
@@ -1663,6 +2064,13 @@ export default function Collections({ initialTab = "locations" }) {
           </button>
           <button
             type="button"
+            className={`tab-button ${tab === "cargo_types" ? "active" : ""}`}
+            onClick={() => setTab("cargo_types")}
+          >
+            Tipo de Carga
+          </button>
+          <button
+            type="button"
             className={`tab-button ${tab === "responsables" ? "active" : ""}`}
             onClick={() => setTab("responsables")}
           >
@@ -1679,6 +2087,9 @@ export default function Collections({ initialTab = "locations" }) {
       </div>
       <div style={{ display: tab === "companies" ? "block" : "none" }}>
         <CompaniesTab />
+      </div>
+      <div style={{ display: tab === "cargo_types" ? "block" : "none" }}>
+        <CargoTypesTab />
       </div>
       <div style={{ display: tab === "responsables" ? "block" : "none" }}>
         <ResponsablesTab />

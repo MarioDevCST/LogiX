@@ -195,6 +195,8 @@ export default function PalletDetail() {
             <option value="Refrigerado">Refrigerado</option>
             <option value="Congelado">Congelado</option>
             <option value="Técnico">Técnico</option>
+            <option value="Fruta y verdura">Fruta y verdura</option>
+            <option value="Repuestos">Repuestos</option>
           </select>
         </div>
         <div>

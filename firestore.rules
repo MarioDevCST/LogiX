@@ -55,6 +55,10 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    match /cargo_types/{id} {
+      allow read, write: if isSignedIn();
+    }
+
     match /responsables/{id} {
       allow read: if isSignedIn();
       allow create, update, delete: if canManageResponsables();

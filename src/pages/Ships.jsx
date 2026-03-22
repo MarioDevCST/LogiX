@@ -9,6 +9,7 @@ import { getCurrentUser } from "../utils/roles.js";
 import {
   createCompany,
   createShip,
+  fetchAllCargoTypes,
   fetchAllCompanies,
   fetchAllShips,
   fetchAllResponsables,
@@ -41,7 +42,10 @@ export default function Ships() {
     { key: "nombre", header: "Nombre del barco" },
     { key: "empresa", header: "Empresa" },
     { key: "responsable", header: "Responsable" },
+    { key: "telefono", header: "Teléfono" },
+    { key: "email", header: "Email" },
     { key: "tipo", header: "Tipo" },
+    { key: "cargo_type", header: "Tipo de carga" },
     { key: "enlace", header: "Enlace" },
   ];
 
@@ -54,11 +58,15 @@ export default function Ships() {
     nombre_del_barco: "",
     empresa: "",
     responsable: "",
+    telefono: "",
+    email: "",
     tipo: "Mercante",
+    cargo_type: "",
     enlace: "",
   });
   const [companies, setCompanies] = useState([]);
   const [responsables, setResponsables] = useState([]);
+  const [cargoTypes, setCargoTypes] = useState([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -81,11 +89,13 @@ export default function Ships() {
           fetchAllShips(),
           fetchAllCompanies(),
           fetchAllResponsables(),
+          fetchAllCargoTypes(),
         ]);
         const values = results.map((r) =>
           r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
         );
-        const [shipsList, companiesList, responsablesList] = values;
+        const [shipsList, companiesList, responsablesList, cargoTypesList] =
+          values;
         if (!mounted) return;
         const companyNameById = new Map(
           companiesList.map((c) => [String(c.id || c._id), c.nombre || ""])
@@ -103,6 +113,14 @@ export default function Ships() {
             .map((r) => [String(r.email || "").toLowerCase(), r])
             .filter((p) => p[0])
         );
+        const cargoTypeNameById = new Map(
+          cargoTypesList.map((t) => [String(t.id || t._id), t.nombre || ""])
+        );
+        const cargoTypeNameByName = new Map(
+          cargoTypesList
+            .map((t) => [String(t.nombre || "").toLowerCase(), t.nombre || ""])
+            .filter((p) => p[0] && p[1])
+        );
 
         const mapped = shipsList.map((s) => {
           const rawEmpresa = String(s.empresa || "");
@@ -118,12 +136,23 @@ export default function Ships() {
             responsableByEmail.get(rawResponsable.toLowerCase());
           const responsableName =
             s.responsable_nombre || r?.nombre || rawResponsable || "";
+
+          const rawCargoType = String(s.cargo_type || "");
+          const cargoTypeName =
+            s.cargo_type_nombre ||
+            cargoTypeNameById.get(rawCargoType) ||
+            cargoTypeNameByName.get(rawCargoType.toLowerCase()) ||
+            rawCargoType ||
+            "";
           return {
             id: s.id || s._id,
             nombre: s.nombre_del_barco,
             empresa: companyName,
             responsable: responsableName,
+            telefono: String(s.telefono || ""),
+            email: String(s.email || ""),
             tipo: s.tipo || "",
+            cargo_type: cargoTypeName,
             enlace: s.enlace || "",
           };
         });
@@ -140,6 +169,13 @@ export default function Ships() {
             ...r,
             _id: r._id || r.id,
             id: r.id || r._id,
+          }))
+        );
+        setCargoTypes(
+          cargoTypesList.map((t) => ({
+            ...t,
+            _id: t._id || t.id,
+            id: t.id || t._id,
           }))
         );
       } catch {
@@ -173,6 +209,9 @@ export default function Ships() {
       const responsable = responsables.find(
         (r) => String(r._id || r.id) === String(form.responsable)
       );
+      const cargoType = cargoTypes.find(
+        (t) => String(t._id || t.id) === String(form.cargo_type)
+      );
       const payload = {
         ...form,
         empresa: form.empresa || "",
@@ -180,6 +219,8 @@ export default function Ships() {
         responsable: form.responsable || "",
         responsable_nombre: responsable?.nombre || "",
         responsable_email: responsable?.email || "",
+        cargo_type: form.cargo_type || "",
+        cargo_type_nombre: cargoType?.nombre || "",
         creado_por: getCurrentUser()?.name || "Testing",
       };
       const created = await createShip(payload);
@@ -194,7 +235,10 @@ export default function Ships() {
           nombre: created.nombre_del_barco,
           empresa: created.empresa_nombre || company?.nombre || "",
           responsable: created.responsable_nombre || responsable?.nombre || "",
+          telefono: String(created.telefono || form.telefono || ""),
+          email: String(created.email || form.email || ""),
           tipo: created.tipo || "",
+          cargo_type: created.cargo_type_nombre || cargoType?.nombre || "",
           enlace: created.enlace || form.enlace || "",
         },
       ]);
@@ -203,7 +247,10 @@ export default function Ships() {
         nombre_del_barco: "",
         empresa: "",
         responsable: "",
+        telefono: "",
+        email: "",
         tipo: "Mercante",
+        cargo_type: "",
         enlace: "",
       });
       setSnack({ open: true, message: "Barco creado", type: "success" });
@@ -228,7 +275,16 @@ export default function Ships() {
         r.nombre.toLowerCase().includes(q) ||
         r.empresa.toLowerCase().includes(q) ||
         r.responsable.toLowerCase().includes(q) ||
+        String(r.telefono || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.email || "")
+          .toLowerCase()
+          .includes(q) ||
         r.tipo.toLowerCase().includes(q) ||
+        String(r.cargo_type || "")
+          .toLowerCase()
+          .includes(q) ||
         String(r.enlace || "")
           .toLowerCase()
           .includes(q)
@@ -319,7 +375,9 @@ export default function Ships() {
           items={paginated.map((i) => ({
             ...i,
             name: i.nombre,
-            subtitle: `${i.empresa} · ${i.responsable} · ${i.tipo}`,
+            subtitle: `${i.empresa} · ${i.responsable} · ${i.tipo}${
+              i.cargo_type ? ` · ${i.cargo_type}` : ""
+            }`,
           }))}
           loading={loading}
           onCreate={onCreate}
@@ -414,6 +472,24 @@ export default function Ships() {
           </select>
         </div>
         <div>
+          <div className="label">Teléfono (opcional)</div>
+          <input
+            className="input"
+            value={form.telefono}
+            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+            placeholder="+34..."
+          />
+        </div>
+        <div>
+          <div className="label">Email (opcional)</div>
+          <input
+            className="input"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="correo@ejemplo.com"
+          />
+        </div>
+        <div>
           <div className="label">Tipo</div>
           <select
             className="select"
@@ -423,6 +499,29 @@ export default function Ships() {
             <option value="Mercante">Mercante</option>
             <option value="Ferry">Ferry</option>
             <option value="Crucero">Crucero</option>
+          </select>
+        </div>
+        <div>
+          <div className="label">Tipo de carga</div>
+          <select
+            className="input"
+            value={form.cargo_type}
+            onChange={(e) => setForm({ ...form, cargo_type: e.target.value })}
+          >
+            <option value="">Sin tipo</option>
+            {cargoTypes
+              .slice()
+              .sort((a, b) =>
+                String(a?.nombre || "").localeCompare(
+                  String(b?.nombre || ""),
+                  "es"
+                )
+              )
+              .map((t) => (
+                <option key={t._id || t.id} value={t._id || t.id}>
+                  {t.nombre}
+                </option>
+              ))}
           </select>
         </div>
         <div>

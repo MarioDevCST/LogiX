@@ -7,7 +7,11 @@ import {
   fetchUserById,
   updateUserById,
 } from "../firebase/auth.js";
-import { getCurrentUser } from "../utils/roles.js";
+import {
+  getCurrentUser,
+  readAuthState,
+  writeAuthState,
+} from "../utils/roles.js";
 
 const ROLE_OPTIONS = [
   { label: "Administrador", value: "admin" },
@@ -101,10 +105,8 @@ export default function UserDetail() {
       }
       setUser(updated);
       if (current && (current.id === id || current._id === id)) {
-        localStorage.setItem(
-          "auth",
-          JSON.stringify({ user: { ...current, ...updated } })
-        );
+        const { session } = readAuthState();
+        writeAuthState({ user: { ...current, ...updated }, session });
       }
       setOpen(false);
       setSnack({ open: true, message: "Usuario actualizado", type: "success" });

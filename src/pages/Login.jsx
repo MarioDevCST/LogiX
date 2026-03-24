@@ -8,6 +8,7 @@ import {
   getOrCreateUserProfile,
   logInteraction,
 } from "../firebase/auth.js";
+import { writeAuthState } from "../utils/roles.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -77,7 +78,11 @@ export default function Login() {
       });
       const user = { ...profile, id: profile.id || fbUser.uid };
 
-      localStorage.setItem("auth", JSON.stringify({ user }));
+      const now = Date.now();
+      writeAuthState({
+        user,
+        session: { loginAt: now, lastActivityAt: now },
+      });
       const actor = {
         id: user.id,
         name: user.name || "",

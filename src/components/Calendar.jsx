@@ -61,7 +61,14 @@ export default function Calendar({ title = 'Calendario', items = [], month = new
     return map
   }, [items, dateKey, secondaryDateKey])
 
-  const COLOR_MAP = { 'Preparando': '#64748b', 'En Proceso': '#2563eb', 'Cancelado': '#ef4444', 'Entregado': '#16a34a' }
+  const COLOR_MAP = {
+    'Preparando': '#64748b',
+    'Cargando': '#2563eb',
+    'Viajando': '#0ea5e9',
+    'Entregado': '#16a34a',
+    'Cancelado': '#ef4444',
+    'En Proceso': '#2563eb',
+  }
   const weekday = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
   const label = mode === 'week'
     ? (() => {

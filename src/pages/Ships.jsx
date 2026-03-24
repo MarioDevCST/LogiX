@@ -41,9 +41,9 @@ export default function Ships() {
   const columns = [
     { key: "nombre", header: "Nombre del barco" },
     { key: "empresa", header: "Empresa" },
-    { key: "responsable", header: "Responsable" },
     { key: "telefono", header: "Teléfono" },
-    { key: "email", header: "Email" },
+    { key: "email", header: "Contacto" },
+    { key: "responsable", header: "Responsable" },
     { key: "tipo", header: "Tipo" },
     { key: "cargo_type", header: "Tipo de carga" },
     { key: "enlace", header: "Enlace" },
@@ -58,8 +58,6 @@ export default function Ships() {
     nombre_del_barco: "",
     empresa: "",
     responsable: "",
-    telefono: "",
-    email: "",
     tipo: "Mercante",
     cargo_type: "",
     enlace: "",
@@ -78,7 +76,11 @@ export default function Ships() {
 
   // modales de creación rápida
   const [openCreateCompany, setOpenCreateCompany] = useState(false);
-  const [companyForm, setCompanyForm] = useState({ nombre: "" });
+  const [companyForm, setCompanyForm] = useState({
+    nombre: "",
+    telefono: "",
+    email: "",
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -100,9 +102,17 @@ export default function Ships() {
         const companyNameById = new Map(
           companiesList.map((c) => [String(c.id || c._id), c.nombre || ""])
         );
+        const companyById = new Map(
+          companiesList.map((c) => [String(c.id || c._id), c])
+        );
         const companyNameByName = new Map(
           companiesList
             .map((c) => [String(c.nombre || "").toLowerCase(), c.nombre || ""])
+            .filter((p) => p[0] && p[1])
+        );
+        const companyByName = new Map(
+          companiesList
+            .map((c) => [String(c.nombre || "").toLowerCase(), c])
             .filter((p) => p[0] && p[1])
         );
         const responsableById = new Map(
@@ -130,6 +140,10 @@ export default function Ships() {
             companyNameByName.get(rawEmpresa.toLowerCase()) ||
             rawEmpresa ||
             "";
+          const company =
+            companyById.get(rawEmpresa) ||
+            companyByName.get(String(companyName || "").toLowerCase()) ||
+            null;
           const rawResponsable = String(s.responsable || "");
           const r =
             responsableById.get(rawResponsable) ||
@@ -148,9 +162,9 @@ export default function Ships() {
             id: s.id || s._id,
             nombre: s.nombre_del_barco,
             empresa: companyName,
+            telefono: String(company?.telefono || ""),
+            email: String(company?.email || ""),
             responsable: responsableName,
-            telefono: String(s.telefono || ""),
-            email: String(s.email || ""),
             tipo: s.tipo || "",
             cargo_type: cargoTypeName,
             enlace: s.enlace || "",
@@ -234,9 +248,9 @@ export default function Ships() {
           id: created._id || created.id,
           nombre: created.nombre_del_barco,
           empresa: created.empresa_nombre || company?.nombre || "",
+          telefono: String(company?.telefono || ""),
+          email: String(company?.email || ""),
           responsable: created.responsable_nombre || responsable?.nombre || "",
-          telefono: String(created.telefono || form.telefono || ""),
-          email: String(created.email || form.email || ""),
           tipo: created.tipo || "",
           cargo_type: created.cargo_type_nombre || cargoType?.nombre || "",
           enlace: created.enlace || form.enlace || "",
@@ -247,8 +261,6 @@ export default function Ships() {
         nombre_del_barco: "",
         empresa: "",
         responsable: "",
-        telefono: "",
-        email: "",
         tipo: "Mercante",
         cargo_type: "",
         enlace: "",
@@ -274,13 +286,13 @@ export default function Ships() {
         q === "" ||
         r.nombre.toLowerCase().includes(q) ||
         r.empresa.toLowerCase().includes(q) ||
-        r.responsable.toLowerCase().includes(q) ||
         String(r.telefono || "")
           .toLowerCase()
           .includes(q) ||
         String(r.email || "")
           .toLowerCase()
           .includes(q) ||
+        r.responsable.toLowerCase().includes(q) ||
         r.tipo.toLowerCase().includes(q) ||
         String(r.cargo_type || "")
           .toLowerCase()
@@ -472,24 +484,6 @@ export default function Ships() {
           </select>
         </div>
         <div>
-          <div className="label">Teléfono (opcional)</div>
-          <input
-            className="input"
-            value={form.telefono}
-            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-            placeholder="+34..."
-          />
-        </div>
-        <div>
-          <div className="label">Email (opcional)</div>
-          <input
-            className="input"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="correo@ejemplo.com"
-          />
-        </div>
-        <div>
           <div className="label">Tipo</div>
           <select
             className="select"
@@ -569,7 +563,7 @@ export default function Ships() {
             };
             setCompanies((prev) => [...prev, next]);
             setOpenCreateCompany(false);
-            setCompanyForm({ nombre: "" });
+            setCompanyForm({ nombre: "", telefono: "", email: "" });
             setSnack({
               open: true,
               message: "Empresa creada",
@@ -594,6 +588,28 @@ export default function Ships() {
               setCompanyForm({ ...companyForm, nombre: e.target.value })
             }
             placeholder="Nombre de la empresa"
+          />
+        </div>
+        <div>
+          <div className="label">Teléfono (opcional)</div>
+          <input
+            className="input"
+            value={companyForm.telefono}
+            onChange={(e) =>
+              setCompanyForm({ ...companyForm, telefono: e.target.value })
+            }
+            placeholder="+34..."
+          />
+        </div>
+        <div>
+          <div className="label">Contacto (opcional)</div>
+          <input
+            className="input"
+            value={companyForm.email}
+            onChange={(e) =>
+              setCompanyForm({ ...companyForm, email: e.target.value })
+            }
+            placeholder="correo@ejemplo.com"
           />
         </div>
       </Modal>

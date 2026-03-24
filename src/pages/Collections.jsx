@@ -815,6 +815,8 @@ function CompaniesTab() {
   const navigate = useNavigate();
   const columns = [
     { key: "nombre", header: "Nombre" },
+    { key: "telefono", header: "Teléfono" },
+    { key: "email", header: "Contacto" },
     { key: "fecha", header: "Creación" },
     { key: "acciones", header: "Acciones" },
   ];
@@ -824,11 +826,15 @@ function CompaniesTab() {
   const [loading, setLoading] = useState(true);
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ nombre: "" });
+  const [form, setForm] = useState({ nombre: "", telefono: "", email: "" });
 
   const [openEdit, setOpenEdit] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ nombre: "" });
+  const [editForm, setEditForm] = useState({
+    nombre: "",
+    telefono: "",
+    email: "",
+  });
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -844,7 +850,11 @@ function CompaniesTab() {
       const c = await fetchCompanyById(id);
       if (!c) return;
       setEditingId(id);
-      setEditForm({ nombre: c.nombre || "" });
+        setEditForm({
+          nombre: c.nombre || "",
+          telefono: String(c.telefono || ""),
+          email: String(c.email || ""),
+        });
       setOpenEdit(true);
     } catch {
       setSnack({
@@ -882,6 +892,8 @@ function CompaniesTab() {
           return {
             id,
             nombre: c.nombre || "",
+            telefono: String(c.telefono || ""),
+            email: String(c.email || ""),
             fecha: formatDateOnly(c.createdAt || c.fecha_creacion),
             acciones: (
               <div style={{ display: "flex", gap: 6 }}>
@@ -924,7 +936,17 @@ function CompaniesTab() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => q === "" || r.nombre.toLowerCase().includes(q));
+    return rows.filter(
+      (r) =>
+        q === "" ||
+        r.nombre.toLowerCase().includes(q) ||
+        String(r.telefono || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.email || "")
+          .toLowerCase()
+          .includes(q)
+    );
   }, [rows, query]);
 
   const paginated = useMemo(() => {
@@ -951,6 +973,8 @@ function CompaniesTab() {
       }
       const created = await createCompany({
         nombre: form.nombre,
+        telefono: form.telefono,
+        email: form.email,
         creado_por: getCurrentUser()?.name || "Testing",
       });
       const id = created?._id || created?.id;
@@ -959,6 +983,8 @@ function CompaniesTab() {
         {
           id,
           nombre: created.nombre || "",
+          telefono: String(created.telefono || ""),
+          email: String(created.email || ""),
           fecha: formatDateOnly(created.createdAt || created.fecha_creacion),
           acciones: (
             <div style={{ display: "flex", gap: 6 }}>
@@ -987,7 +1013,7 @@ function CompaniesTab() {
         },
       ]);
       setOpen(false);
-      setForm({ nombre: "" });
+      setForm({ nombre: "", telefono: "", email: "" });
       setSnack({ open: true, message: "Empresa creada", type: "success" });
     } catch (e) {
       const message =
@@ -1011,6 +1037,8 @@ function CompaniesTab() {
       }
       const updated = await updateCompanyById(editingId, {
         nombre: editForm.nombre,
+        telefono: editForm.telefono,
+        email: editForm.email,
         modificado_por: getCurrentUser()?.name || "Testing",
       });
       if (!updated) {
@@ -1023,7 +1051,14 @@ function CompaniesTab() {
       }
       setRows((prev) =>
         prev.map((r) =>
-          r.id === editingId ? { ...r, nombre: updated.nombre } : r
+          r.id === editingId
+            ? {
+                ...r,
+                nombre: updated.nombre,
+                telefono: String(updated.telefono || ""),
+                email: String(updated.email || ""),
+              }
+            : r
         )
       );
       setOpenEdit(false);
@@ -1138,6 +1173,24 @@ function CompaniesTab() {
             placeholder="Nombre"
           />
         </div>
+        <div>
+          <div className="label">Teléfono (opcional)</div>
+          <input
+            className="input"
+            value={form.telefono}
+            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+            placeholder="+34..."
+          />
+        </div>
+        <div>
+          <div className="label">Contacto (opcional)</div>
+          <input
+            className="input"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="correo@ejemplo.com"
+          />
+        </div>
       </Modal>
 
       <Modal
@@ -1156,6 +1209,26 @@ function CompaniesTab() {
               setEditForm({ ...editForm, nombre: e.target.value })
             }
             placeholder="Nombre"
+          />
+        </div>
+        <div>
+          <div className="label">Teléfono (opcional)</div>
+          <input
+            className="input"
+            value={editForm.telefono}
+            onChange={(e) =>
+              setEditForm({ ...editForm, telefono: e.target.value })
+            }
+            placeholder="+34..."
+          />
+        </div>
+        <div>
+          <div className="label">Contacto (opcional)</div>
+          <input
+            className="input"
+            value={editForm.email}
+            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            placeholder="correo@ejemplo.com"
           />
         </div>
       </Modal>

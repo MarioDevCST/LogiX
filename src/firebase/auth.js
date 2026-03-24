@@ -965,20 +965,29 @@ export async function fusePallets({
   );
   const numeroMerged = mergedNumeroParts.join("+");
 
+  const loadRef = doc(firebaseDb, "loads", String(targetCarga));
+  const loadSnap = await getDoc(loadRef);
+  if (!loadSnap.exists()) throw new Error("Carga no encontrada");
+  const loadData = loadSnap.data() || {};
+  const loadLabel =
+    String(loadData?.nombre || "").trim() ||
+    String(target.carga_nombre || "").trim() ||
+    "Sin carga";
+  const numeroFinal = numeroMerged || target.numero_palet;
+  const nombreFinal = `${numeroFinal} - ${loadLabel}`;
+
   await updateDoc(doc(firebaseDb, "pallets", String(targetId)), {
     productos: productosMerged,
-    nombre: numeroMerged || target.nombre || target.numero_palet,
-    numero_palet: numeroMerged || target.numero_palet,
+    nombre: nombreFinal,
+    numero_palet: numeroFinal,
+    carga: String(targetCarga || ""),
+    carga_nombre: loadLabel === "Sin carga" ? "" : loadLabel,
     ...(mergedBase ? { base: mergedBase } : {}),
     modificado_por: resolvedModificadoPor,
     fecha_modificacion: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
-  const loadRef = doc(firebaseDb, "loads", String(targetCarga));
-  const loadSnap = await getDoc(loadRef);
-  if (!loadSnap.exists()) throw new Error("Carga no encontrada");
-  const loadData = loadSnap.data() || {};
   const current = Array.isArray(loadData.palets) ? loadData.palets : [];
   const idsToRemove = new Set(sourceIds.map((v) => String(v)));
   const next = current.filter((pid) => !idsToRemove.has(String(pid)));
@@ -1023,6 +1032,33 @@ export async function deletePalletById(id) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const current = await fetchPalletById(id).catch(() => null);
   const ref = doc(firebaseDb, "pallets", String(id));
+  // Si el palet pertenece a una carga, eliminar la referencia residual en la carga
+  if (current && current.carga) {
+    try {
+      const loadRef = doc(firebaseDb, "loads", String(current.carga));
+      const loadSnap = await getDoc(loadRef);
+      if (loadSnap.exists()) {
+        const loadData = loadSnap.data() || {};
+        const paletsArray = Array.isArray(loadData.palets)
+          ? loadData.palets
+          : [];
+        const next = paletsArray.filter(
+          (pid) =>
+            String(pid) !== String(id) &&
+            String(pid?._id || pid?.id || pid) !== String(id)
+        );
+        if (next.length !== paletsArray.length) {
+          await updateDoc(loadRef, {
+            palets: next,
+            fecha_modificacion: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    } catch {
+      // silencioso: si falla la limpieza, continuamos con el borrado
+    }
+  }
   await deleteDoc(ref);
   if (current) {
     queueInteraction({
@@ -1487,6 +1523,8 @@ export async function fetchAllCompanies() {
   return docs.map(({ docId, data }) => ({
     ...mapCommonAudit(data, docId),
     nombre: data.nombre || "",
+    telefono: data.telefono || "",
+    email: data.email || "",
   }));
 }
 
@@ -1499,6 +1537,8 @@ export async function fetchCompanyById(id) {
   return {
     ...mapCommonAudit(data, snap.id),
     nombre: data.nombre || "",
+    telefono: data.telefono || "",
+    email: data.email || "",
   };
 }
 
@@ -1507,11 +1547,16 @@ export async function createCompany(payload) {
   const nombre = String(payload?.nombre || "").trim();
   if (!nombre) throw new Error("nombre es obligatorio");
 
+  const telefono = String(payload?.telefono || "").trim();
+  const email = String(payload?.email || "").trim();
+
   const ref = doc(collection(firebaseDb, "companies"));
   const id = ref.id;
   await setDoc(ref, {
     id,
     nombre,
+    telefono,
+    email,
     creado_por: String(payload?.creado_por || "Testing"),
     modificado_por: "",
     fecha_creacion: serverTimestamp(),
@@ -1526,7 +1571,11 @@ export async function createCompany(payload) {
       target: { id: created.id, name: created.nombre || "" },
       details: {
         entity: "company",
-        snapshot: { nombre: created.nombre || "" },
+        snapshot: {
+          nombre: created.nombre || "",
+          telefono: created.telefono || "",
+          email: created.email || "",
+        },
       },
     });
   }
@@ -1538,8 +1587,18 @@ export async function updateCompanyById(id, updates) {
   const ref = doc(firebaseDb, "companies", String(id));
   const current = await fetchCompanyById(id);
   if (!current) return null;
+  const patch = { ...updates };
+  if (typeof updates?.nombre !== "undefined") {
+    patch.nombre = String(updates?.nombre || "").trim();
+  }
+  if (typeof updates?.telefono !== "undefined") {
+    patch.telefono = String(updates?.telefono || "").trim();
+  }
+  if (typeof updates?.email !== "undefined") {
+    patch.email = String(updates?.email || "").trim();
+  }
   await updateDoc(ref, {
-    ...updates,
+    ...patch,
     fecha_modificacion: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -1548,7 +1607,7 @@ export async function updateCompanyById(id, updates) {
     queueInteraction({
       type: "company_updated",
       target: { id: updated.id, name: updated.nombre || "" },
-      details: { entity: "company", updates: updates || {} },
+      details: { entity: "company", updates: patch || {} },
     });
   }
   return updated;
@@ -1624,8 +1683,6 @@ export async function fetchAllShips() {
     return {
       ...mapCommonAudit(data, docId),
       nombre_del_barco: data.nombre_del_barco || "",
-      telefono: data.telefono || "",
-      email: data.email || "",
       enlace: data.enlace || "",
       tipo: data.tipo || "",
       empresa: empresaId,
@@ -1693,8 +1750,6 @@ export async function fetchShipById(id) {
   return {
     ...mapCommonAudit(data, snap.id),
     nombre_del_barco: data.nombre_del_barco || "",
-    telefono: data.telefono || "",
-    email: data.email || "",
     enlace: data.enlace || "",
     tipo: data.tipo || "",
     empresa: empresaId,
@@ -1766,8 +1821,6 @@ export async function createShip(payload) {
       ""
   ).trim();
 
-  const telefono = String(payload?.telefono || "").trim();
-  const email = String(payload?.email || "").trim();
   const enlace = String(payload?.enlace || "").trim();
   const tipo = String(payload?.tipo || "").trim();
   const creado_por = String(payload?.creado_por || "Testing");
@@ -1776,8 +1829,6 @@ export async function createShip(payload) {
   await setDoc(ref, {
     id,
     nombre_del_barco,
-    telefono,
-    email,
     enlace,
     tipo,
     empresa,
@@ -1804,8 +1855,6 @@ export async function createShip(payload) {
         entity: "ship",
         snapshot: {
           nombre_del_barco: created.nombre_del_barco || "",
-          telefono: created.telefono || "",
-          email: created.email || "",
           enlace: created.enlace || "",
           tipo: created.tipo || "",
           empresa: created.empresa || "",
@@ -1829,6 +1878,8 @@ export async function updateShipById(id, updates) {
   if (!current) return null;
 
   const patch = { ...updates };
+  delete patch.telefono;
+  delete patch.email;
   if (typeof updates?.modificado_por === "undefined") {
     const actorName = getActorFromLocalStorage()?.name || "";
     if (actorName) patch.modificado_por = actorName;
@@ -1912,14 +1963,6 @@ export async function updateShipById(id, updates) {
 
   if (typeof updates?.nombre_del_barco !== "undefined") {
     patch.nombre_del_barco = String(updates?.nombre_del_barco || "").trim();
-  }
-
-  if (typeof updates?.telefono !== "undefined") {
-    patch.telefono = String(updates?.telefono || "").trim();
-  }
-
-  if (typeof updates?.email !== "undefined") {
-    patch.email = String(updates?.email || "").trim();
   }
 
   await updateDoc(ref, {

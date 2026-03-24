@@ -103,21 +103,54 @@ export function hasPermission(role, permission) {
   return perms.includes(permission);
 }
 
-export function getCurrentUser() {
+export function readAuthState() {
   try {
     const raw = localStorage.getItem("auth");
-    if (!raw) return null;
+    if (!raw) return { user: null, session: null };
     const parsed = JSON.parse(raw);
-    if (!parsed) return null;
-    if (parsed.user && typeof parsed.user === "object") return parsed.user;
-    if (parsed.currentUser && typeof parsed.currentUser === "object")
-      return parsed.currentUser;
-    if (
-      typeof parsed === "object" &&
-      (parsed.email || parsed.role || parsed.id || parsed._id)
-    )
-      return parsed;
-    return null;
+    const user =
+      parsed?.user && typeof parsed.user === "object"
+        ? parsed.user
+        : parsed?.currentUser && typeof parsed.currentUser === "object"
+        ? parsed.currentUser
+        : typeof parsed === "object" &&
+          (parsed.email || parsed.role || parsed.id || parsed._id)
+        ? parsed
+        : null;
+    const session =
+      parsed?.session && typeof parsed.session === "object"
+        ? parsed.session
+        : null;
+    return { user, session };
+  } catch {
+    return { user: null, session: null };
+  }
+}
+
+export function writeAuthState({ user, session }) {
+  const nextUser = user && typeof user === "object" ? user : null;
+  const nextSession = session && typeof session === "object" ? session : null;
+  if (!nextUser) {
+    localStorage.removeItem("auth");
+    return;
+  }
+  localStorage.setItem(
+    "auth",
+    JSON.stringify({
+      user: nextUser,
+      ...(nextSession ? { session: nextSession } : {}),
+    })
+  );
+}
+
+export function clearAuthState() {
+  localStorage.removeItem("auth");
+}
+
+export function getCurrentUser() {
+  try {
+    const { user } = readAuthState();
+    return user;
   } catch {
     return null;
   }

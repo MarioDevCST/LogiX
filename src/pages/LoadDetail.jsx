@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
@@ -17,6 +17,7 @@ import {
   fetchAllUsers,
   deleteLoadById,
   fetchLoadById,
+  createPallet,
   fusePallets,
   updateLoadById,
 } from "../firebase/auth.js";
@@ -71,6 +72,144 @@ function formatDateLabel(value) {
     month: "2-digit",
     year: "numeric",
   }).format(d);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildFoliosHtml({ shipName, dateLabel, portLabel, from, to }) {
+  const pages = [];
+  for (let n = from; n <= to; n += 1) {
+    const big = escapeHtml(String(n));
+    pages.push(`
+      <div class="page">
+        <div class="top">
+          <div class="small-circle">${big}</div>
+        </div>
+        <div class="ship">${escapeHtml(shipName || "")}</div>
+        <div class="big">${big}</div>
+        <div class="bottom">
+          <div class="row">
+            <span class="label">FECHA PREVISTA DE CARGA:</span>
+            <span class="value">${escapeHtml(dateLabel || "-")}</span>
+          </div>
+          <div class="row">
+            <span class="label">PUERTO:</span>
+            <span class="value">${escapeHtml(portLabel || "-")}</span>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+  return `<!doctype html>
+  <html lang="es">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Folios</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #e5e7eb; font-family: Arial, Helvetica, sans-serif; }
+        .wrap { display: grid; gap: 16px; padding: 16px; }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          background: white;
+          margin: 0 auto;
+          border: 1px solid #d1d5db;
+          position: relative;
+          padding: 22mm 18mm 18mm;
+          overflow: hidden;
+        }
+        .top {
+          position: absolute;
+          top: 14mm;
+          left: 18mm;
+          right: 18mm;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+        }
+        .brand {
+          font-weight: 800;
+          font-size: 24px;
+          letter-spacing: 0.5px;
+          color: #111827;
+          opacity: 0.75;
+          text-transform: lowercase;
+        }
+        .small-circle {
+          width: 54px;
+          height: 54px;
+          border: 3px solid #111827;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          font-size: 24px;
+        }
+        .ship {
+          margin-top: 20mm;
+          text-align: center;
+          font-size: 56px;
+          font-weight: 500;
+          letter-spacing: 2px;
+          color: #111827;
+          text-transform: uppercase;
+          line-height: 1.05;
+          padding: 0 8mm;
+          word-break: break-word;
+        }
+        .big {
+          margin-top: 38mm;
+          text-align: center;
+          font-size: 220px;
+          font-weight: 800;
+          color: #111827;
+          line-height: 1;
+        }
+        .bottom {
+          position: absolute;
+          left: 18mm;
+          right: 18mm;
+          bottom: 18mm;
+          border-top: 2px dashed #9ca3af;
+          padding-top: 10mm;
+          display: grid;
+          gap: 8px;
+          font-size: 24px;
+          letter-spacing: 0.5px;
+          color: #111827;
+        }
+        .row {
+          display: flex;
+          justify-content: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .label { font-weight: 500; }
+        .value { font-weight: 800; }
+
+        @media print {
+          body { background: white; }
+          .wrap { padding: 0; gap: 0; }
+          .page { margin: 0; border: none; page-break-after: always; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        ${pages.join("")}
+      </div>
+    </body>
+  </html>`;
 }
 
 function parseNumeroPaletsInput(value) {
@@ -141,6 +280,12 @@ export default function LoadDetail() {
   const [fuseNumbers, setFuseNumbers] = useState("");
   const [fuseSubmitting, setFuseSubmitting] = useState(false);
   const [fuseBaseChoice, setFuseBaseChoice] = useState("");
+  const [openCreatePallet, setOpenCreatePallet] = useState(false);
+  const [createPalletForm, setCreatePalletForm] = useState({
+    numero_palet: "",
+    tipo: "Seco",
+    base: "Europeo",
+  });
   const [dragPalletId, setDragPalletId] = useState("");
   const [dragPalletTipo, setDragPalletTipo] = useState("");
   const [dragOverPalletId, setDragOverPalletId] = useState("");
@@ -148,6 +293,33 @@ export default function LoadDetail() {
   const [fuseDnDSourceId, setFuseDnDSourceId] = useState("");
   const [fuseDnDTargetId, setFuseDnDTargetId] = useState("");
   const [fuseDnDBaseChoice, setFuseDnDBaseChoice] = useState("");
+  const lastTapRef = useRef({ id: "", at: 0 });
+  const isTouchMode = useMemo(() => {
+    try {
+      const coarse =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      const noHover =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(hover: none)").matches;
+      const touchPoints =
+        typeof navigator !== "undefined" &&
+        Number(navigator.maxTouchPoints) > 0;
+      return (
+        (coarse && noHover) ||
+        (touchPoints && noHover) ||
+        (coarse && touchPoints)
+      );
+    } catch {
+      return false;
+    }
+  }, []);
+  const [openFolio, setOpenFolio] = useState(false);
+  const [folioFrom, setFolioFrom] = useState(1);
+  const [folioTo, setFolioTo] = useState(10);
+  const [folioStep, setFolioStep] = useState("config");
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -257,6 +429,133 @@ export default function LoadDetail() {
     String(role || "")
       .trim()
       .toLowerCase() === "dispatcher";
+
+  const folioMeta = useMemo(() => {
+    if (!load) return { shipName: "", dateLabel: "-", portLabel: "-" };
+    const barcoId = String(load?.barco?._id || load?.barco || "");
+    const terminalEntregaId = String(
+      load?.terminal_entrega?._id || load?.terminal_entrega || ""
+    );
+    const ship =
+      ships.find((s) => String(s?._id || s?.id || "") === barcoId) ||
+      (load?.barco && typeof load.barco === "object" ? load.barco : null);
+    const terminal =
+      locations.find(
+        (l) => String(l?._id || l?.id || "") === terminalEntregaId
+      ) ||
+      (load?.terminal_entrega && typeof load.terminal_entrega === "object"
+        ? load.terminal_entrega
+        : null);
+    const shipName = String(ship?.nombre_del_barco || "").trim();
+    const dateLabel = formatDateLabel(load?.fecha_de_carga);
+    const puerto = String(terminal?.puerto || "").trim();
+    const nombre = String(terminal?.nombre || "").trim();
+    const portLabel = (puerto || nombre || "-").toUpperCase();
+    return { shipName, dateLabel, portLabel };
+  }, [load, ships, locations]);
+
+  const folioHtml = useMemo(() => {
+    if (!openFolio || folioStep !== "preview") return "";
+    const from = Number(folioFrom);
+    const to = Number(folioTo);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return "";
+    const a = Math.min(from, to);
+    const b = Math.max(from, to);
+    if (b - a > 500) return "";
+    return buildFoliosHtml({
+      shipName: folioMeta.shipName,
+      dateLabel: folioMeta.dateLabel,
+      portLabel: folioMeta.portLabel,
+      from: a,
+      to: b,
+    });
+  }, [openFolio, folioStep, folioFrom, folioTo, folioMeta]);
+
+  const openFolioModal = () => {
+    if (!canManageLoads) {
+      setSnack({
+        open: true,
+        message: "No tienes permiso para crear folios",
+        type: "error",
+      });
+      return;
+    }
+    setFolioFrom(1);
+    setFolioTo(10);
+    setFolioStep("config");
+    setOpenFolio(true);
+  };
+
+  const closeFolioModal = () => {
+    setOpenFolio(false);
+    setFolioStep("config");
+  };
+
+  const goFolioPreview = () => {
+    const from = Number(folioFrom);
+    const to = Number(folioTo);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) {
+      setSnack({ open: true, message: "Rango inválido", type: "error" });
+      return;
+    }
+    const a = Math.min(from, to);
+    const b = Math.max(from, to);
+    if (a < 1 || b < 1) {
+      setSnack({
+        open: true,
+        message: "Los números deben ser >= 1",
+        type: "error",
+      });
+      return;
+    }
+    if (b - a > 500) {
+      setSnack({
+        open: true,
+        message: "El rango es demasiado grande",
+        type: "error",
+      });
+      return;
+    }
+    setFolioFrom(a);
+    setFolioTo(b);
+    setFolioStep("preview");
+  };
+
+  const printFolios = () => {
+    const html = folioHtml;
+    if (!html) {
+      setSnack({
+        open: true,
+        message: "No hay previsualización disponible",
+        type: "error",
+      });
+      return;
+    }
+    const w = window.open("", "_blank");
+    if (!w) {
+      setSnack({
+        open: true,
+        message: "El navegador bloqueó la ventana emergente para imprimir",
+        type: "error",
+      });
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => {
+      try {
+        w.focus();
+        w.print();
+      } catch (e) {
+        setSnack({
+          open: true,
+          message: String(e?.message || "") || "Error imprimiendo folios",
+          type: "error",
+        });
+      }
+    }, 100);
+  };
 
   const handleDelete = async () => {
     if (deleting) return;
@@ -555,6 +854,20 @@ export default function LoadDetail() {
     setDragPalletTipo("");
     setDragOverPalletId("");
   };
+  const clearDnDState = () => {
+    setDragPalletId("");
+    setDragPalletTipo("");
+    setDragOverPalletId("");
+  };
+  const isDoubleTap = (id) => {
+    const now = Date.now();
+    const prev = lastTapRef.current || { id: "", at: 0 };
+    lastTapRef.current = { id, at: now };
+    return (
+      String(prev.id || "") === String(id || "") &&
+      now - Number(prev.at || 0) < 320
+    );
+  };
 
   const submitFuseDnD = async () => {
     if (fuseSubmitting) return;
@@ -721,13 +1034,20 @@ export default function LoadDetail() {
           )}
           <button
             className="icon-button"
-            onClick={() =>
-              navigate("/app/palets", { state: { createPalletForCarga: id } })
-            }
+            onClick={() => setOpenCreatePallet(true)}
             title="Crear palet"
           >
             <span className="material-symbols-outlined">add_box</span>
           </button>
+          {canManageLoads && (
+            <button
+              className="icon-button"
+              onClick={openFolioModal}
+              title="Folio"
+            >
+              <span className="material-symbols-outlined">description</span>
+            </button>
+          )}
           {canDeleteLoad && (
             <button
               className="icon-button"
@@ -874,6 +1194,18 @@ export default function LoadDetail() {
                     gap: 12,
                     alignItems: "flex-start",
                   }}
+                  onClick={(e) => {
+                    if (!isTouchMode) return;
+                    if (!dragPalletId) return;
+                    const t = e.target;
+                    if (
+                      t &&
+                      typeof t.closest === "function" &&
+                      t.closest(".card-item")
+                    )
+                      return;
+                    clearDnDState();
+                  }}
                 >
                   {palletsInLoad.map((p) => {
                     const pid = String(p?._id || p?.id || "");
@@ -914,7 +1246,7 @@ export default function LoadDetail() {
                       <div
                         key={pid || `${numero || nombre}`}
                         className="card-item"
-                        draggable={canManagePallets}
+                        draggable={!isTouchMode && canManagePallets}
                         style={{
                           cursor: isDragging
                             ? isSource
@@ -934,19 +1266,27 @@ export default function LoadDetail() {
                           background: isOver ? "var(--hover)" : undefined,
                         }}
                         onDragStart={(e) => {
+                          if (isTouchMode) return;
                           if (!canManagePallets) return;
                           if (!idStr) return;
                           e.dataTransfer.effectAllowed = "copy";
+                          try {
+                            e.dataTransfer.setData("text/plain", String(idStr));
+                          } catch {
+                            void 0;
+                          }
                           setDragPalletId(String(idStr));
                           setDragPalletTipo(String(tipo || ""));
                           setDragOverPalletId("");
                         }}
                         onDragEnd={() => {
+                          if (isTouchMode) return;
                           setDragPalletId("");
                           setDragPalletTipo("");
                           setDragOverPalletId("");
                         }}
                         onDragOver={(e) => {
+                          if (isTouchMode) return;
                           if (!canManagePallets) return;
                           if (!canDnDFuseTo(p)) return;
                           e.preventDefault();
@@ -955,6 +1295,7 @@ export default function LoadDetail() {
                             setDragOverPalletId(idStr);
                         }}
                         onDrop={(e) => {
+                          if (isTouchMode) return;
                           if (!canManagePallets) return;
                           if (!canDnDFuseTo(p)) return;
                           e.preventDefault();
@@ -966,11 +1307,45 @@ export default function LoadDetail() {
                           setDragPalletTipo("");
                           setDragOverPalletId("");
                         }}
-                        onClick={() =>
-                          dragPalletId
-                            ? undefined
-                            : navigate(`/app/palets/${pid}`)
-                        }
+                        onClick={(e) => {
+                          if (!idStr) return;
+                          if (isTouchMode) {
+                            e.stopPropagation();
+                            if (isDoubleTap(idStr)) {
+                              clearDnDState();
+                              navigate(`/app/palets/${pid}`);
+                              return;
+                            }
+                            if (!canManagePallets) return;
+                            if (!dragPalletId) {
+                              setDragPalletId(String(idStr));
+                              setDragPalletTipo(String(tipo || ""));
+                              setDragOverPalletId("");
+                              return;
+                            }
+                            if (String(idStr) === String(dragPalletId)) {
+                              clearDnDState();
+                              return;
+                            }
+                            if (!canDnDFuseTo(p)) {
+                              setSnack({
+                                open: true,
+                                message:
+                                  "Solo puedes fusionar palets del mismo tipo",
+                                type: "error",
+                              });
+                              return;
+                            }
+                            setFuseDnDSourceId(String(dragPalletId));
+                            setFuseDnDTargetId(String(idStr));
+                            setFuseDnDBaseChoice(String(base || "").trim());
+                            setOpenFuseDnD(true);
+                            clearDnDState();
+                            return;
+                          }
+                          if (dragPalletId) return;
+                          navigate(`/app/palets/${pid}`);
+                        }}
                       >
                         <div className="card-item-header">
                           <div
@@ -1296,6 +1671,114 @@ export default function LoadDetail() {
       </Modal>
 
       <Modal
+        open={openFolio}
+        title="Crear folios"
+        onClose={closeFolioModal}
+        onSubmit={folioStep === "config" ? goFolioPreview : printFolios}
+        submitLabel={folioStep === "config" ? "Previsualizar" : "Imprimir"}
+        width={980}
+        bodyStyle={{
+          gridTemplateColumns: "1fr",
+          maxHeight: "80vh",
+          overflow: "auto",
+        }}
+      >
+        {folioStep === "config" ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "grid", gap: 6 }}>
+              <div className="label">Rango de folios</div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div className="label">Desde</div>
+                  <input
+                    type="number"
+                    className="input"
+                    min={1}
+                    value={folioFrom}
+                    onChange={(e) => setFolioFrom(e.target.value)}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div className="label">Hasta</div>
+                  <input
+                    type="number"
+                    className="input"
+                    min={1}
+                    value={folioTo}
+                    onChange={(e) => setFolioTo(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+              {(() => {
+                const from = Number(folioFrom);
+                const to = Number(folioTo);
+                if (!Number.isFinite(from) || !Number.isFinite(to)) return "";
+                const a = Math.min(from, to);
+                const b = Math.max(from, to);
+                const count = b - a + 1;
+                return `Se imprimirán ${count} folios (${a}–${b}).`;
+              })()}
+            </div>
+
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: 12,
+                background: "#fff",
+              }}
+            >
+              <div style={{ display: "grid", gap: 6 }}>
+                <div>
+                  <strong>Barco:</strong> {folioMeta.shipName || "-"}
+                </div>
+                <div>
+                  <strong>Fecha prevista:</strong> {folioMeta.dateLabel || "-"}
+                </div>
+                <div>
+                  <strong>Puerto:</strong> {folioMeta.portLabel || "-"}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button
+                className="secondary-button"
+                onClick={() => setFolioStep("config")}
+              >
+                Cambiar rango
+              </button>
+              <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+                Vista previa
+              </div>
+            </div>
+            <iframe
+              title="Previsualización folios"
+              style={{
+                width: "100%",
+                height: "70vh",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                background: "#fff",
+              }}
+              srcDoc={folioHtml}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={open}
         title="Modificar carga"
         onClose={() => setOpen(false)}
@@ -1615,6 +2098,113 @@ export default function LoadDetail() {
                   {opt}
                 </option>
               ))}
+            </select>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openCreatePallet}
+        title="Crear palet"
+        onClose={() => setOpenCreatePallet(false)}
+        onSubmit={async () => {
+          const numero = String(createPalletForm.numero_palet || "").trim();
+          if (!numero) {
+            setSnack({
+              open: true,
+              message: "El número de palet es obligatorio",
+              type: "error",
+            });
+            return;
+          }
+          try {
+            const created = await createPallet({
+              ...createPalletForm,
+              carga: String(id || ""),
+              creado_por: getCurrentUser()?.name || "Testing",
+            });
+            if (!created) {
+              setSnack({
+                open: true,
+                message: "Error creando palet",
+                type: "error",
+              });
+              return;
+            }
+            setPallets((prev) => [
+              ...prev,
+              {
+                ...created,
+                _id: created._id || created.id,
+                id: created.id || created._id,
+              },
+            ]);
+            setOpenCreatePallet(false);
+            setCreatePalletForm({
+              numero_palet: "",
+              tipo: "Seco",
+              base: "Europeo",
+            });
+            setSnack({ open: true, message: "Palet creado", type: "success" });
+          } catch (e) {
+            const msg = String(e?.message || "");
+            setSnack({
+              open: true,
+              message: msg || "Error creando palet",
+              type: "error",
+            });
+          }
+        }}
+        submitLabel="Crear"
+      >
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <div className="label">Número de palet</div>
+            <input
+              className="input"
+              value={createPalletForm.numero_palet}
+              onChange={(e) =>
+                setCreatePalletForm({
+                  ...createPalletForm,
+                  numero_palet: e.target.value,
+                })
+              }
+              placeholder="Nº de palet"
+            />
+          </div>
+          <div>
+            <div className="label">Tipo</div>
+            <select
+              className="select"
+              value={createPalletForm.tipo}
+              onChange={(e) =>
+                setCreatePalletForm({
+                  ...createPalletForm,
+                  tipo: e.target.value,
+                })
+              }
+            >
+              {CARGA_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="label">Base</div>
+            <select
+              className="select"
+              value={createPalletForm.base}
+              onChange={(e) =>
+                setCreatePalletForm({
+                  ...createPalletForm,
+                  base: e.target.value,
+                })
+              }
+            >
+              <option value="Europeo">Europeo</option>
+              <option value="Americano">Americano</option>
             </select>
           </div>
         </div>

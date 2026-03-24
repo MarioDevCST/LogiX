@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import DataTable from "../components/DataTable.jsx";
 import Modal from "../components/Modal.jsx";
@@ -84,6 +84,29 @@ export default function Pallets() {
   const [fuseDnDTargetId, setFuseDnDTargetId] = useState("");
   const [fuseDnDBaseChoice, setFuseDnDBaseChoice] = useState("");
   const [fuseSubmitting, setFuseSubmitting] = useState(false);
+  const lastTapRef = useRef({ id: "", at: 0 });
+  const isTouchMode = useMemo(() => {
+    try {
+      const coarse =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      const noHover =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(hover: none)").matches;
+      const touchPoints =
+        typeof navigator !== "undefined" &&
+        Number(navigator.maxTouchPoints) > 0;
+      return (
+        (coarse && noHover) ||
+        (touchPoints && noHover) ||
+        (coarse && touchPoints)
+      );
+    } catch {
+      return false;
+    }
+  }, []);
 
   const [form, setForm] = useState({
     numero_palet: "",
@@ -208,6 +231,20 @@ export default function Pallets() {
     setDragPalletId("");
     setDragPalletTipo("");
     setDragOverPalletId("");
+  };
+  const clearDnDState = () => {
+    setDragPalletId("");
+    setDragPalletTipo("");
+    setDragOverPalletId("");
+  };
+  const isDoubleTap = (id) => {
+    const now = Date.now();
+    const prev = lastTapRef.current || { id: "", at: 0 };
+    lastTapRef.current = { id, at: now };
+    return (
+      String(prev.id || "") === String(id || "") &&
+      now - Number(prev.at || 0) < 320
+    );
   };
 
   const normalizeBase = (value) => {
@@ -776,6 +813,18 @@ export default function Pallets() {
                                 paddingBottom: 12,
                                 alignItems: "flex-start",
                               }}
+                              onClick={(e) => {
+                                if (!isTouchMode) return;
+                                if (!dragPalletId) return;
+                                const t = e.target;
+                                if (
+                                  t &&
+                                  typeof t.closest === "function" &&
+                                  t.closest(".card-item")
+                                )
+                                  return;
+                                clearDnDState();
+                              }}
                             >
                               {palletsInLoad.map((p) => {
                                 const pid = String(p?._id || p?.id || "");
@@ -826,7 +875,7 @@ export default function Pallets() {
                                   <div
                                     key={pid || `${loadId}-${numero || nombre}`}
                                     className="card-item"
-                                    draggable={canManagePallets}
+                                    draggable={!isTouchMode && canManagePallets}
                                     style={{
                                       cursor: isDragging
                                         ? isSource
@@ -850,19 +899,30 @@ export default function Pallets() {
                                         : undefined,
                                     }}
                                     onDragStart={(e) => {
+                                      if (isTouchMode) return;
                                       if (!canManagePallets) return;
                                       if (!idStr) return;
                                       e.dataTransfer.effectAllowed = "copy";
+                                      try {
+                                        e.dataTransfer.setData(
+                                          "text/plain",
+                                          String(idStr)
+                                        );
+                                      } catch {
+                                        void 0;
+                                      }
                                       setDragPalletId(String(idStr));
                                       setDragPalletTipo(String(tipo || ""));
                                       setDragOverPalletId("");
                                     }}
                                     onDragEnd={() => {
+                                      if (isTouchMode) return;
                                       setDragPalletId("");
                                       setDragPalletTipo("");
                                       setDragOverPalletId("");
                                     }}
                                     onDragOver={(e) => {
+                                      if (isTouchMode) return;
                                       if (!canManagePallets) return;
                                       if (!canDnDFuseTo(p)) return;
                                       e.preventDefault();
@@ -871,6 +931,7 @@ export default function Pallets() {
                                         setDragOverPalletId(idStr);
                                     }}
                                     onDrop={(e) => {
+                                      if (isTouchMode) return;
                                       if (!canManagePallets) return;
                                       if (!canDnDFuseTo(p)) return;
                                       e.preventDefault();
@@ -884,11 +945,51 @@ export default function Pallets() {
                                       setDragPalletTipo("");
                                       setDragOverPalletId("");
                                     }}
-                                    onClick={() =>
-                                      dragPalletId
-                                        ? undefined
-                                        : navigate(`/app/palets/${pid}`)
-                                    }
+                                    onClick={(e) => {
+                                      if (!idStr) return;
+                                      if (isTouchMode) {
+                                        e.stopPropagation();
+                                        if (isDoubleTap(idStr)) {
+                                          clearDnDState();
+                                          navigate(`/app/palets/${pid}`);
+                                          return;
+                                        }
+                                        if (!canManagePallets) return;
+                                        if (!dragPalletId) {
+                                          setDragPalletId(String(idStr));
+                                          setDragPalletTipo(String(tipo || ""));
+                                          setDragOverPalletId("");
+                                          return;
+                                        }
+                                        if (
+                                          String(idStr) === String(dragPalletId)
+                                        ) {
+                                          clearDnDState();
+                                          return;
+                                        }
+                                        if (!canDnDFuseTo(p)) {
+                                          setSnack({
+                                            open: true,
+                                            message:
+                                              "Solo puedes fusionar palets del mismo tipo",
+                                            type: "error",
+                                          });
+                                          return;
+                                        }
+                                        setFuseDnDSourceId(
+                                          String(dragPalletId)
+                                        );
+                                        setFuseDnDTargetId(String(idStr));
+                                        setFuseDnDBaseChoice(
+                                          String(base || "").trim()
+                                        );
+                                        setOpenFuseDnD(true);
+                                        clearDnDState();
+                                        return;
+                                      }
+                                      if (dragPalletId) return;
+                                      navigate(`/app/palets/${pid}`);
+                                    }}
                                   >
                                     <div className="card-item-header">
                                       <div

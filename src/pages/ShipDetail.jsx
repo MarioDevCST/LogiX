@@ -51,8 +51,6 @@ export default function ShipDetail() {
     nombre_del_barco: "",
     empresa: "",
     responsable: "",
-    telefono: "",
-    email: "",
     tipo: "Mercante",
     cargo_type: "",
     enlace: "",
@@ -114,8 +112,6 @@ export default function ShipDetail() {
           nombre_del_barco: s?.nombre_del_barco || "",
           empresa: s?.empresa || "",
           responsable: s?.responsable || "",
-          telefono: String(s?.telefono || ""),
-          email: String(s?.email || ""),
           tipo: s?.tipo || "Mercante",
           cargo_type: s?.cargo_type || "",
           enlace: s?.enlace || "",
@@ -185,6 +181,9 @@ export default function ShipDetail() {
       ?.nombre ||
     String(ship?.empresa || "") ||
     "";
+  const company = ship?.empresa
+    ? companies.find((c) => String(c._id || c.id) === String(ship?.empresa))
+    : null;
   const responsableName =
     ship?.responsable_nombre ||
     responsables.find(
@@ -251,10 +250,10 @@ export default function ShipDetail() {
           <strong>Responsable:</strong> {responsableName || "-"}
         </p>
         <p>
-          <strong>Teléfono:</strong> {ship.telefono || "-"}
+          <strong>Teléfono:</strong> {company?.telefono || "-"}
         </p>
         <p>
-          <strong>Email:</strong> {ship.email || "-"}
+          <strong>Contacto:</strong> {company?.email || "-"}
         </p>
         <p>
           <strong>Tipo:</strong> {ship.tipo || "-"}
@@ -326,24 +325,6 @@ export default function ShipDetail() {
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Teléfono (opcional)</div>
-          <input
-            className="input"
-            value={form.telefono}
-            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-            placeholder="+34..."
-          />
-        </div>
-        <div>
-          <div className="label">Email (opcional)</div>
-          <input
-            className="input"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="correo@ejemplo.com"
-          />
         </div>
         <div>
           <div className="label">Tipo</div>

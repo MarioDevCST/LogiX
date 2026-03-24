@@ -321,9 +321,9 @@ export default function Loads() {
 
   // Filtros y agrupación
   const [estadoFilter, setEstadoFilter] = useState("");
-  const [entregaFilter, setEntregaFilter] = useState("");
   const [barcoFilter, setBarcoFilter] = useState("");
   const [groupBy, setGroupBy] = useState("none");
+  const [showHistory, setShowHistory] = useState(false);
   const columnsMenuRef = useRef(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const allColumnKeys = useMemo(
@@ -903,15 +903,24 @@ export default function Loads() {
     const locationById = new Map(
       locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0])
     );
+    const existingPalletIds = new Set(
+      pallets.map((p) => String(p?._id || p?.id || "").trim()).filter(Boolean)
+    );
     return loadDocs.map((l) => {
       const paletsArray = Array.isArray(l.palets) ? l.palets : [];
       const byRelation = pallets.filter(
         (p) => String(p.carga?._id || p.carga) === String(l._id)
       );
-      const uniqueIds = new Set([
-        ...paletsArray.map((p) => String(p._id || p)),
-        ...byRelation.map((p) => String(p._id)),
-      ]);
+      const listFromArrayAll = paletsArray
+        .map((p) => String(p?._id || p?.id || p || "").trim())
+        .filter(Boolean);
+      const listFromArray = listFromArrayAll.filter((pid) =>
+        existingPalletIds.has(String(pid))
+      );
+      const listFromRelation = byRelation
+        .map((p) => String(p?._id || p?.id || "").trim())
+        .filter(Boolean);
+      const uniqueIds = new Set([...listFromArray, ...listFromRelation]);
       const totalPalets = uniqueIds.size;
 
       const barcoId = String(l.barco?._id || l.barco || "");
@@ -971,20 +980,23 @@ export default function Loads() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
+    const isHistoryStatus = (s) => s === "Entregado" || s === "Cancelado";
+    const scopedRows = rows.filter((r) =>
+      showHistory
+        ? isHistoryStatus(r.estado_viaje)
+        : !isHistoryStatus(r.estado_viaje)
+    );
+    return scopedRows.filter((r) => {
       const textOk =
         q === "" ||
         r.barco.toLowerCase().includes(q) ||
-        r.entrega.toLowerCase().includes(q) ||
         (r.terminal_entrega || "").toLowerCase().includes(q) ||
         r.estado_viaje.toLowerCase().includes(q);
       const estadoOk = !estadoFilter || r.estado_viaje === estadoFilter;
-      const entregaOk =
-        !entregaFilter || r.entrega.split(", ").includes(entregaFilter);
       const barcoOk = !barcoFilter || r.barco === barcoFilter;
-      return textOk && estadoOk && entregaOk && barcoOk;
+      return textOk && estadoOk && barcoOk;
     });
-  }, [rows, query, estadoFilter, entregaFilter, barcoFilter]);
+  }, [rows, showHistory, query, estadoFilter, barcoFilter]);
 
   const exportCandidates = useMemo(() => {
     const base = exportUseCurrentFilters ? filtered : rows;
@@ -1077,11 +1089,9 @@ export default function Loads() {
     }).format(new Date());
 
     const filtrosLabel = exportUseCurrentFilters
-      ? `Filtros: estado=${estadoFilter || "Todos"}, entrega=${
-          entregaFilter || "Todas"
-        }, barco=${barcoFilter || "Todos"}, búsqueda=${
-          query ? `"${query}"` : "—"
-        }`
+      ? `Filtros: estado=${estadoFilter || "Todos"}, barco=${
+          barcoFilter || "Todos"
+        }, búsqueda=${query ? `"${query}"` : "—"}`
       : "Filtros: sin filtros de pantalla";
 
     const estadosHtml = Object.entries(exportSummary.porEstado || {})
@@ -1283,7 +1293,16 @@ export default function Loads() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, estadoFilter, entregaFilter, barcoFilter]);
+  }, [query, estadoFilter, barcoFilter, showHistory]);
+
+  useEffect(() => {
+    const isHistoryStatus = (s) => s === "Entregado" || s === "Cancelado";
+    if (showHistory) {
+      if (estadoFilter && !isHistoryStatus(estadoFilter)) setEstadoFilter("");
+    } else {
+      if (estadoFilter && isHistoryStatus(estadoFilter)) setEstadoFilter("");
+    }
+  }, [showHistory, estadoFilter]);
 
   const goDetail = (row) => {
     if (row.id) navigate(`/app/logistica/cargas/${row.id}`);
@@ -1302,7 +1321,7 @@ export default function Loads() {
         <input
           className="input"
           style={{ width: 280 }}
-          placeholder="Buscar por barco, terminal, entrega o estado"
+          placeholder="Buscar por barco, terminal o estado"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -1314,7 +1333,13 @@ export default function Loads() {
             aria-label="Filtrar por estado"
           >
             <option value="">Todos los estados</option>
-            {ESTADO_VIAJE_OPTIONS.slice()
+            {(showHistory
+              ? ["Entregado", "Cancelado"]
+              : ESTADO_VIAJE_OPTIONS.filter(
+                  (s) => s !== "Entregado" && s !== "Cancelado"
+                )
+            )
+              .slice()
               .sort(esCompare)
               .map((opt) => (
                 <option key={opt} value={opt}>
@@ -1324,25 +1349,24 @@ export default function Loads() {
           </select>
           <select
             className="select"
-            value={entregaFilter}
-            onChange={(e) => setEntregaFilter(e.target.value)}
-            aria-label="Filtrar por entrega"
-          >
-            <option value="">Todas las entregas</option>
-            {ENTREGA_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
             value={barcoFilter}
             onChange={(e) => setBarcoFilter(e.target.value)}
             aria-label="Filtrar por barco"
           >
             <option value="">Todos los barcos</option>
-            {Array.from(new Set(rows.map((r) => r.barco)))
+            {Array.from(
+              new Set(
+                rows
+                  .filter((r) =>
+                    showHistory
+                      ? r.estado_viaje === "Entregado" ||
+                        r.estado_viaje === "Cancelado"
+                      : r.estado_viaje !== "Entregado" &&
+                        r.estado_viaje !== "Cancelado"
+                  )
+                  .map((r) => r.barco)
+              )
+            )
               .filter(Boolean)
               .sort(esCompare)
               .map((name) => (
@@ -1540,12 +1564,20 @@ export default function Loads() {
               </span>
             </button>
           )}
+          <button
+            className="icon-button"
+            title={showHistory ? "Ver cargas activas" : "Ver historial"}
+            aria-label={showHistory ? "Ver cargas activas" : "Ver historial"}
+            onClick={() => setShowHistory((v) => !v)}
+          >
+            <span className="material-symbols-outlined">history</span>
+          </button>
         </div>
       </div>
 
       {view === "table" ? (
         <DataTable
-          title="Cargas"
+          title={showHistory ? "Historial" : "Cargas"}
           columns={tableColumns}
           data={paginated}
           loading={loading}
@@ -1557,7 +1589,7 @@ export default function Loads() {
         />
       ) : view === "cards" ? (
         <CardGrid
-          title="Cargas"
+          title={showHistory ? "Historial" : "Cargas"}
           items={paginated.map((i) => ({
             ...i,
             name: i.nombre || i.entrega,
@@ -1685,7 +1717,7 @@ export default function Loads() {
         </div>
       ) : (
         <Calendar
-          title="Cargas"
+          title={showHistory ? "Historial" : "Cargas"}
           items={filtered}
           loading={loading}
           month={calMonth}
@@ -1770,9 +1802,9 @@ export default function Loads() {
               <div style={{ fontSize: 13 }}>
                 {exportUseCurrentFilters ? (
                   <>
-                    Estado: {estadoFilter || "Todos"} · Entrega:{" "}
-                    {entregaFilter || "Todas"} · Barco: {barcoFilter || "Todos"}{" "}
-                    · Búsqueda: {query ? `"${query}"` : "—"}
+                    Estado: {estadoFilter || "Todos"} · Barco:{" "}
+                    {barcoFilter || "Todos"} · Búsqueda:{" "}
+                    {query ? `"${query}"` : "—"}
                   </>
                 ) : (
                   <>Sin filtros</>

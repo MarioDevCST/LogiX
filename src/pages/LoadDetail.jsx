@@ -20,6 +20,7 @@ import {
   createPallet,
   fusePallets,
   updateLoadById,
+  logInteraction,
 } from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
@@ -83,36 +84,145 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function buildFoliosHtml({ shipName, dateLabel, portLabel, from, to }) {
-  const pages = [];
-  for (let n = from; n <= to; n += 1) {
-    const big = escapeHtml(String(n));
-    pages.push(`
-      <div class="page">
-        <div class="top">
-          <div class="small-circle">${big}</div>
+function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
+  const cols = [
+    "Nº PALET",
+    "SECO-REFRIGERADO-CONGELADO-REPUESTOS-TÉCNICO",
+    "QUIEN COGE EL NÚMERO",
+    "Nº DE CAMIÓN",
+  ];
+  const nums = Array.isArray(numeros)
+    ? numeros
+        .map((n) => String(n ?? "").trim())
+        .filter((n) => n !== "")
+        .slice(0, 30)
+    : [];
+  const buildRows = (offset) => {
+    const rows = [];
+    for (let i = 0; i < 15; i += 1) {
+      const n = nums[offset + i] ?? "";
+      rows.push(`
+        <tr>
+          <td class="c-num">${escapeHtml(n)}</td>
+          <td class="c-tipo"></td>
+          <td class="c-quien"></td>
+          <td class="c-camion"></td>
+        </tr>
+      `);
+    }
+    return rows.join("");
+  };
+  const ths = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
+  return `
+    <div class="page sheet-page">
+      <div class="sheet-rot">
+        <div class="sheet-top">
+          <div></div>
+          <div class="sheet-title">HOJA DE CARGA</div>
         </div>
-        <div class="ship">${escapeHtml(shipName || "")}</div>
-        <div class="big">${big}</div>
-        <div class="bottom">
-          <div class="row">
-            <span class="label">FECHA PREVISTA DE CARGA:</span>
-            <span class="value">${escapeHtml(dateLabel || "-")}</span>
+
+        <div class="sheet-meta">
+          <div class="meta-row">
+            <span class="meta-label">CLIENTE:</span>
+            <span class="meta-value">${escapeHtml(cliente || "-")}</span>
           </div>
-          <div class="row">
-            <span class="label">PUERTO:</span>
-            <span class="value">${escapeHtml(portLabel || "-")}</span>
+          <div class="meta-row">
+            <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
+            <span class="meta-value">${escapeHtml(
+              fechaPrevistaEntrega || "-"
+            )}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">CARGADOR FINAL:</span>
+            <span class="meta-value"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">FECHA DE CARGA FINAL:</span>
+            <span class="meta-value"></span>
+          </div>
+        </div>
+
+        <div class="sheet-grid">
+          <table class="sheet-table" aria-label="Tabla palets 1-15">
+            <thead><tr>${ths}</tr></thead>
+            <tbody>${buildRows(0)}</tbody>
+          </table>
+          <table class="sheet-table" aria-label="Tabla palets 16-30">
+            <thead><tr>${ths}</tr></thead>
+            <tbody>${buildRows(15)}</tbody>
+          </table>
+        </div>
+
+        <div class="sheet-footer">
+          <div class="footer-title">PALETS QUE SE REMONTAN:</div>
+          <div class="footer-lines">
+            <div class="line"></div>
+            <div class="line"></div>
+            <div class="line"></div>
           </div>
         </div>
       </div>
-    `);
+    </div>
+  `;
+}
+
+function buildFoliosHtml({
+  shipName,
+  dateLabel,
+  portLabel,
+  numbersFrom,
+  numbersTo,
+  hojaFrom,
+  hojaTo,
+  includeHojaCarga,
+  includeNumbers,
+}) {
+  const pages = [];
+  if (includeHojaCarga) {
+    const chunkSize = 30;
+    for (let start = hojaFrom; start <= hojaTo; start += chunkSize) {
+      const end = Math.min(hojaTo, start + chunkSize - 1);
+      const nums = [];
+      for (let n = start; n <= end; n += 1) nums.push(String(n));
+      pages.push(
+        buildHojaCargaPageHtml({
+          cliente: shipName,
+          fechaPrevistaEntrega: dateLabel,
+          numeros: nums,
+        })
+      );
+    }
+  }
+  if (includeNumbers) {
+    for (let n = numbersFrom; n <= numbersTo; n += 1) {
+      const big = escapeHtml(String(n));
+      pages.push(`
+        <div class="page numero-page">
+          <div class="top">
+            <div class="small-circle">${big}</div>
+          </div>
+          <div class="ship">${escapeHtml(shipName || "")}</div>
+          <div class="big">${big}</div>
+          <div class="bottom">
+            <div class="row">
+              <span class="label">FECHA PREVISTA DE CARGA:</span>
+              <span class="value">${escapeHtml(dateLabel || "-")}</span>
+            </div>
+            <div class="row">
+              <span class="label">PUERTO:</span>
+              <span class="value">${escapeHtml(portLabel || "-")}</span>
+            </div>
+          </div>
+        </div>
+      `);
+    }
   }
   return `<!doctype html>
   <html lang="es">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Folios</title>
+      <title>Números</title>
       <style>
         * { box-sizing: border-box; }
         body { margin: 0; background: #e5e7eb; font-family: Arial, Helvetica, sans-serif; }
@@ -126,6 +236,89 @@ function buildFoliosHtml({ shipName, dateLabel, portLabel, from, to }) {
           position: relative;
           padding: 22mm 18mm 18mm;
           overflow: hidden;
+        }
+        .sheet-page {
+          padding: 0;
+        }
+        .sheet-rot {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 297mm;
+          height: 210mm;
+          transform: translate(-50%, -50%) rotate(-90deg);
+          transform-origin: center;
+          padding: 12mm 12mm 14mm;
+        }
+        .sheet-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          margin-bottom: 6mm;
+        }
+        .sheet-title {
+          font-weight: 700;
+          font-size: 28px;
+          letter-spacing: 0.5px;
+          color: #111827;
+          text-transform: uppercase;
+        }
+        .sheet-meta {
+          display: grid;
+          gap: 4px;
+          font-size: 13px;
+          color: #111827;
+          margin-bottom: 8mm;
+        }
+        .meta-row { display: flex; gap: 8px; }
+        .meta-label { font-weight: 700; white-space: nowrap; }
+        .meta-value { font-weight: 700; }
+        .sheet-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10mm;
+          align-items: start;
+        }
+        .sheet-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 10px;
+          color: #111827;
+        }
+        .sheet-table th,
+        .sheet-table td {
+          border: 1px solid #111827;
+          padding: 3px 4px;
+        }
+        .sheet-table th {
+          text-align: center;
+          font-weight: 700;
+          font-size: 9px;
+          line-height: 1.15;
+        }
+        .sheet-table td {
+          height: 18px;
+          vertical-align: middle;
+        }
+        .c-num { width: 12%; text-align: center; font-weight: 700; }
+        .c-tipo { width: 44%; }
+        .c-quien { width: 28%; }
+        .c-camion { width: 16%; }
+        .sheet-footer {
+          margin-top: 10mm;
+          display: grid;
+          gap: 6px;
+        }
+        .footer-title { font-weight: 700; font-size: 12px; }
+        .footer-lines {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 12mm;
+        }
+        .footer-lines .line {
+          border-bottom: 1px solid #111827;
+          height: 18px;
         }
         .top {
           position: absolute;
@@ -170,7 +363,7 @@ function buildFoliosHtml({ shipName, dateLabel, portLabel, from, to }) {
         .big {
           margin-top: 38mm;
           text-align: center;
-          font-size: 220px;
+          font-size: 280px;
           font-weight: 800;
           color: #111827;
           line-height: 1;
@@ -285,6 +478,7 @@ export default function LoadDetail() {
     numero_palet: "",
     tipo: "Seco",
     base: "Europeo",
+    productos: "",
   });
   const [dragPalletId, setDragPalletId] = useState("");
   const [dragPalletTipo, setDragPalletTipo] = useState("");
@@ -319,7 +513,11 @@ export default function LoadDetail() {
   const [openFolio, setOpenFolio] = useState(false);
   const [folioFrom, setFolioFrom] = useState(1);
   const [folioTo, setFolioTo] = useState(10);
+  const [folioSheetFrom, setFolioSheetFrom] = useState(1);
+  const [folioSheetTo, setFolioSheetTo] = useState(30);
   const [folioStep, setFolioStep] = useState("config");
+  const [folioIncludeLoadSheet, setFolioIncludeLoadSheet] = useState(false);
+  const [folioIncludeNumbers, setFolioIncludeNumbers] = useState(true);
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -456,33 +654,62 @@ export default function LoadDetail() {
 
   const folioHtml = useMemo(() => {
     if (!openFolio || folioStep !== "preview") return "";
-    const from = Number(folioFrom);
-    const to = Number(folioTo);
-    if (!Number.isFinite(from) || !Number.isFinite(to)) return "";
-    const a = Math.min(from, to);
-    const b = Math.max(from, to);
-    if (b - a > 500) return "";
+    const numFrom = Number(folioFrom);
+    const numTo = Number(folioTo);
+    if (folioIncludeNumbers) {
+      if (!Number.isFinite(numFrom) || !Number.isFinite(numTo)) return "";
+    }
+    const aNum = Math.min(numFrom, numTo);
+    const bNum = Math.max(numFrom, numTo);
+    if (folioIncludeNumbers && bNum - aNum > 500) return "";
+
+    const sheetFrom = Number(folioSheetFrom);
+    const sheetTo = Number(folioSheetTo);
+    if (folioIncludeLoadSheet) {
+      if (!Number.isFinite(sheetFrom) || !Number.isFinite(sheetTo)) return "";
+    }
+    const aSheet = Math.min(sheetFrom, sheetTo);
+    const bSheet = Math.max(sheetFrom, sheetTo);
+    if (folioIncludeLoadSheet && bSheet - aSheet > 500) return "";
     return buildFoliosHtml({
       shipName: folioMeta.shipName,
       dateLabel: folioMeta.dateLabel,
       portLabel: folioMeta.portLabel,
-      from: a,
-      to: b,
+      numbersFrom: folioIncludeNumbers ? aNum : 1,
+      numbersTo: folioIncludeNumbers ? bNum : 1,
+      hojaFrom: folioIncludeLoadSheet ? aSheet : 1,
+      hojaTo: folioIncludeLoadSheet ? bSheet : 1,
+      includeHojaCarga: folioIncludeLoadSheet,
+      includeNumbers: folioIncludeNumbers,
     });
-  }, [openFolio, folioStep, folioFrom, folioTo, folioMeta]);
+  }, [
+    openFolio,
+    folioStep,
+    folioFrom,
+    folioTo,
+    folioSheetFrom,
+    folioSheetTo,
+    folioMeta,
+    folioIncludeLoadSheet,
+    folioIncludeNumbers,
+  ]);
 
   const openFolioModal = () => {
     if (!canManageLoads) {
       setSnack({
         open: true,
-        message: "No tienes permiso para crear folios",
+        message: "No tienes permiso para imprimir números",
         type: "error",
       });
       return;
     }
     setFolioFrom(1);
     setFolioTo(10);
+    setFolioSheetFrom(1);
+    setFolioSheetTo(30);
     setFolioStep("config");
+    setFolioIncludeLoadSheet(false);
+    setFolioIncludeNumbers(true);
     setOpenFolio(true);
   };
 
@@ -492,32 +719,106 @@ export default function LoadDetail() {
   };
 
   const goFolioPreview = () => {
+    if (!folioIncludeNumbers && !folioIncludeLoadSheet) {
+      setSnack({
+        open: true,
+        message: "Selecciona al menos una opción de impresión",
+        type: "error",
+      });
+      return;
+    }
     const from = Number(folioFrom);
     const to = Number(folioTo);
-    if (!Number.isFinite(from) || !Number.isFinite(to)) {
-      setSnack({ open: true, message: "Rango inválido", type: "error" });
-      return;
+    const sheetFrom = Number(folioSheetFrom);
+    const sheetTo = Number(folioSheetTo);
+
+    if (folioIncludeNumbers) {
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        setSnack({ open: true, message: "Rango inválido", type: "error" });
+        return;
+      }
+      const a = Math.min(from, to);
+      const b = Math.max(from, to);
+      if (a < 1 || b < 1) {
+        setSnack({
+          open: true,
+          message: "Los números deben ser >= 1",
+          type: "error",
+        });
+        return;
+      }
+      if (b - a > 500) {
+        setSnack({
+          open: true,
+          message: "El rango es demasiado grande",
+          type: "error",
+        });
+        return;
+      }
+      setFolioFrom(a);
+      setFolioTo(b);
     }
-    const a = Math.min(from, to);
-    const b = Math.max(from, to);
-    if (a < 1 || b < 1) {
-      setSnack({
-        open: true,
-        message: "Los números deben ser >= 1",
-        type: "error",
-      });
-      return;
+
+    if (folioIncludeLoadSheet) {
+      if (!Number.isFinite(sheetFrom) || !Number.isFinite(sheetTo)) {
+        setSnack({
+          open: true,
+          message: "Rango de hoja de carga inválido",
+          type: "error",
+        });
+        return;
+      }
+      const a = Math.min(sheetFrom, sheetTo);
+      const b = Math.max(sheetFrom, sheetTo);
+      if (a < 1 || b < 1) {
+        setSnack({
+          open: true,
+          message: "El rango de hoja de carga debe ser >= 1",
+          type: "error",
+        });
+        return;
+      }
+      if (b - a > 500) {
+        setSnack({
+          open: true,
+          message: "El rango de hoja de carga es demasiado grande",
+          type: "error",
+        });
+        return;
+      }
+      setFolioSheetFrom(a);
+      setFolioSheetTo(b);
     }
-    if (b - a > 500) {
-      setSnack({
-        open: true,
-        message: "El rango es demasiado grande",
-        type: "error",
-      });
-      return;
-    }
-    setFolioFrom(a);
-    setFolioTo(b);
+
+    const actorUser = getCurrentUser();
+    const actor =
+      actorUser?.id || actorUser?._id
+        ? {
+            id: actorUser?.id || actorUser?._id,
+            name: actorUser?.name || "",
+            email: actorUser?.email || "",
+            role: actorUser?.role || "",
+          }
+        : undefined;
+    logInteraction({
+      type: "numeros_previewed",
+      actor,
+      target: {
+        id: String(load?._id || load?.id || id || ""),
+        name: String(load?.nombre || folioMeta.shipName || ""),
+      },
+      details: {
+        numbersFrom: folioIncludeNumbers ? Math.min(from, to) : null,
+        numbersTo: folioIncludeNumbers ? Math.max(from, to) : null,
+        hojaFrom: folioIncludeLoadSheet ? Math.min(sheetFrom, sheetTo) : null,
+        hojaTo: folioIncludeLoadSheet ? Math.max(sheetFrom, sheetTo) : null,
+        includeHojaCarga: !!folioIncludeLoadSheet,
+        includeNumbers: !!folioIncludeNumbers,
+        shipName: String(folioMeta.shipName || ""),
+        dateLabel: String(folioMeta.dateLabel || ""),
+        portLabel: String(folioMeta.portLabel || ""),
+      },
+    }).catch(() => {});
     setFolioStep("preview");
   };
 
@@ -550,7 +851,7 @@ export default function LoadDetail() {
       } catch (e) {
         setSnack({
           open: true,
-          message: String(e?.message || "") || "Error imprimiendo folios",
+          message: String(e?.message || "") || "Error imprimiendo números",
           type: "error",
         });
       }
@@ -1043,7 +1344,7 @@ export default function LoadDetail() {
             <button
               className="icon-button"
               onClick={openFolioModal}
-              title="Folio"
+              title="Número"
             >
               <span className="material-symbols-outlined">description</span>
             </button>
@@ -1672,7 +1973,7 @@ export default function LoadDetail() {
 
       <Modal
         open={openFolio}
-        title="Crear folios"
+        title="Imprimir números"
         onClose={closeFolioModal}
         onSubmit={folioStep === "config" ? goFolioPreview : printFolios}
         submitLabel={folioStep === "config" ? "Previsualizar" : "Imprimir"}
@@ -1686,7 +1987,7 @@ export default function LoadDetail() {
         {folioStep === "config" ? (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Rango de folios</div>
+              <div className="label">Rango de números</div>
               <div
                 style={{
                   display: "grid",
@@ -1719,15 +2020,104 @@ export default function LoadDetail() {
 
             <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
               {(() => {
+                const sheetFrom = Number(folioSheetFrom);
+                const sheetTo = Number(folioSheetTo);
                 const from = Number(folioFrom);
                 const to = Number(folioTo);
-                if (!Number.isFinite(from) || !Number.isFinite(to)) return "";
-                const a = Math.min(from, to);
-                const b = Math.max(from, to);
-                const count = b - a + 1;
-                return `Se imprimirán ${count} folios (${a}–${b}).`;
+                const hasNumRange =
+                  Number.isFinite(from) && Number.isFinite(to);
+                const a = hasNumRange ? Math.min(from, to) : null;
+                const b = hasNumRange ? Math.max(from, to) : null;
+                const count =
+                  typeof a === "number" && typeof b === "number"
+                    ? b - a + 1
+                    : 0;
+
+                if (folioIncludeNumbers && folioIncludeLoadSheet) {
+                  if (!hasNumRange) return "";
+                  if (
+                    Number.isFinite(sheetFrom) &&
+                    Number.isFinite(sheetTo) &&
+                    sheetFrom >= 1 &&
+                    sheetTo >= 1
+                  ) {
+                    const sa = Math.min(sheetFrom, sheetTo);
+                    const sb = Math.max(sheetFrom, sheetTo);
+                    return `Se imprimirán ${count} números (${a}–${b}) y la hoja de carga (${sa}–${sb}).`;
+                  }
+                  return `Se imprimirán ${count} números (${a}–${b}) y la hoja de carga.`;
+                }
+                if (folioIncludeNumbers) {
+                  if (!hasNumRange) return "";
+                  return `Se imprimirán ${count} números (${a}–${b}).`;
+                }
+                if (folioIncludeLoadSheet) {
+                  if (
+                    !Number.isFinite(sheetFrom) ||
+                    !Number.isFinite(sheetTo) ||
+                    sheetFrom < 1 ||
+                    sheetTo < 1
+                  )
+                    return "";
+                  const sa = Math.min(sheetFrom, sheetTo);
+                  const sb = Math.max(sheetFrom, sheetTo);
+                  return `Se imprimirá la hoja de carga (${sa}–${sb}).`;
+                }
+                return "";
               })()}
             </div>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={folioIncludeNumbers}
+                onChange={(e) => setFolioIncludeNumbers(e.target.checked)}
+              />
+              <span>Imprimir números</span>
+            </label>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={folioIncludeLoadSheet}
+                onChange={(e) => setFolioIncludeLoadSheet(e.target.checked)}
+              />
+              <span>Desea imprimir la hoja de carga?</span>
+            </label>
+
+            {folioIncludeLoadSheet && (
+              <div style={{ display: "grid", gap: 6 }}>
+                <div className="label">Rango hoja de carga</div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div className="label">Desde</div>
+                    <input
+                      type="number"
+                      className="input"
+                      min={1}
+                      value={folioSheetFrom}
+                      onChange={(e) => setFolioSheetFrom(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div className="label">Hasta</div>
+                    <input
+                      type="number"
+                      className="input"
+                      min={1}
+                      value={folioSheetTo}
+                      onChange={(e) => setFolioSheetTo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div
               style={{
@@ -1764,7 +2154,7 @@ export default function LoadDetail() {
               </div>
             </div>
             <iframe
-              title="Previsualización folios"
+              title="Previsualización números"
               style={{
                 width: "100%",
                 height: "70vh",
@@ -2144,6 +2534,7 @@ export default function LoadDetail() {
               numero_palet: "",
               tipo: "Seco",
               base: "Europeo",
+              productos: "",
             });
             setSnack({ open: true, message: "Palet creado", type: "success" });
           } catch (e) {
@@ -2206,6 +2597,20 @@ export default function LoadDetail() {
               <option value="Europeo">Europeo</option>
               <option value="Americano">Americano</option>
             </select>
+          </div>
+          <div>
+            <div className="label">Productos</div>
+            <textarea
+              className="input"
+              rows="4"
+              value={createPalletForm.productos}
+              onChange={(e) =>
+                setCreatePalletForm({
+                  ...createPalletForm,
+                  productos: e.target.value,
+                })
+              }
+            />
           </div>
         </div>
       </Modal>

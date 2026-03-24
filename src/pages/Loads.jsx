@@ -25,6 +25,7 @@ import {
   fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
+  logInteraction,
 } from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
@@ -598,6 +599,35 @@ export default function Loads() {
         return;
       }
     }
+    const actorUser = getCurrentUser();
+    const actor =
+      actorUser?.id || actorUser?._id
+        ? {
+            id: actorUser?.id || actorUser?._id,
+            name: actorUser?.name || "",
+            email: actorUser?.email || "",
+            role: actorUser?.role || "",
+          }
+        : undefined;
+    logInteraction({
+      type: "agenda_previewed",
+      actor,
+      target: {
+        id: "",
+        name: "export_agenda",
+      },
+      details: {
+        start: effectiveStartKey,
+        end: effectiveEndKey,
+        useCurrentFilters: !!exportUseCurrentFilters,
+        mode: String(exportMode || ""),
+        candidatesCount: candidates.length,
+        selectedCount:
+          exportMode === "select"
+            ? exportSelectedIds.length
+            : candidates.length,
+      },
+    }).catch(() => {});
     setExportStep("preview");
   };
 
@@ -906,6 +936,19 @@ export default function Loads() {
     const existingPalletIds = new Set(
       pallets.map((p) => String(p?._id || p?.id || "").trim()).filter(Boolean)
     );
+    const palletById = new Map(
+      pallets
+        .map((p) => [String(p?._id || p?.id || "").trim(), p])
+        .filter((pair) => pair[0])
+    );
+    const tipoForms = {
+      Seco: ["seco", "secos"],
+      Refrigerado: ["refrigerado", "refrigerados"],
+      Congelado: ["congelado", "congelados"],
+      Técnico: ["técnico", "técnicos"],
+      "Fruta y verdura": ["fruta y verdura", "fruta y verdura"],
+      Repuestos: ["repuesto", "repuestos"],
+    };
     return loadDocs.map((l) => {
       const paletsArray = Array.isArray(l.palets) ? l.palets : [];
       const byRelation = pallets.filter(
@@ -922,6 +965,22 @@ export default function Loads() {
         .filter(Boolean);
       const uniqueIds = new Set([...listFromArray, ...listFromRelation]);
       const totalPalets = uniqueIds.size;
+      const tipoCounts = {};
+      for (const pid of uniqueIds) {
+        const tipo = String(palletById.get(String(pid))?.tipo || "").trim();
+        if (!tipo) continue;
+        tipoCounts[tipo] = (tipoCounts[tipo] || 0) + 1;
+      }
+      const paletsPorTipo = CARGA_OPTIONS.map((t) => {
+        const n = Number(tipoCounts[t] || 0);
+        if (!n) return null;
+        const forms = tipoForms[t] || [String(t || "").toLowerCase()];
+        const word =
+          n === 1 ? forms[0] : forms[1] || `${String(forms[0] || "")}s`;
+        return `${n} ${word}`;
+      })
+        .filter(Boolean)
+        .join(", ");
 
       const barcoId = String(l.barco?._id || l.barco || "");
       const choferId = String(l.chofer?._id || l.chofer || "");
@@ -961,6 +1020,7 @@ export default function Loads() {
           (terminal?.nombre || ""),
         carga: Array.isArray(l.carga) ? l.carga.join(", ") : l.carga || "",
         total_palets: totalPalets,
+        palets_por_tipo: paletsPorTipo,
         estado_viaje: l.estado_viaje || "Preparando",
         cash: l.cash ? "Sí" : "No",
         lancha: l.lancha ? "Sí" : "No",
@@ -1146,6 +1206,10 @@ export default function Loads() {
               <div>
                 <div class="label">Palets</div>
                 <div class="value">${escapeHtml(r.total_palets || 0)}</div>
+              </div>
+              <div>
+                <div class="label">Palets por tipo</div>
+                <div class="value">${escapeHtml(r.palets_por_tipo || "—")}</div>
               </div>
               <div>
                 <div class="label">Descarga</div>

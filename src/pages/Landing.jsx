@@ -27,7 +27,7 @@ export default function Landing() {
           con una interfaz clara y rápida.
         </p>
         <div style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
-          Versión 0.1.1
+          Versión 0.1.3
         </div>
         <Link to="/login" className="primary-button">
           Entrar

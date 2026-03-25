@@ -20,6 +20,7 @@ import {
   limit,
   orderBy,
   query,
+  where,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -67,8 +68,8 @@ async function ensureUserDocument({ uid, email, name, role, active }) {
     typeof active === "boolean"
       ? active
       : typeof existingActive === "boolean"
-      ? existingActive
-      : false;
+        ? existingActive
+        : false;
   const resolvedRole = role || existing.data()?.role || "dispatcher";
 
   await withTimeout(
@@ -83,9 +84,9 @@ async function ensureUserDocument({ uid, email, name, role, active }) {
         ...(isNew ? { createdAt: serverTimestamp() } : {}),
         updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     ),
-    5000
+    5000,
   );
 }
 
@@ -142,7 +143,7 @@ export async function firebaseRegister({ email, password, name }) {
   const cred = await createUserWithEmailAndPassword(
     firebaseAuth,
     email,
-    password
+    password,
   );
   if (name) {
     await updateProfile(cred.user, { displayName: name });
@@ -153,7 +154,7 @@ export async function firebaseRegister({ email, password, name }) {
       email: cred.user.email || email,
       name: cred.user.displayName || name,
     }),
-    3000
+    3000,
   ).catch(() => {});
   return cred.user;
 }
@@ -241,7 +242,7 @@ export async function updateUserById(id, updates) {
         },
         details: { updates: updates || {} },
       }),
-      1500
+      1500,
     ).catch(() => {});
   }
   return updated;
@@ -289,7 +290,7 @@ export async function createUser(payload) {
   const cred = await createUserWithEmailAndPassword(
     secondaryAuth,
     email,
-    password
+    password,
   );
   if (name) {
     await updateProfile(cred.user, { displayName: name });
@@ -324,8 +325,8 @@ export async function fetchInteractions({ limitCount = 200 } = {}) {
     query(
       collection(firebaseDb, "interactions"),
       orderBy("createdAt", "desc"),
-      limit(Math.max(1, Number(limitCount) || 200))
-    )
+      limit(Math.max(1, Number(limitCount) || 200)),
+    ),
   );
   const list = [];
   snap.forEach((d) => {
@@ -380,6 +381,7 @@ export async function fetchAllLoads() {
     cash: !!data.cash,
     lancha: !!data.lancha,
     estado_viaje: data.estado_viaje || "Preparando",
+    last_informe_resumen: data.last_informe_resumen || null,
   }));
 }
 
@@ -407,6 +409,7 @@ export async function fetchLoadById(id) {
     cash: !!data.cash,
     lancha: !!data.lancha,
     estado_viaje: data.estado_viaje || "Preparando",
+    last_informe_resumen: data.last_informe_resumen || null,
   };
 }
 
@@ -469,8 +472,8 @@ export async function createLoad(payload) {
         updatePalletById(pid, {
           carga: created.id,
           carga_nombre: cargaNombre,
-        }).catch(() => null)
-      )
+        }).catch(() => null),
+      ),
     );
   }
   if (created) {
@@ -488,7 +491,7 @@ export async function createLoad(payload) {
           },
         },
       }),
-      5000
+      5000,
     ).catch(() => {});
   }
   return created;
@@ -499,6 +502,20 @@ export async function updateLoadById(id, updates) {
   const ref = doc(firebaseDb, "loads", String(id));
   const current = await fetchLoadById(id);
   if (!current) return null;
+
+  const normalizeEstado = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase();
+  const currentEstadoKey = normalizeEstado(current?.estado_viaje);
+  const nextEstadoKey =
+    typeof updates?.estado_viaje !== "undefined"
+      ? normalizeEstado(updates?.estado_viaje)
+      : currentEstadoKey;
+  const shouldResetPalletEstado =
+    typeof updates?.estado_viaje !== "undefined" &&
+    nextEstadoKey === "preparando" &&
+    currentEstadoKey !== "preparando";
 
   const modificado_por = String(updates?.modificado_por || "").trim();
   if (!modificado_por) throw new Error("modificado_por es obligatorio");
@@ -533,7 +550,7 @@ export async function updateLoadById(id, updates) {
   if (Array.isArray(updates?.palets)) patch.palets = updates.palets;
 
   const cleanedPatch = Object.fromEntries(
-    Object.entries(patch).filter(([, v]) => typeof v !== "undefined")
+    Object.entries(patch).filter(([, v]) => typeof v !== "undefined"),
   );
   await updateDoc(ref, cleanedPatch);
 
@@ -564,7 +581,7 @@ export async function updateLoadById(id, updates) {
             updatePalletById(pid, {
               carga: updated.id,
               carga_nombre: cargaNombre,
-            }).catch(() => null)
+            }).catch(() => null),
           );
         });
       } else {
@@ -573,21 +590,44 @@ export async function updateLoadById(id, updates) {
             updatePalletById(pid, {
               carga: updated.id,
               carga_nombre: cargaNombre,
-            }).catch(() => null)
+            }).catch(() => null),
           );
         });
       }
       removed.forEach((pid) => {
         tasks.push(
           updatePalletById(pid, { carga: "", carga_nombre: "" }).catch(
-            () => null
-          )
+            () => null,
+          ),
         );
       });
 
       if (tasks.length > 0) await Promise.all(tasks);
     }
   }
+
+  if (updated && shouldResetPalletEstado) {
+    const loadId = String(updated?.id || updated?._id || id || "");
+    const ids = new Set();
+    if (Array.isArray(updated?.palets)) {
+      updated.palets
+        .map((v) => String(v?._id || v?.id || v || "").trim())
+        .filter(Boolean)
+        .forEach((pid) => ids.add(pid));
+    }
+    const all = await fetchAllPallets().catch(() => []);
+    (Array.isArray(all) ? all : []).forEach((p) => {
+      const cargaId = String(p?.carga?._id || p?.carga || "").trim();
+      if (cargaId !== loadId) return;
+      const pid = String(p?._id || p?.id || "").trim();
+      if (pid) ids.add(pid);
+    });
+    const tasks = Array.from(ids).map((pid) =>
+      updatePalletById(pid, { estado: false }).catch(() => null),
+    );
+    if (tasks.length > 0) await Promise.all(tasks);
+  }
+
   if (updated) {
     await withTimeout(
       logInteraction({
@@ -595,7 +635,7 @@ export async function updateLoadById(id, updates) {
         target: { id: updated.id, name: updated.nombre || "" },
         details: { entity: "load", updates: updates || {} },
       }),
-      5000
+      5000,
     ).catch(() => {});
   }
   return updated;
@@ -609,8 +649,10 @@ export async function deleteLoadById(id) {
   if (current && Array.isArray(current.palets) && current.palets.length > 0) {
     await Promise.all(
       current.palets.map((pid) =>
-        updatePalletById(pid, { carga: "", carga_nombre: "" }).catch(() => null)
-      )
+        updatePalletById(pid, { carga: "", carga_nombre: "" }).catch(
+          () => null,
+        ),
+      ),
     );
   }
   if (current) {
@@ -620,7 +662,7 @@ export async function deleteLoadById(id) {
         target: { id: current.id, name: current.nombre || "" },
         details: { entity: "load" },
       }),
-      5000
+      5000,
     ).catch(() => {});
   }
   return { ok: true };
@@ -633,8 +675,8 @@ export async function fetchAllPallets() {
     snap = await getDocs(
       query(
         collection(firebaseDb, "pallets"),
-        orderBy("fecha_creacion", "desc")
-      )
+        orderBy("fecha_creacion", "desc"),
+      ),
     );
   } catch {
     snap = await getDocs(collection(firebaseDb, "pallets"));
@@ -698,13 +740,20 @@ export async function createPallet(payload) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const numero_palet = String(payload?.numero_palet || "").trim();
   const tipo = String(payload?.tipo || "").trim();
-  const carga = String(payload?.carga || "").trim();
+  const carga =
+    typeof payload?.carga === "object" && payload?.carga
+      ? String(payload?.carga?._id || payload?.carga?.id || "").trim()
+      : String(payload?.carga || "").trim();
   if (!numero_palet) throw new Error("numero_palet es obligatorio");
   if (!tipo) throw new Error("tipo es obligatorio");
 
   const ref = doc(collection(firebaseDb, "pallets"));
   const id = ref.id;
-  const cargaLabel = getLoadLabelFromPayload(payload);
+  let cargaLabel = getLoadLabelFromPayload(payload);
+  if (!cargaLabel && carga) {
+    const load = await fetchLoadById(carga).catch(() => null);
+    cargaLabel = String(load?.nombre || "").trim();
+  }
   const nombre = `${numero_palet} - ${cargaLabel || "Sin carga"}`;
   const base = payload?.base ? String(payload.base) : "Europeo";
   const estado = typeof payload?.estado === "boolean" ? payload.estado : false;
@@ -795,6 +844,207 @@ export async function updatePalletById(id, updates) {
   return updated;
 }
 
+export async function createLoadReport(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const palletIds = Array.isArray(payload?.pallet_ids)
+    ? payload.pallet_ids.map((v) => String(v)).filter(Boolean)
+    : [];
+  if (palletIds.length === 0) throw new Error("pallet_ids es obligatorio");
+  const loadId = String(payload?.load_id || "").trim();
+  const loadNombre = String(payload?.load_nombre || "").trim();
+  const cargadoPor = Array.isArray(payload?.cargado_por)
+    ? payload.cargado_por
+        .map((u) => ({
+          user_id: String(u?.user_id || u?.id || "").trim(),
+          name: String(u?.name || u?.nombre || "").trim(),
+        }))
+        .filter((u) => u.user_id || u.name)
+    : [];
+  const cargadoA = {
+    chofer_id: String(payload?.cargado_a?.chofer_id || "").trim(),
+    chofer_name: String(payload?.cargado_a?.chofer_name || "").trim(),
+    consignatario_id: String(payload?.cargado_a?.consignatario_id || "").trim(),
+    consignatario_name: String(
+      payload?.cargado_a?.consignatario_name || "",
+    ).trim(),
+  };
+  const notas = String(payload?.notas || "").trim();
+  const creadoPor = String(payload?.creado_por || "").trim();
+
+  const ref = doc(collection(firebaseDb, "informes_carga"));
+  const id = ref.id;
+  const nowFields = {
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  await setDoc(ref, {
+    id,
+    load_id: loadId,
+    load_nombre: loadNombre,
+    pallet_ids: palletIds,
+    pallet_count: palletIds.length,
+    finished_at: serverTimestamp(),
+    cargado_por: cargadoPor,
+    cargado_a: cargadoA,
+    notas,
+    creado_por: creadoPor || "Sistema",
+    ...nowFields,
+  });
+
+  const resumen = {
+    finished_at: serverTimestamp(),
+    pallet_count: palletIds.length,
+    cargado_por_names: cargadoPor.map((u) => u.name).filter(Boolean),
+  };
+  if (loadId) {
+    const loadRef = doc(firebaseDb, "loads", String(loadId));
+    await updateDoc(loadRef, {
+      last_informe_resumen: resumen,
+      last_informe_id: id,
+      modificado_por: creadoPor || "Sistema",
+      fecha_modificacion: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => null);
+  }
+
+  await withTimeout(
+    logInteraction({
+      type: "load_report_created",
+      target: { id, name: loadNombre || loadId || id },
+      details: {
+        entity: "load_report",
+        load_id: loadId,
+        pallet_count: palletIds.length,
+      },
+    }),
+    5000,
+  ).catch(() => {});
+
+  return { ok: true, id };
+}
+
+export async function fetchLatestLoadReportByLoadId(loadId, opts = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const lid = String(loadId || "").trim();
+  if (!lid) return null;
+  const getIdFromMixed = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return String(value).trim();
+    if (typeof value === "number") return String(value);
+    if (typeof value === "object")
+      return String(value?._id || value?.id || value?.docId || "").trim();
+    return "";
+  };
+  const mapReport = (docSnap) => {
+    const data = docSnap.data() || {};
+    return {
+      ...mapCommonAudit(data, docSnap.id),
+      load_id: getIdFromMixed(data.load_id) || "",
+      load_nombre: String(data.load_nombre || "").trim(),
+      pallet_ids: Array.isArray(data.pallet_ids) ? data.pallet_ids : [],
+      pallet_count: Number(data.pallet_count || 0),
+      finished_at: data.finished_at || null,
+      cargado_por: Array.isArray(data.cargado_por) ? data.cargado_por : [],
+      cargado_a: data.cargado_a || null,
+      notas: data.notas || "",
+      creado_por: data.creado_por || "",
+    };
+  };
+  const queryOne = async ({ field }) => {
+    let snap;
+    try {
+      snap = await getDocs(
+        query(
+          collection(firebaseDb, "informes_carga"),
+          where(field, "==", lid),
+          orderBy("finished_at", "desc"),
+          limit(1),
+        ),
+      );
+    } catch {
+      snap = await getDocs(
+        query(
+          collection(firebaseDb, "informes_carga"),
+          where(field, "==", lid),
+          limit(1),
+        ),
+      );
+    }
+    if (!snap || snap.empty) return null;
+    return mapReport(snap.docs[0]);
+  };
+
+  const direct =
+    (await queryOne({ field: "load_id" }).catch(() => null)) ||
+    (await queryOne({ field: "loadId" }).catch(() => null)) ||
+    (await queryOne({ field: "carga_id" }).catch(() => null)) ||
+    (await queryOne({ field: "carga" }).catch(() => null));
+  if (direct) return direct;
+
+  const scanLimit = Math.max(1, Math.min(200, Number(opts?.scanLimit || 50)));
+  const wantedNombre = String(opts?.loadNombre || "")
+    .trim()
+    .toLowerCase();
+  const wantedPalletIds = new Set(
+    Array.isArray(opts?.palletIds)
+      ? opts.palletIds.map((v) => String(v)).filter(Boolean)
+      : [],
+  );
+  let snap;
+  try {
+    snap = await getDocs(
+      query(
+        collection(firebaseDb, "informes_carga"),
+        orderBy("finished_at", "desc"),
+        limit(scanLimit),
+      ),
+    );
+  } catch {
+    snap = await getDocs(
+      query(collection(firebaseDb, "informes_carga"), limit(scanLimit)),
+    );
+  }
+  if (!snap || snap.empty) return null;
+
+  const pickByHeuristic = (docSnap) => {
+    const data = docSnap.data() || {};
+    const candidateIds = [
+      getIdFromMixed(data.load_id),
+      getIdFromMixed(data.loadId),
+      getIdFromMixed(data.carga_id),
+      getIdFromMixed(data.carga),
+      getIdFromMixed(data.load),
+    ].filter(Boolean);
+    const isIdMatch = candidateIds.some((cid) => cid === lid);
+    const nombre = String(data.load_nombre || "")
+      .trim()
+      .toLowerCase();
+    const isNombreMatch = !!wantedNombre && nombre === wantedNombre;
+    const palletIds = Array.isArray(data.pallet_ids)
+      ? data.pallet_ids.map((v) => String(v)).filter(Boolean)
+      : [];
+    const hasPalletOverlap =
+      wantedPalletIds.size > 0 &&
+      palletIds.some((pid) => wantedPalletIds.has(pid));
+    if (isIdMatch) return { score: 3, docSnap };
+    if (isNombreMatch) return { score: 2, docSnap };
+    if (hasPalletOverlap) return { score: 1, docSnap };
+    return null;
+  };
+
+  let best = null;
+  for (const d of snap.docs) {
+    const hit = pickByHeuristic(d);
+    if (!hit) continue;
+    if (!best || hit.score > best.score) best = hit;
+    if (best?.score === 3) break;
+  }
+  if (!best) return null;
+  return mapReport(best.docSnap);
+}
+
 function mergeProductosText(texts) {
   const lines = [];
   for (const t of texts) {
@@ -828,7 +1078,7 @@ function sortNumeroParts(parts) {
   const isAllNumeric = parts.every((p) => /^\d+$/.test(p));
   if (isAllNumeric) return [...parts].sort((a, b) => Number(a) - Number(b));
   return [...parts].sort((a, b) =>
-    a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
+    a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }),
   );
 }
 
@@ -856,12 +1106,12 @@ export async function fusePallets({
   if (mode === "ids") {
     const ids = Array.isArray(sourcePalletIds) ? sourcePalletIds : [];
     const unique = Array.from(
-      new Set(ids.map((v) => String(v || "").trim()).filter(Boolean))
+      new Set(ids.map((v) => String(v || "").trim()).filter(Boolean)),
     ).filter((v) => v !== String(target._id || target.id));
     if (unique.length === 0) throw new Error("Debe indicar palets origen");
 
     const byId = new Map(
-      all.map((p) => [String(p._id || p.id || ""), p]).filter((p) => p[0])
+      all.map((p) => [String(p._id || p.id || ""), p]).filter((p) => p[0]),
     );
     const missing = unique.filter((v) => !byId.has(String(v)));
     if (missing.length > 0) {
@@ -873,7 +1123,7 @@ export async function fusePallets({
   } else if (mode === "numbers") {
     const nums = Array.isArray(sourcePalletNumbers) ? sourcePalletNumbers : [];
     const normalized = Array.from(
-      new Set(nums.map((v) => String(v || "").trim()).filter(Boolean))
+      new Set(nums.map((v) => String(v || "").trim()).filter(Boolean)),
     ).filter((n) => n !== String(target.numero_palet));
     if (normalized.length === 0)
       throw new Error("Debe indicar números de palet a fusionar");
@@ -882,7 +1132,7 @@ export async function fusePallets({
       (p) =>
         String(p.carga || "") === String(target.carga || "") &&
         normalized.includes(String(p.numero_palet || "")) &&
-        String(p._id || p.id) !== String(target._id || target.id)
+        String(p._id || p.id) !== String(target._id || target.id),
     );
     const foundNums = new Set(sources.map((p) => String(p.numero_palet || "")));
     const missing = normalized.filter((n) => !foundNums.has(String(n)));
@@ -902,7 +1152,7 @@ export async function fusePallets({
 
   const targetTipo = String(target.tipo || "");
   const differentTipo = sources.filter(
-    (p) => String(p.tipo || "") !== targetTipo
+    (p) => String(p.tipo || "") !== targetTipo,
   );
   if (differentTipo.length > 0)
     throw new Error("Solo se pueden fusionar palets del mismo tipo");
@@ -921,8 +1171,8 @@ export async function fusePallets({
     new Set(
       [normalizeBase(target.base), ...sources.map((p) => normalizeBase(p.base))]
         .map((v) => String(v || "").trim())
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
   const baseChoiceNormalized = normalizeBase(baseChoice);
   const mergedBase = (() => {
@@ -930,19 +1180,19 @@ export async function fusePallets({
       return baseCandidates[0] || normalizeBase(target.base);
     if (!baseChoiceNormalized)
       throw new Error(
-        `Debes elegir base (${baseCandidates.join(" o ")}) para fusionar`
+        `Debes elegir base (${baseCandidates.join(" o ")}) para fusionar`,
       );
     const ok = baseCandidates.some(
       (b) =>
-        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase()
+        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase(),
     );
     if (!ok)
       throw new Error(
-        `La base elegida debe ser una de: ${baseCandidates.join(", ")}`
+        `La base elegida debe ser una de: ${baseCandidates.join(", ")}`,
       );
     return baseCandidates.find(
       (b) =>
-        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase()
+        String(b).toLowerCase() === String(baseChoiceNormalized).toLowerCase(),
     );
   })();
 
@@ -959,9 +1209,9 @@ export async function fusePallets({
           ...sources.flatMap((p) => splitNumeroParts(p.numero_palet)),
         ]
           .map((v) => String(v).trim())
-          .filter(Boolean)
-      )
-    )
+          .filter(Boolean),
+      ),
+    ),
   );
   const numeroMerged = mergedNumeroParts.join("+");
 
@@ -1002,7 +1252,7 @@ export async function fusePallets({
   });
 
   await Promise.all(
-    sourceIds.map((sid) => deleteDoc(doc(firebaseDb, "pallets", String(sid))))
+    sourceIds.map((sid) => deleteDoc(doc(firebaseDb, "pallets", String(sid)))),
   );
 
   const updatedTarget = await fetchPalletById(targetId);
@@ -1045,7 +1295,7 @@ export async function deletePalletById(id) {
         const next = paletsArray.filter(
           (pid) =>
             String(pid) !== String(id) &&
-            String(pid?._id || pid?.id || pid) !== String(id)
+            String(pid?._id || pid?.id || pid) !== String(id),
         );
         if (next.length !== paletsArray.length) {
           await updateDoc(loadRef, {
@@ -1078,7 +1328,10 @@ async function getAllDocsOrdered({ collectionName, orderField }) {
   let snap;
   try {
     snap = await getDocs(
-      query(collection(firebaseDb, collectionName), orderBy(orderField, "desc"))
+      query(
+        collection(firebaseDb, collectionName),
+        orderBy(orderField, "desc"),
+      ),
     );
   } catch {
     snap = await getDocs(collection(firebaseDb, collectionName));
@@ -1653,7 +1906,7 @@ export async function fetchAllShips() {
     const responsableId =
       (responsableObj &&
         String(
-          responsableObj._id || responsableObj.id || responsableObj.docId || ""
+          responsableObj._id || responsableObj.id || responsableObj.docId || "",
         )) ||
       String(rawResponsable || "");
     const responsableNombre =
@@ -1671,7 +1924,7 @@ export async function fetchAllShips() {
     const cargo_type =
       (cargoTypeObj &&
         String(
-          cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || ""
+          cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || "",
         )) ||
       String(rawCargoType || "");
     const cargo_type_nombre =
@@ -1721,7 +1974,7 @@ export async function fetchShipById(id) {
   const responsableId =
     (responsableObj &&
       String(
-        responsableObj._id || responsableObj.id || responsableObj.docId || ""
+        responsableObj._id || responsableObj.id || responsableObj.docId || "",
       )) ||
     String(rawResponsable || "");
   const responsableNombre =
@@ -1739,7 +1992,7 @@ export async function fetchShipById(id) {
   const cargo_type =
     (cargoTypeObj &&
       String(
-        cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || ""
+        cargoTypeObj._id || cargoTypeObj.id || cargoTypeObj.docId || "",
       )) ||
     String(rawCargoType || "");
   const cargo_type_nombre =
@@ -1774,10 +2027,14 @@ export async function createShip(payload) {
   const empresaObj =
     empresaInput && typeof empresaInput === "object" ? empresaInput : null;
   const empresa = String(
-    empresaObj?.id || empresaObj?._id || empresaObj?.docId || empresaInput || ""
+    empresaObj?.id ||
+      empresaObj?._id ||
+      empresaObj?.docId ||
+      empresaInput ||
+      "",
   ).trim();
   const empresa_nombre = String(
-    payload?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || ""
+    payload?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || "",
   ).trim();
 
   const responsableInput = payload?.responsable;
@@ -1790,16 +2047,16 @@ export async function createShip(payload) {
       responsableObj?._id ||
       responsableObj?.docId ||
       responsableInput ||
-      ""
+      "",
   ).trim();
   const responsable_nombre = String(
     payload?.responsable_nombre ||
       responsableObj?.nombre ||
       responsableObj?.name ||
-      ""
+      "",
   ).trim();
   const responsable_email = String(
-    payload?.responsable_email || responsableObj?.email || ""
+    payload?.responsable_email || responsableObj?.email || "",
   ).trim();
 
   const cargoTypeInput = payload?.cargo_type;
@@ -1812,13 +2069,13 @@ export async function createShip(payload) {
       cargoTypeObj?._id ||
       cargoTypeObj?.docId ||
       cargoTypeInput ||
-      ""
+      "",
   ).trim();
   const cargo_type_nombre = String(
     payload?.cargo_type_nombre ||
       cargoTypeObj?.nombre ||
       cargoTypeObj?.name ||
-      ""
+      "",
   ).trim();
 
   const enlace = String(payload?.enlace || "").trim();
@@ -1895,10 +2152,10 @@ export async function updateShipById(id, updates) {
         empresaObj?._id ||
         empresaObj?.docId ||
         empresaInput ||
-        ""
+        "",
     ).trim();
     patch.empresa_nombre = String(
-      updates?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || ""
+      updates?.empresa_nombre || empresaObj?.nombre || empresaObj?.name || "",
     ).trim();
     if (!patch.empresa) patch.empresa_nombre = "";
   }
@@ -1914,16 +2171,16 @@ export async function updateShipById(id, updates) {
         responsableObj?._id ||
         responsableObj?.docId ||
         responsableInput ||
-        ""
+        "",
     ).trim();
     patch.responsable_nombre = String(
       updates?.responsable_nombre ||
         responsableObj?.nombre ||
         responsableObj?.name ||
-        ""
+        "",
     ).trim();
     patch.responsable_email = String(
-      updates?.responsable_email || responsableObj?.email || ""
+      updates?.responsable_email || responsableObj?.email || "",
     ).trim();
     if (!patch.responsable) {
       patch.responsable_nombre = "";
@@ -1942,13 +2199,13 @@ export async function updateShipById(id, updates) {
         cargoTypeObj?._id ||
         cargoTypeObj?.docId ||
         cargoTypeInput ||
-        ""
+        "",
     ).trim();
     patch.cargo_type_nombre = String(
       updates?.cargo_type_nombre ||
         cargoTypeObj?.nombre ||
         cargoTypeObj?.name ||
-        ""
+        "",
     ).trim();
     if (!patch.cargo_type) patch.cargo_type_nombre = "";
   }

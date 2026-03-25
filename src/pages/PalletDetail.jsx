@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import { getCurrentUser } from "../utils/roles.js";
@@ -26,6 +26,7 @@ function formatDateTime(value) {
 export default function PalletDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [pallet, setPallet] = useState(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -103,7 +104,12 @@ export default function PalletDetail() {
       }
       await deletePalletById(id);
       setSnack({ open: true, message: "Palet borrado", type: "success" });
-      navigate("/app/palets");
+      const fromRaw = location?.state?.from;
+      const from =
+        typeof fromRaw === "string" && fromRaw.trim().startsWith("/app/")
+          ? fromRaw.trim()
+          : "";
+      navigate(from || "/app/palets", { replace: true });
     } catch (e) {
       setSnack({
         open: true,

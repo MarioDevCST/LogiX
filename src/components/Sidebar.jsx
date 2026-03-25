@@ -149,6 +149,16 @@ export default function Sidebar({ collapsed }) {
           </span>
           <span className="nav-label">Cargas</span>
         </NavLink>
+        <NavLink
+          to="/app/logistica/carga-palets"
+          title="Carga de Palets"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
+          <span className="nav-icon material-symbols-outlined">
+            inventory_2
+          </span>
+          <span className="nav-label">Carga de Palets</span>
+        </NavLink>
 
         <div className="nav-section">Palets</div>
         <NavLink

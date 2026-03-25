@@ -6,6 +6,8 @@ export default function Modal({
   children,
   onClose,
   onSubmit,
+  cancelLabel,
+  onCancel,
   submitLabel = "Aceptar",
   width,
   bodyStyle,
@@ -45,7 +47,20 @@ export default function Modal({
           {children}
         </div>
         <div className="modal-footer">
-          <button className="primary-button" onClick={onSubmit}>
+          {cancelLabel ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={onCancel || onClose}
+            >
+              {cancelLabel}
+            </button>
+          ) : null}
+          <button
+            className="primary-button"
+            type="button"
+            onClick={onSubmit || onClose}
+          >
             {submitLabel}
           </button>
         </div>

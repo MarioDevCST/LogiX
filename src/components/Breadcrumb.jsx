@@ -24,6 +24,7 @@ const titleMap = {
   interacciones: "Interacciones",
   logistica: "Logística",
   cargas: "Cargas",
+  "carga-palets": "Carga de Palets",
   palets: "Palets",
 };
 

@@ -16,6 +16,7 @@ import Loads from "./pages/Loads.jsx";
 import LoadDetail from "./pages/LoadDetail.jsx";
 import Pallets from "./pages/Pallets.jsx";
 import PalletDetail from "./pages/PalletDetail.jsx";
+import PalletLoading from "./pages/PalletLoading.jsx";
 import "./index.css";
 import ConsigneeDetail from "./pages/ConsigneeDetail.jsx";
 import Messages from "./pages/Messages.jsx";
@@ -63,6 +64,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           {/* Logística */}
           <Route path="logistica/cargas" element={<Loads />} />
           <Route path="logistica/cargas/:id" element={<LoadDetail />} />
+          <Route path="logistica/carga-palets" element={<PalletLoading />} />
           {/* Palets */}
           <Route path="palets" element={<Pallets />} />
           <Route path="palets/:id" element={<PalletDetail />} />

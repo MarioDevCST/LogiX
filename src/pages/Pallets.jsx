@@ -15,6 +15,7 @@ import {
   fetchAllLoads,
   fetchAllPallets,
   fusePallets,
+  updateLoadById,
 } from "../firebase/auth.js";
 
 const TIPO_OPTIONS = [
@@ -62,7 +63,10 @@ function combineDateTime(dateValue, timeValue) {
   return d;
 }
 
-export default function Pallets() {
+export default function Pallets({
+  title = "Palets",
+  restrictLoadEstado = "Preparando",
+} = {}) {
   const columns = [
     { key: "nombre", header: "Nombre" },
     { key: "numero_palet", header: "Número de palet" },
@@ -84,6 +88,10 @@ export default function Pallets() {
   const [fuseDnDTargetId, setFuseDnDTargetId] = useState("");
   const [fuseDnDBaseChoice, setFuseDnDBaseChoice] = useState("");
   const [fuseSubmitting, setFuseSubmitting] = useState(false);
+  const [loadEstadoSubmitting, setLoadEstadoSubmitting] = useState(false);
+  const [loadEstadoIdSubmitting, setLoadEstadoIdSubmitting] = useState("");
+  const [openLoadStartConfirm, setOpenLoadStartConfirm] = useState(false);
+  const [loadStartConfirmId, setLoadStartConfirmId] = useState("");
   const lastTapRef = useRef({ id: "", at: 0 });
   const isTouchMode = useMemo(() => {
     try {
@@ -148,13 +156,15 @@ export default function Pallets() {
         setLoading(true);
         const list = await fetchAllPallets();
         if (!mounted) return;
-        setPalletDocs(list);
-        const mapped = list.map((p) => ({
+        const visible = Array.isArray(list) ? list : [];
+        setPalletDocs(visible);
+        const mapped = visible.map((p) => ({
           id: p._id || p.id,
           nombre: p.nombre,
           numero_palet: p.numero_palet,
           tipo: p.tipo,
           base: p.base || "",
+          carga_id: String(p?.carga?._id || p?.carga || ""),
         }));
         setRows(mapped);
       } catch {
@@ -286,8 +296,8 @@ export default function Pallets() {
       new Set(
         [normalizeBase(fuseDnDSource?.base), normalizeBase(fuseDnDTarget?.base)]
           .map((v) => String(v || "").trim())
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
     const needsBaseChoice = baseCandidates.length > 1;
     const effectiveBaseChoice = normalizeBase(fuseDnDBaseChoice);
@@ -314,15 +324,17 @@ export default function Pallets() {
         fetchAllPallets(),
         fetchAllLoads(),
       ]);
-      setPalletDocs(palletsList);
+      const visible = Array.isArray(palletsList) ? palletsList : [];
+      setPalletDocs(visible);
       setRows(
-        palletsList.map((p) => ({
+        visible.map((p) => ({
           id: p._id || p.id,
           nombre: p.nombre,
           numero_palet: p.numero_palet,
           tipo: p.tipo,
           base: p.base || "",
-        }))
+          carga_id: String(p?.carga?._id || p?.carga || ""),
+        })),
       );
       const normalize = (x) => ({
         ...x,
@@ -341,6 +353,79 @@ export default function Pallets() {
     } finally {
       setFuseSubmitting(false);
     }
+  };
+
+  const setLoadEstado = async ({ loadId, estado }) => {
+    const id = String(loadId || "");
+    if (!id) return false;
+    if (!canManageLoads) {
+      setSnack({
+        open: true,
+        message: "No tienes permiso para modificar cargas",
+        type: "error",
+      });
+      return false;
+    }
+    if (loadEstadoSubmitting) return false;
+    try {
+      setLoadEstadoSubmitting(true);
+      setLoadEstadoIdSubmitting(id);
+      const updated = await updateLoadById(id, {
+        estado_viaje: String(estado || "").trim(),
+        modificado_por: getCurrentUser()?.name || "Testing",
+      });
+      if (updated) {
+        setLoads((prev) =>
+          prev.map((l) =>
+            String(l?._id || l?.id || "") === id
+              ? { ...l, ...updated, _id: updated._id || updated.id }
+              : l,
+          ),
+        );
+        setSnack({
+          open: true,
+          message: "Carga actualizada",
+          type: "success",
+        });
+        return true;
+      } else {
+        setSnack({
+          open: true,
+          message: "No se pudo actualizar la carga",
+          type: "error",
+        });
+        return false;
+      }
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: String(e?.message || "Error actualizando carga"),
+        type: "error",
+      });
+      return false;
+    } finally {
+      setLoadEstadoSubmitting(false);
+      setLoadEstadoIdSubmitting("");
+    }
+  };
+
+  const openStartLoadConfirm = (loadId) => {
+    const id = String(loadId || "");
+    if (!id) return;
+    setLoadStartConfirmId(id);
+    setOpenLoadStartConfirm(true);
+  };
+  const closeStartLoadConfirm = () => {
+    setOpenLoadStartConfirm(false);
+    setLoadStartConfirmId("");
+  };
+  const confirmStartLoad = async () => {
+    const id = String(loadStartConfirmId || "");
+    if (!id) return;
+    const ok = await setLoadEstado({ loadId: id, estado: "Cargando" });
+    if (!ok) return;
+    closeStartLoadConfirm();
+    navigate("/app/logistica/carga-palets");
   };
 
   const openCreateForLoad = (loadId) => {
@@ -388,6 +473,7 @@ export default function Pallets() {
           numero_palet: created.numero_palet,
           tipo: created.tipo,
           base: created.base || "",
+          carga_id: String(created?.carga?._id || created?.carga || form.carga),
         },
       ]);
       setPalletDocs((prev) => [...prev, created]);
@@ -406,10 +492,10 @@ export default function Pallets() {
         e?.message === "numero_palet es obligatorio"
           ? "El número de palet es obligatorio"
           : e?.message === "tipo es obligatorio"
-          ? "El tipo es obligatorio"
-          : e?.message === "carga es obligatoria"
-          ? "La carga es obligatoria"
-          : "Error creando palet";
+            ? "El tipo es obligatorio"
+            : e?.message === "carga es obligatoria"
+              ? "La carga es obligatoria"
+              : "Error creando palet";
       setSnack({
         open: true,
         message,
@@ -422,16 +508,66 @@ export default function Pallets() {
     if (row.id) navigate(`/app/palets/${row.id}`);
   };
 
-  const filtered = useMemo(() => {
+  const normalizeEstado = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase();
+  const restrictEstadoKey = normalizeEstado(restrictLoadEstado);
+  const visibleLoads = useMemo(() => {
+    if (!restrictEstadoKey) return loads;
+    return loads.filter(
+      (l) => normalizeEstado(l?.estado_viaje) === restrictEstadoKey,
+    );
+  }, [loads, restrictEstadoKey]);
+  const visibleLoadIds = useMemo(() => {
+    if (!restrictEstadoKey) return null;
+    const set = new Set();
+    visibleLoads.forEach((l) => {
+      const id = String(l?._id || l?.id || "");
+      if (id) set.add(id);
+    });
+    return set;
+  }, [visibleLoads, restrictEstadoKey]);
+  const effectiveLoading = loading || (!!restrictEstadoKey && loadsLoading);
+
+  const scopedRows = useMemo(() => {
+    if (!restrictEstadoKey) return rows;
+    const set = visibleLoadIds;
+    if (!set) return [];
+    return rows.filter((r) => set.has(String(r?.carga_id || "")));
+  }, [rows, restrictEstadoKey, visibleLoadIds]);
+
+  const dualFilteredLoads = useMemo(() => {
+    if (view !== "dual") return visibleLoads;
     const q = query.trim().toLowerCase();
-    return rows.filter(
+    if (!q) return visibleLoads;
+    return visibleLoads.filter((l) => {
+      const nombre = String(l?.nombre || "").toLowerCase();
+      const fecha = String(
+        formatDateLabel(l?.fecha_de_carga) || "",
+      ).toLowerCase();
+      const hora = String(l?.hora_de_carga || "").toLowerCase();
+      const estado = String(l?.estado_viaje || "").toLowerCase();
+      return (
+        nombre.includes(q) ||
+        fecha.includes(q) ||
+        hora.includes(q) ||
+        estado.includes(q)
+      );
+    });
+  }, [visibleLoads, query, view]);
+
+  const filtered = useMemo(() => {
+    if (view === "dual") return scopedRows;
+    const q = query.trim().toLowerCase();
+    return scopedRows.filter(
       (r) =>
         q === "" ||
         (r.nombre && r.nombre.toLowerCase().includes(q)) ||
         r.numero_palet.toLowerCase().includes(q) ||
-        r.tipo.toLowerCase().includes(q)
+        r.tipo.toLowerCase().includes(q),
     );
-  }, [rows, query]);
+  }, [scopedRows, query, view]);
 
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -441,7 +577,7 @@ export default function Pallets() {
 
   // derivados para el modo dual
   const loadsSorted = useMemo(() => {
-    const withDate = loads.filter((l) => !!l.fecha_de_carga);
+    const withDate = dualFilteredLoads.filter((l) => !!l.fecha_de_carga);
     return [...withDate].sort((a, b) => {
       const ad =
         combineDateTime(a.fecha_de_carga, a.hora_de_carga) ||
@@ -451,7 +587,7 @@ export default function Pallets() {
         new Date(8640000000000000);
       return ad - bd;
     });
-  }, [loads]);
+  }, [dualFilteredLoads]);
   const loadsSortedPage = useMemo(() => {
     const start = (loadsListPage - 1) * loadsListPageSize;
     const end = start + loadsListPageSize;
@@ -462,7 +598,7 @@ export default function Pallets() {
     const palletById = new Map(
       palletDocs
         .map((p) => [String(p?._id || p?.id || ""), p])
-        .filter((pair) => pair[0])
+        .filter((pair) => pair[0]),
     );
     const byRelation = new Map();
     palletDocs.forEach((p) => {
@@ -473,7 +609,7 @@ export default function Pallets() {
       byRelation.set(loadId, arr);
     });
     const out = new Map();
-    loads.forEach((l) => {
+    visibleLoads.forEach((l) => {
       const loadId = String(l?._id || l?.id || "");
       if (!loadId) return;
       const uniq = new Map();
@@ -494,11 +630,12 @@ export default function Pallets() {
       out.set(loadId, Array.from(uniq.values()));
     });
     return out;
-  }, [palletDocs, loads]);
+  }, [palletDocs, visibleLoads]);
 
   useEffect(() => {
-    setPage(1);
-  }, [query]);
+    if (view === "dual") setLoadsListPage(1);
+    else setPage(1);
+  }, [query, view]);
 
   return (
     <>
@@ -514,7 +651,11 @@ export default function Pallets() {
           <input
             className="input"
             style={{ width: 280 }}
-            placeholder="Buscar por número o tipo"
+            placeholder={
+              view === "dual"
+                ? "Buscar carga por nombre, fecha o estado"
+                : "Buscar por número o tipo"
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -564,10 +705,10 @@ export default function Pallets() {
 
       {view === "table" ? (
         <DataTable
-          title="Palets"
+          title={title}
           columns={columns}
           data={paginated}
-          loading={loading}
+          loading={effectiveLoading}
           createLabel={canCreatePallets ? "Crear palet" : undefined}
           onCreate={canCreatePallets ? onCreate : undefined}
           onRowClick={goDetail}
@@ -575,7 +716,7 @@ export default function Pallets() {
       ) : view === "cards" ? (
         <section className="card">
           <div className="card-header">
-            <h2 className="card-title">Palets</h2>
+            <h2 className="card-title">{title}</h2>
             {canCreatePallets && (
               <button
                 className="primary-button"
@@ -721,7 +862,7 @@ export default function Pallets() {
                           }}
                           onClick={() =>
                             setExpandedLoadId((cur) =>
-                              String(cur || "") === loadId ? null : loadId
+                              String(cur || "") === loadId ? null : loadId,
                             )
                           }
                         >
@@ -768,6 +909,25 @@ export default function Pallets() {
                                 </div>
                               )}
                             </div>
+                            {canManageLoads && (
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                disabled={
+                                  String(l?.estado_viaje || "").trim() ===
+                                    "Cargando" ||
+                                  (loadEstadoSubmitting &&
+                                    String(loadEstadoIdSubmitting) === loadId)
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openStartLoadConfirm(loadId);
+                                }}
+                                style={{ height: 34, padding: "0 10px" }}
+                              >
+                                Cargar
+                              </button>
+                            )}
                             <button
                               className="icon-button"
                               title="Abrir carga"
@@ -843,7 +1003,7 @@ export default function Pallets() {
                                   idStr &&
                                   String(idStr) === String(dragOverPalletId);
                                 const numero = String(
-                                  p?.numero_palet || ""
+                                  p?.numero_palet || "",
                                 ).trim();
                                 const nombre = String(p?.nombre || "").trim();
                                 const tipo = String(p?.tipo || "").trim();
@@ -865,7 +1025,7 @@ export default function Pallets() {
                                   l?.nombre ||
                                     l?.barco?.nombre_del_barco ||
                                     p?.carga_nombre ||
-                                    "Sin carga"
+                                    "Sin carga",
                                 ).trim();
                                 const title = cargaTitle || "Sin carga";
                                 const subtitle = [tipo, base]
@@ -881,8 +1041,8 @@ export default function Pallets() {
                                         ? isSource
                                           ? "grabbing"
                                           : isDroppable
-                                          ? "copy"
-                                          : "not-allowed"
+                                            ? "copy"
+                                            : "not-allowed"
                                         : "pointer",
                                       borderLeft: `${
                                         isAmericano ? 10 : 6
@@ -906,7 +1066,7 @@ export default function Pallets() {
                                       try {
                                         e.dataTransfer.setData(
                                           "text/plain",
-                                          String(idStr)
+                                          String(idStr),
                                         );
                                       } catch {
                                         void 0;
@@ -938,7 +1098,7 @@ export default function Pallets() {
                                       setFuseDnDSourceId(String(dragPalletId));
                                       setFuseDnDTargetId(String(idStr));
                                       setFuseDnDBaseChoice(
-                                        String(base || "").trim()
+                                        String(base || "").trim(),
                                       );
                                       setOpenFuseDnD(true);
                                       setDragPalletId("");
@@ -977,11 +1137,11 @@ export default function Pallets() {
                                           return;
                                         }
                                         setFuseDnDSourceId(
-                                          String(dragPalletId)
+                                          String(dragPalletId),
                                         );
                                         setFuseDnDTargetId(String(idStr));
                                         setFuseDnDBaseChoice(
-                                          String(base || "").trim()
+                                          String(base || "").trim(),
                                         );
                                         setOpenFuseDnD(true);
                                         clearDnDState();
@@ -1064,7 +1224,7 @@ export default function Pallets() {
                         )}
                       </div>
                     );
-                  })()
+                  })(),
                 )
               )}
               <Pagination
@@ -1082,16 +1242,18 @@ export default function Pallets() {
         </section>
       )}
 
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        total={filtered.length}
-        onPageChange={(p) => setPage(Math.max(1, p))}
-        onPageSizeChange={(s) => {
-          setPageSize(s);
-          setPage(1);
-        }}
-      />
+      {view !== "dual" && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={(p) => setPage(Math.max(1, p))}
+          onPageSizeChange={(s) => {
+            setPageSize(s);
+            setPage(1);
+          }}
+        />
+      )}
 
       <Modal
         open={openFuseDnD}
@@ -1114,8 +1276,8 @@ export default function Pallets() {
                 normalizeBase(fuseDnDTarget?.base),
               ]
                 .map((v) => String(v || "").trim())
-                .filter(Boolean)
-            )
+                .filter(Boolean),
+            ),
           );
           if (baseCandidates.length <= 1) return null;
           const value =
@@ -1207,6 +1369,21 @@ export default function Pallets() {
             value={form.productos}
             onChange={(e) => setForm({ ...form, productos: e.target.value })}
           />
+        </div>
+      </Modal>
+
+      <Modal
+        open={openLoadStartConfirm}
+        title="Advertencia"
+        onClose={closeStartLoadConfirm}
+        onSubmit={confirmStartLoad}
+        submitLabel="Sí"
+        cancelLabel="Cancelar"
+        width={520}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        <div style={{ fontSize: 16 }}>
+          Desea cambiar el estado de la carga e iniciar la carga?
         </div>
       </Modal>
 

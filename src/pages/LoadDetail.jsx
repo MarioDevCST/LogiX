@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import {
@@ -17,10 +17,12 @@ import {
   fetchAllUsers,
   deleteLoadById,
   fetchLoadById,
+  createLoadReport,
   createPallet,
   fusePallets,
   updateLoadById,
   logInteraction,
+  fetchLatestLoadReportByLoadId,
 } from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
@@ -129,7 +131,7 @@ function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
           <div class="meta-row">
             <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
             <span class="meta-value">${escapeHtml(
-              fechaPrevistaEntrega || "-"
+              fechaPrevistaEntrega || "-",
             )}</span>
           </div>
           <div class="meta-row">
@@ -189,7 +191,7 @@ function buildFoliosHtml({
           cliente: shipName,
           fechaPrevistaEntrega: dateLabel,
           numeros: nums,
-        })
+        }),
       );
     }
   }
@@ -405,6 +407,175 @@ function buildFoliosHtml({
   </html>`;
 }
 
+function buildInformeCargaHtml({
+  loadNombre,
+  finishedLabel,
+  cargadoPorLabel,
+  choferName,
+  consignatarioName,
+  notas,
+  palletsRows,
+}) {
+  return `<!doctype html>
+  <html lang="es">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Informe de carga</title>
+      <style>
+        :root {
+          --border: #e5e7eb;
+          --text: #111827;
+          --muted: #6b7280;
+          --bg: #ffffff;
+        }
+        body {
+          margin: 0;
+          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+            Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+          color: var(--text);
+          background: var(--bg);
+        }
+        .wrap {
+          padding: 24px;
+          max-width: 980px;
+          margin: 0 auto;
+          display: grid;
+          gap: 14px;
+        }
+        .header {
+          display: grid;
+          gap: 6px;
+        }
+        .title {
+          font-size: 18px;
+          font-weight: 900;
+        }
+        .subtitle {
+          font-size: 13px;
+          color: var(--muted);
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 14px;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 12px 14px;
+        }
+        .label {
+          font-size: 12px;
+          color: var(--muted);
+          margin-bottom: 4px;
+        }
+        .value {
+          font-weight: 700;
+        }
+        .notes {
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 12px 14px;
+          display: grid;
+          gap: 6px;
+        }
+        .notes .text {
+          white-space: pre-wrap;
+          line-height: 1.35;
+          font-size: 13px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+        th,
+        td {
+          padding: 10px 10px;
+          border-bottom: 1px solid var(--border);
+          font-size: 13px;
+          vertical-align: top;
+        }
+        th {
+          text-align: left;
+          background: #f9fafb;
+          font-weight: 800;
+        }
+        tr:last-child td {
+          border-bottom: none;
+        }
+        .muted {
+          color: var(--muted);
+          font-weight: 600;
+        }
+        @media print {
+          body { background: white; }
+          .wrap { padding: 0; max-width: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="header">
+          <div class="title">INFORME DE CARGA</div>
+          <div class="subtitle">${escapeHtml(loadNombre || "-")}</div>
+          <div class="subtitle">Finalizado: ${escapeHtml(finishedLabel || "-")}</div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <div class="label">Cargado por</div>
+            <div class="value">${escapeHtml(cargadoPorLabel || "-")}</div>
+          </div>
+          <div>
+            <div class="label">Chofer</div>
+            <div class="value">${escapeHtml(choferName || "-")}</div>
+          </div>
+          <div>
+            <div class="label">Consignatario</div>
+            <div class="value">${escapeHtml(consignatarioName || "-")}</div>
+          </div>
+          <div>
+            <div class="label">Palets</div>
+            <div class="value">${escapeHtml(String(palletsRows.length))}</div>
+          </div>
+        </div>
+
+        <div class="notes">
+          <div class="label">Notas</div>
+          <div class="text">${escapeHtml(String(notas || "").trim() || "-")}</div>
+        </div>
+
+        <table aria-label="Palets del informe">
+          <thead>
+            <tr>
+              <th style="width: 120px;">Nº palet</th>
+              <th style="width: 140px;">Tipo</th>
+              <th style="width: 120px;">Base</th>
+              <th>Productos</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${palletsRows
+              .map(
+                (r) => `
+              <tr>
+                <td><span class="value">${escapeHtml(r.numero_palet || "-")}</span></td>
+                <td>${escapeHtml(r.tipo || "-")}</td>
+                <td>${escapeHtml(r.base || "-")}</td>
+                <td class="muted">${escapeHtml(r.productos || "-")}</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </body>
+  </html>`;
+}
+
 function parseNumeroPaletsInput(value) {
   const raw = String(value || "");
   const tokens = raw
@@ -434,6 +605,7 @@ function parseNumeroPaletsInput(value) {
 export default function LoadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [load, setLoad] = useState(null);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -518,6 +690,10 @@ export default function LoadDetail() {
   const [folioStep, setFolioStep] = useState("config");
   const [folioIncludeLoadSheet, setFolioIncludeLoadSheet] = useState(false);
   const [folioIncludeNumbers, setFolioIncludeNumbers] = useState(true);
+  const [openLoadReport, setOpenLoadReport] = useState(false);
+  const [loadReportLoading, setLoadReportLoading] = useState(false);
+  const [loadReport, setLoadReport] = useState(null);
+  const [loadReportExists, setLoadReportExists] = useState(false);
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -535,7 +711,7 @@ export default function LoadDetail() {
           responsable: String(l.responsable?._id || l.responsable || ""),
           consignatario: String(l.consignatario?._id || l.consignatario || ""),
           terminal_entrega: String(
-            l.terminal_entrega?._id || l.terminal_entrega || ""
+            l.terminal_entrega?._id || l.terminal_entrega || "",
           ),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
@@ -572,7 +748,7 @@ export default function LoadDetail() {
           fetchAllResponsables(),
         ]);
         const values = results.map((r) =>
-          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
+          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : [],
         );
         const [
           shipsList,
@@ -632,14 +808,14 @@ export default function LoadDetail() {
     if (!load) return { shipName: "", dateLabel: "-", portLabel: "-" };
     const barcoId = String(load?.barco?._id || load?.barco || "");
     const terminalEntregaId = String(
-      load?.terminal_entrega?._id || load?.terminal_entrega || ""
+      load?.terminal_entrega?._id || load?.terminal_entrega || "",
     );
     const ship =
       ships.find((s) => String(s?._id || s?.id || "") === barcoId) ||
       (load?.barco && typeof load.barco === "object" ? load.barco : null);
     const terminal =
       locations.find(
-        (l) => String(l?._id || l?.id || "") === terminalEntregaId
+        (l) => String(l?._id || l?.id || "") === terminalEntregaId,
       ) ||
       (load?.terminal_entrega && typeof load.terminal_entrega === "object"
         ? load.terminal_entrega
@@ -864,7 +1040,7 @@ export default function LoadDetail() {
     const label = String(load.nombre || "").trim();
     if (
       !window.confirm(
-        `¿Seguro que deseas borrar la carga "${label || String(id || "")}"?`
+        `¿Seguro que deseas borrar la carga "${label || String(id || "")}"?`,
       )
     )
       return;
@@ -926,19 +1102,46 @@ export default function LoadDetail() {
     }
   };
 
+  const loadIdParam = String(id || "");
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      if (!loadIdParam) return;
+      if (load?.last_informe_resumen) {
+        if (!mounted) return;
+        setLoadReportExists(true);
+        return;
+      }
+      const rep = await fetchLatestLoadReportByLoadId(loadIdParam, {
+        loadNombre: load?.nombre || "",
+      }).catch(() => null);
+      if (!mounted) return;
+      if (rep) {
+        setLoadReportExists(true);
+        setLoadReport(rep);
+      } else {
+        setLoadReportExists(false);
+      }
+    };
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [loadIdParam, load?.last_informe_resumen, load?.nombre]);
+
   if (!load) return <p>Cargando...</p>;
 
   const loadId = String(load?._id || load?.id || id || "");
 
   const palletsInLoad = (() => {
     const byRelation = pallets.filter(
-      (p) => String(p.carga?._id || p.carga) === String(loadId)
+      (p) => String(p.carga?._id || p.carga) === String(loadId),
     );
     const byArrayIds = Array.isArray(load.palets)
       ? load.palets.map((p) => String(p?._id || p?.id || p)).filter(Boolean)
       : [];
     const byId = new Map(
-      byRelation.map((p) => [String(p._id || p.id), p]).filter((p) => p[0])
+      byRelation.map((p) => [String(p._id || p.id), p]).filter((p) => p[0]),
     );
     byArrayIds.forEach((pid) => {
       const found = pallets.find((p) => String(p._id || p.id) === String(pid));
@@ -946,6 +1149,141 @@ export default function LoadDetail() {
     });
     return Array.from(byId.values());
   })();
+
+  const impliedHasLoadReport =
+    palletsInLoad.some((p) => p?.estado === true) &&
+    String(load?.estado_viaje || "")
+      .trim()
+      .toLowerCase() !== "preparando";
+  const hasLoadReport =
+    !!load?.last_informe_resumen || !!loadReportExists || impliedHasLoadReport;
+
+  const formatMaybeDateTime = (value) => {
+    if (!value) return "";
+    let d = null;
+    if (value && typeof value?.toDate === "function") d = value.toDate();
+    else if (typeof value?.seconds === "number")
+      d = new Date(value.seconds * 1000);
+    else d = new Date(value);
+    if (!d || Number.isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+  };
+
+  const openLoadReportPreview = async () => {
+    if (!hasLoadReport) return;
+    if (!loadId) return;
+    if (loadReportLoading) return;
+    setOpenLoadReport(true);
+    if (loadReport) return;
+    try {
+      setLoadReportLoading(true);
+      const rep = await fetchLatestLoadReportByLoadId(loadId, {
+        loadNombre: load?.nombre || "",
+        palletIds: palletsInLoad.map((p) => String(p?._id || p?.id || "")),
+      });
+      setLoadReport(rep || null);
+    } catch (e) {
+      setLoadReport(null);
+      const msg = String(e?.message || "").trim();
+      setSnack({
+        open: true,
+        message: msg || "Error cargando el informe de carga",
+        type: "error",
+      });
+    } finally {
+      setLoadReportLoading(false);
+    }
+  };
+
+  const generateLoadReport = async () => {
+    if (!loadId) return;
+    if (loadReportLoading) return;
+    try {
+      setLoadReportLoading(true);
+      const existing = await fetchLatestLoadReportByLoadId(loadId, {
+        loadNombre: load?.nombre || "",
+        palletIds: palletsInLoad.map((p) => String(p?._id || p?.id || "")),
+      }).catch(() => null);
+      if (existing) {
+        setLoadReport(existing);
+        setLoadReportExists(true);
+        return;
+      }
+      const palletIds = palletsInLoad
+        .filter((p) => p?.estado === true)
+        .map((p) => String(p?._id || p?.id || ""))
+        .filter(Boolean);
+      if (palletIds.length === 0) {
+        setSnack({
+          open: true,
+          message: "No hay palets cargados para generar el informe",
+          type: "error",
+        });
+        return;
+      }
+      const operator =
+        currentUser &&
+        (String(currentUser?._id || currentUser?.id || "").trim() ||
+          String(currentUser?.name || "").trim())
+          ? [
+              {
+                user_id: String(
+                  currentUser?._id || currentUser?.id || "",
+                ).trim(),
+                name: String(currentUser?.name || "").trim(),
+              },
+            ]
+          : [];
+      await createLoadReport({
+        load_id: loadId,
+        load_nombre: String(load?.nombre || "").trim(),
+        pallet_ids: palletIds,
+        cargado_por: operator,
+        cargado_a: {
+          chofer_id: String(load?.chofer?._id || load?.chofer || "").trim(),
+          chofer_name: String(
+            choferObj?.name || choferObj?.nombre || "",
+          ).trim(),
+          consignatario_id: String(
+            load?.consignatario?._id || load?.consignatario || "",
+          ).trim(),
+          consignatario_name: String(
+            consignatarioObj?.nombre || consignatarioObj?.name || "",
+          ).trim(),
+        },
+        notas: "",
+        creado_por: String(currentUser?.name || "Sistema").trim(),
+      });
+      const rep = await fetchLatestLoadReportByLoadId(loadId, {
+        loadNombre: load?.nombre || "",
+        palletIds,
+      }).catch(() => null);
+      setLoadReport(rep || null);
+      setLoadReportExists(!!rep);
+      const updatedLoad = await fetchLoadById(loadId).catch(() => null);
+      if (updatedLoad) setLoad(updatedLoad);
+      setSnack({
+        open: true,
+        message: rep ? "Informe generado" : "Informe guardado",
+        type: "success",
+      });
+    } catch (e) {
+      const msg = String(e?.message || "").trim();
+      setSnack({
+        open: true,
+        message: msg || "Error generando el informe de carga",
+        type: "error",
+      });
+    } finally {
+      setLoadReportLoading(false);
+    }
+  };
 
   const totalPallets = palletsInLoad.length;
   const tipoCounts = palletsInLoad.reduce((acc, p) => {
@@ -962,28 +1300,28 @@ export default function LoadDetail() {
       if (b === "americano") acc.americano += 1;
       return acc;
     },
-    { europeo: 0, americano: 0 }
+    { europeo: 0, americano: 0 },
   );
 
   const fuseTarget = palletsInLoad.find(
-    (p) => String(p._id) === String(fuseTargetId)
+    (p) => String(p._id) === String(fuseTargetId),
   );
   const fuseOthers = palletsInLoad.filter(
-    (p) => String(p._id) !== String(fuseTargetId)
+    (p) => String(p._id) !== String(fuseTargetId),
   );
   const fuseParsedNumbers = parseNumeroPaletsInput(fuseNumbers);
   const fuseMatchedByNumbers = palletsInLoad.filter(
     (p) =>
       fuseParsedNumbers.includes(String(p.numero_palet)) &&
-      String(p._id) !== String(fuseTargetId)
+      String(p._id) !== String(fuseTargetId),
   );
   const fuseMissingNumbers = fuseParsedNumbers.filter(
     (n) =>
       !palletsInLoad.some(
         (p) =>
           String(p.numero_palet) === String(n) &&
-          String(p._id) !== String(fuseTargetId)
-      )
+          String(p._id) !== String(fuseTargetId),
+      ),
   );
 
   const openFuseModal = () => {
@@ -1054,7 +1392,7 @@ export default function LoadDetail() {
     };
     const selectedSources = isSelectMode
       ? palletsInLoad.filter((p) =>
-          fuseSourceIds.some((sid) => String(sid) === String(p?._id))
+          fuseSourceIds.some((sid) => String(sid) === String(p?._id)),
         )
       : fuseMatchedByNumbers;
     const baseCandidates = Array.from(
@@ -1064,8 +1402,8 @@ export default function LoadDetail() {
           ...selectedSources.map((p) => normalizeBase(p?.base)),
         ]
           .map((v) => String(v || "").trim())
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
     const needsBaseChoice = baseCandidates.length > 1;
     const effectiveBaseChoice = normalizeBase(fuseBaseChoice);
@@ -1101,7 +1439,7 @@ export default function LoadDetail() {
           ...x,
           _id: x?._id || x?.id,
           id: x?.id || x?._id,
-        }))
+        })),
       );
       if (l) {
         setForm({
@@ -1111,7 +1449,7 @@ export default function LoadDetail() {
           responsable: String(l.responsable?._id || l.responsable || ""),
           consignatario: String(l.consignatario?._id || l.consignatario || ""),
           terminal_entrega: String(
-            l.terminal_entrega?._id || l.terminal_entrega || ""
+            l.terminal_entrega?._id || l.terminal_entrega || "",
           ),
           palets: Array.isArray(l.palets) ? l.palets.map((p) => String(p)) : [],
           carga: Array.isArray(l.carga) ? l.carga : [],
@@ -1191,8 +1529,8 @@ export default function LoadDetail() {
       new Set(
         [normalizeBase(fuseDnDSource?.base), normalizeBase(fuseDnDTarget?.base)]
           .map((v) => String(v || "").trim())
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
     const needsBaseChoice = baseCandidates.length > 1;
     const effectiveBaseChoice = normalizeBase(fuseDnDBaseChoice);
@@ -1225,7 +1563,7 @@ export default function LoadDetail() {
           ...x,
           _id: x?._id || x?.id,
           id: x?.id || x?._id,
-        }))
+        })),
       );
       if (l) {
         setForm({
@@ -1262,32 +1600,32 @@ export default function LoadDetail() {
   };
 
   const fuseDnDSource = palletsInLoad.find(
-    (p) => String(p._id) === String(fuseDnDSourceId)
+    (p) => String(p._id) === String(fuseDnDSourceId),
   );
   const fuseDnDTarget = palletsInLoad.find(
-    (p) => String(p._id) === String(fuseDnDTargetId)
+    (p) => String(p._id) === String(fuseDnDTargetId),
   );
 
   const shipById = new Map(
-    ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0])
+    ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0]),
   );
   const userById = new Map(
-    users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0])
+    users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0]),
   );
   const consigneeById = new Map(
-    consignees.map((c) => [String(c._id || c.id || ""), c]).filter((p) => p[0])
+    consignees.map((c) => [String(c._id || c.id || ""), c]).filter((p) => p[0]),
   );
   const locationById = new Map(
-    locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0])
+    locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0]),
   );
 
   const barcoId = String(load?.barco?._id || load?.barco || "");
   const choferId = String(load?.chofer?._id || load?.chofer || "");
   const consignatarioId = String(
-    load?.consignatario?._id || load?.consignatario || ""
+    load?.consignatario?._id || load?.consignatario || "",
   );
   const terminalEntregaId = String(
-    load?.terminal_entrega?._id || load?.terminal_entrega || ""
+    load?.terminal_entrega?._id || load?.terminal_entrega || "",
   );
 
   const barcoObj =
@@ -1306,6 +1644,112 @@ export default function LoadDetail() {
     (load?.terminal_entrega && typeof load.terminal_entrega === "object"
       ? load.terminal_entrega
       : null);
+
+  const exportLoadReportPdf = () => {
+    if (!loadReport) return;
+    const wantedIds = new Set(
+      Array.isArray(loadReport?.pallet_ids)
+        ? loadReport.pallet_ids.map((v) => String(v)).filter(Boolean)
+        : [],
+    );
+    const palletsRows = palletsInLoad
+      .filter((p) => {
+        const pid = String(p?._id || p?.id || "").trim();
+        if (!pid) return false;
+        if (wantedIds.size > 0) return wantedIds.has(pid);
+        return p?.estado === true;
+      })
+      .map((p) => ({
+        numero_palet: String(p?.numero_palet || "").trim(),
+        tipo: String(p?.tipo || "").trim(),
+        base: String(p?.base || "").trim(),
+        productos: String(p?.productos || "").trim(),
+      }))
+      .sort((a, b) =>
+        String(a.numero_palet || "").localeCompare(
+          String(b.numero_palet || ""),
+          "es",
+          {
+            sensitivity: "base",
+            numeric: true,
+          },
+        ),
+      );
+
+    const cargadoPorLabel =
+      Array.isArray(loadReport.cargado_por) && loadReport.cargado_por.length > 0
+        ? loadReport.cargado_por
+            .map((u) => String(u?.name || u?.nombre || "").trim())
+            .filter(Boolean)
+            .join(", ") || "-"
+        : "-";
+
+    const html = buildInformeCargaHtml({
+      loadNombre: loadReport.load_nombre || load?.nombre || loadId,
+      finishedLabel: formatMaybeDateTime(loadReport.finished_at) || "-",
+      cargadoPorLabel,
+      choferName:
+        String(loadReport?.cargado_a?.chofer_name || "").trim() ||
+        String(choferObj?.name || choferObj?.nombre || "").trim() ||
+        "-",
+      consignatarioName:
+        String(loadReport?.cargado_a?.consignatario_name || "").trim() ||
+        String(
+          consignatarioObj?.nombre || consignatarioObj?.name || "",
+        ).trim() ||
+        "-",
+      notas: loadReport.notas || "",
+      palletsRows,
+    });
+
+    if (!String(html || "").trim()) {
+      setSnack({
+        open: true,
+        message: "No se pudo generar el contenido del informe",
+        type: "error",
+      });
+      return;
+    }
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    iframe.srcdoc = html;
+
+    const cleanup = () => {
+      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    const doPrint = () => {
+      try {
+        const pw = iframe.contentWindow;
+        if (!pw) throw new Error("No se pudo acceder al documento del informe");
+        pw.focus();
+        pw.print();
+      } catch (e) {
+        const msg = String(e?.message || "").trim();
+        setSnack({
+          open: true,
+          message: msg || "No se pudo abrir el diálogo de impresión",
+          type: "error",
+        });
+      }
+      window.setTimeout(cleanup, 1200);
+    };
+
+    iframe.addEventListener("load", () => {
+      window.setTimeout(doPrint, 50);
+    });
+
+    document.body.appendChild(iframe);
+    window.setTimeout(doPrint, 700);
+  };
 
   return (
     <section className="card">
@@ -1347,6 +1791,16 @@ export default function LoadDetail() {
               title="Número"
             >
               <span className="material-symbols-outlined">description</span>
+            </button>
+          )}
+          {hasLoadReport && (
+            <button
+              className="icon-button"
+              onClick={openLoadReportPreview}
+              title="Ver informe de carga"
+              disabled={loadReportLoading}
+            >
+              <span className="material-symbols-outlined">receipt_long</span>
             </button>
           )}
           {canDeleteLoad && (
@@ -1553,8 +2007,8 @@ export default function LoadDetail() {
                             ? isSource
                               ? "grabbing"
                               : isDroppable
-                              ? "copy"
-                              : "not-allowed"
+                                ? "copy"
+                                : "not-allowed"
                             : "pointer",
                           borderLeft: `${
                             isAmericano ? 10 : 6
@@ -1614,7 +2068,9 @@ export default function LoadDetail() {
                             e.stopPropagation();
                             if (isDoubleTap(idStr)) {
                               clearDnDState();
-                              navigate(`/app/palets/${pid}`);
+                              navigate(`/app/palets/${pid}`, {
+                                state: { from: location.pathname },
+                              });
                               return;
                             }
                             if (!canManagePallets) return;
@@ -1645,7 +2101,9 @@ export default function LoadDetail() {
                             return;
                           }
                           if (dragPalletId) return;
-                          navigate(`/app/palets/${pid}`);
+                          navigate(`/app/palets/${pid}`, {
+                            state: { from: location.pathname },
+                          });
                         }}
                       >
                         <div className="card-item-header">
@@ -1715,8 +2173,8 @@ export default function LoadDetail() {
                 normalizeBase(fuseDnDTarget?.base),
               ]
                 .map((v) => String(v || "").trim())
-                .filter(Boolean)
-            )
+                .filter(Boolean),
+            ),
           );
           if (baseCandidates.length <= 1) return null;
           const value =
@@ -1801,7 +2259,7 @@ export default function LoadDetail() {
               const nextTarget = e.target.value;
               setFuseTargetId(nextTarget);
               setFuseSourceIds((prev) =>
-                prev.filter((pid) => String(pid) !== String(nextTarget))
+                prev.filter((pid) => String(pid) !== String(nextTarget)),
               );
             }}
           >
@@ -1834,7 +2292,7 @@ export default function LoadDetail() {
           const selectedSources =
             fuseMode === "seleccion"
               ? palletsInLoad.filter((p) =>
-                  fuseSourceIds.some((sid) => String(sid) === String(p?._id))
+                  fuseSourceIds.some((sid) => String(sid) === String(p?._id)),
                 )
               : fuseMatchedByNumbers;
           const baseCandidates = Array.from(
@@ -1844,8 +2302,8 @@ export default function LoadDetail() {
                 ...selectedSources.map((p) => normalizeBase(p?.base)),
               ]
                 .map((v) => String(v || "").trim())
-                .filter(Boolean)
-            )
+                .filter(Boolean),
+            ),
           );
           if (baseCandidates.length <= 1) return null;
           const value =
@@ -1906,7 +2364,7 @@ export default function LoadDetail() {
             >
               {fuseOthers.map((p) => {
                 const checked = fuseSourceIds.some(
-                  (pid) => String(pid) === String(p._id)
+                  (pid) => String(pid) === String(p._id),
                 );
                 return (
                   <label
@@ -2169,6 +2627,158 @@ export default function LoadDetail() {
       </Modal>
 
       <Modal
+        open={openLoadReport}
+        title="Informe de carga"
+        onClose={() => setOpenLoadReport(false)}
+        cancelLabel="Cerrar"
+        width={720}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        {loadReportLoading ? (
+          <div style={{ color: "var(--text-secondary)" }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ verticalAlign: "middle", marginRight: 6 }}
+            >
+              progress_activity
+            </span>
+            Cargando...
+          </div>
+        ) : !loadReport ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ color: "var(--text-secondary)" }}>
+              No hay informe para esta carga
+            </div>
+            {(impliedHasLoadReport || canManageLoads) && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={generateLoadReport}
+                  disabled={loadReportLoading}
+                >
+                  Generar informe
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div
+              style={{
+                padding: "10px 12px",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                background: "var(--hover)",
+                display: "grid",
+                gap: 6,
+              }}
+            >
+              <div style={{ fontWeight: 900 }}>
+                {loadReport.load_nombre || load.nombre || loadId}
+              </div>
+              <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+                Finalizado: {formatMaybeDateTime(loadReport.finished_at) || "-"}
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={exportLoadReportPdf}
+              >
+                Exportar PDF
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div className="label">Cargado por</div>
+                <div style={{ fontWeight: 700 }}>
+                  {Array.isArray(loadReport.cargado_por) &&
+                  loadReport.cargado_por.length > 0
+                    ? loadReport.cargado_por
+                        .map((u) => String(u?.name || u?.nombre || "").trim())
+                        .filter(Boolean)
+                        .join(", ") || "-"
+                    : "-"}
+                </div>
+              </div>
+              <div>
+                <div className="label">Palets</div>
+                <div style={{ fontWeight: 700 }}>
+                  {Number(loadReport.pallet_count || 0)}
+                </div>
+              </div>
+              <div>
+                <div className="label">Chofer</div>
+                <div style={{ fontWeight: 700 }}>
+                  {String(loadReport.cargado_a?.chofer_name || "").trim() ||
+                    "-"}
+                </div>
+              </div>
+              <div>
+                <div className="label">Consignatario</div>
+                <div style={{ fontWeight: 700 }}>
+                  {String(
+                    loadReport.cargado_a?.consignatario_name || "",
+                  ).trim() || "-"}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="label">Notas</div>
+              <div
+                style={{
+                  whiteSpace: "pre-wrap",
+                  padding: "10px 12px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  background: "#fff",
+                  minHeight: 72,
+                }}
+              >
+                {String(loadReport.notas || "").trim() || "-"}
+              </div>
+            </div>
+
+            {Array.isArray(loadReport.pallet_ids) &&
+              loadReport.pallet_ids.length > 0 && (
+                <div>
+                  <div className="label">IDs de palets</div>
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      border: "1px solid var(--border)",
+                      borderRadius: 10,
+                      background: "#fff",
+                      maxHeight: 180,
+                      overflow: "auto",
+                      display: "grid",
+                      gap: 6,
+                      fontFamily:
+                        "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontSize: 12,
+                    }}
+                  >
+                    {loadReport.pallet_ids.map((pid) => (
+                      <div key={String(pid)}>{String(pid)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={open}
         title="Modificar carga"
         onClose={() => setOpen(false)}
@@ -2306,8 +2916,8 @@ export default function LoadDetail() {
                 .sort((a, b) =>
                   String(a.nombre || "").localeCompare(
                     String(b.nombre || ""),
-                    "es"
-                  )
+                    "es",
+                  ),
                 )
                 .map((r) => (
                   <option key={r._id} value={r._id}>
@@ -2371,7 +2981,7 @@ export default function LoadDetail() {
                   groups[port].push(l);
                 });
                 const sortedPorts = Object.keys(groups).sort((a, b) =>
-                  a.localeCompare(b, "es")
+                  a.localeCompare(b, "es"),
                 );
                 return sortedPorts.map((port) => (
                   <optgroup key={port} label={port}>
@@ -2380,8 +2990,8 @@ export default function LoadDetail() {
                       .sort((a, b) =>
                         String(a.nombre || "").localeCompare(
                           String(b.nombre || ""),
-                          "es"
-                        )
+                          "es",
+                        ),
                       )
                       .map((l) => (
                         <option key={l._id} value={l._id}>
@@ -2404,7 +3014,7 @@ export default function LoadDetail() {
               value={form.palets}
               onChange={(e) => {
                 const selected = Array.from(e.target.selectedOptions).map(
-                  (o) => o.value
+                  (o) => o.value,
                 );
                 setForm({ ...form, palets: selected });
               }}

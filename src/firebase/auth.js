@@ -343,6 +343,76 @@ export async function fetchInteractions({ limitCount = 200 } = {}) {
   return list;
 }
 
+export async function fetchInteractionsByActorId({
+  actorId,
+  limitCount = 50,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const id = String(actorId || "").trim();
+  if (!id) return [];
+  const resolvedLimit = Math.max(1, Number(limitCount) || 50);
+  const mapSnap = (snap) => {
+    const list = [];
+    snap.forEach((d) => {
+      const data = d.data() || {};
+      list.push({
+        id: d.id,
+        type: data.type || "",
+        actor: data.actor || null,
+        target: data.target || null,
+        details: data.details || null,
+        createdAt: data.createdAt || null,
+      });
+    });
+    return list;
+  };
+
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firebaseDb, "interactions"),
+        where("actor.id", "==", id),
+        orderBy("createdAt", "desc"),
+        limit(resolvedLimit),
+      ),
+    );
+    return mapSnap(snap);
+  } catch (e) {
+    const code = String(e?.code || "").trim();
+    const msg = String(e?.message || "")
+      .trim()
+      .toLowerCase();
+    const isIndex =
+      code === "failed-precondition" ||
+      code === "FAILED_PRECONDITION" ||
+      msg.includes("requires an index") ||
+      msg.includes("index");
+    if (!isIndex) throw e;
+
+    const snap = await getDocs(
+      query(
+        collection(firebaseDb, "interactions"),
+        where("actor.id", "==", id),
+      ),
+    );
+
+    const toMs = (value) => {
+      if (!value) return 0;
+      if (value instanceof Date) return value.getTime();
+      if (typeof value.toDate === "function") {
+        const d = value.toDate();
+        return d instanceof Date ? d.getTime() : 0;
+      }
+      if (typeof value.seconds === "number") return value.seconds * 1000;
+      return 0;
+    };
+
+    const list = mapSnap(snap);
+    list.sort((a, b) => toMs(b?.createdAt) - toMs(a?.createdAt));
+    return list.slice(0, resolvedLimit);
+  }
+}
+
 function getLoadLabelFromPayload(payload) {
   const name = String(payload?.carga_nombre || payload?.cargaName || "").trim();
   return name;
@@ -668,6 +738,47 @@ export async function deleteLoadById(id) {
   return { ok: true };
 }
 
+function normalizePalletProductosItems(value) {
+  const list = Array.isArray(value) ? value : [];
+  return list
+    .map((it) => {
+      const producto_id = String(
+        it?.producto_id || it?.id || it?._id || "",
+      ).trim();
+      const codigo = String(it?.codigo || "").trim();
+      const nombre_producto = String(
+        it?.nombre_producto || it?.nombre || "",
+      ).trim();
+      const qty =
+        typeof it?.cantidad === "number"
+          ? it.cantidad
+          : Number(String(it?.cantidad || "").trim());
+      const cantidad = Number.isFinite(qty) ? qty : 0;
+      return { producto_id, codigo, nombre_producto, cantidad };
+    })
+    .filter((it) => it.producto_id || it.codigo || it.nombre_producto);
+}
+
+function buildPalletProductosText(items) {
+  const list = Array.isArray(items) ? items : [];
+  return list
+    .map((it) => {
+      const code = String(it?.codigo || "").trim();
+      const name = String(it?.nombre_producto || "").trim();
+      const qty =
+        typeof it?.cantidad === "number"
+          ? it.cantidad
+          : Number(String(it?.cantidad || "").trim());
+      const cantidad = Number.isFinite(qty) ? qty : 0;
+      const label = code || name || String(it?.producto_id || "").trim();
+      if (!label) return "";
+      const suffix = name && code ? ` — ${name}` : name && !code ? name : "";
+      return `${label}${suffix}: ${cantidad}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 export async function fetchAllPallets() {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   let snap;
@@ -696,6 +807,9 @@ export async function fetchAllPallets() {
       carga: data.carga || "",
       carga_nombre: data.carga_nombre || "",
       productos: data.productos || "",
+      productos_items: Array.isArray(data.productos_items)
+        ? normalizePalletProductosItems(data.productos_items)
+        : [],
       creado_por: data.creado_por || "",
       modificado_por: data.modificado_por || "",
       fecha_creacion: data.fecha_creacion || null,
@@ -726,6 +840,9 @@ export async function fetchPalletById(id) {
     carga: data.carga || "",
     carga_nombre: data.carga_nombre || "",
     productos: data.productos || "",
+    productos_items: Array.isArray(data.productos_items)
+      ? normalizePalletProductosItems(data.productos_items)
+      : [],
     creado_por: data.creado_por || "",
     modificado_por: data.modificado_por || "",
     fecha_creacion: data.fecha_creacion || null,
@@ -757,6 +874,12 @@ export async function createPallet(payload) {
   const nombre = `${numero_palet} - ${cargaLabel || "Sin carga"}`;
   const base = payload?.base ? String(payload.base) : "Europeo";
   const estado = typeof payload?.estado === "boolean" ? payload.estado : false;
+  const productosItems = normalizePalletProductosItems(
+    payload?.productos_items,
+  );
+  const productosText =
+    String(payload?.productos || "").trim() ||
+    (productosItems.length > 0 ? buildPalletProductosText(productosItems) : "");
 
   await setDoc(ref, {
     id,
@@ -767,7 +890,8 @@ export async function createPallet(payload) {
     carga: carga || "",
     carga_nombre: cargaLabel || "",
     nombre,
-    productos: String(payload?.productos || ""),
+    productos: productosText,
+    productos_items: productosItems,
     contenedor: String(payload?.contenedor || ""),
     creado_por: String(payload?.creado_por || "Testing"),
     modificado_por: "",
@@ -815,8 +939,31 @@ export async function updatePalletById(id, updates) {
     typeof updates?.numero_palet !== "undefined" ||
     typeof updates?.carga_nombre !== "undefined";
 
+  const hasProductosItems = typeof updates?.productos_items !== "undefined";
+  const normalizedProductosItems = hasProductosItems
+    ? normalizePalletProductosItems(updates.productos_items)
+    : null;
+  const hasProductosText = typeof updates?.productos !== "undefined";
+  const incomingProductosText = hasProductosText
+    ? String(updates.productos || "")
+    : "";
+  const derivedProductosText =
+    hasProductosItems && normalizedProductosItems
+      ? buildPalletProductosText(normalizedProductosItems)
+      : "";
+  const nextProductosText =
+    hasProductosText && incomingProductosText.trim()
+      ? incomingProductosText
+      : hasProductosItems
+        ? derivedProductosText
+        : undefined;
+
   const patch = {
     ...updates,
+    ...(hasProductosItems ? { productos_items: normalizedProductosItems } : {}),
+    ...(typeof nextProductosText !== "undefined"
+      ? { productos: nextProductosText }
+      : {}),
     ...(typeof updates?.estado !== "undefined"
       ? {
           estado:
@@ -2368,4 +2515,412 @@ export async function deleteMessageById(id) {
     });
   }
   return { ok: true };
+}
+
+export async function fetchAllMerma() {
+  const docs = await getAllDocsOrdered({
+    collectionName: "merma",
+    orderField: "fecha_creacion",
+  });
+  return docs.map(({ docId, data }) => ({
+    ...mapCommonAudit(data, docId),
+    producto_id: data.producto_id || "",
+    codigo: data.codigo || "",
+    nombre_producto: data.nombre_producto || "",
+    lote: data.lote || "",
+    fecha_caducidad: data.fecha_caducidad || "",
+    cantidad:
+      typeof data.cantidad === "number" ? data.cantidad : data.cantidad || "",
+    unidad: data.unidad || "unidad",
+    motivo: data.motivo || "",
+    estado: data.estado || "Pendiente",
+  }));
+}
+
+export async function fetchMermaById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "merma", String(id));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() || {};
+  return {
+    ...mapCommonAudit(data, snap.id),
+    producto_id: data.producto_id || "",
+    codigo: data.codigo || "",
+    nombre_producto: data.nombre_producto || "",
+    lote: data.lote || "",
+    fecha_caducidad: data.fecha_caducidad || "",
+    cantidad:
+      typeof data.cantidad === "number" ? data.cantidad : data.cantidad || "",
+    unidad: data.unidad || "unidad",
+    motivo: data.motivo || "",
+    estado: data.estado || "Pendiente",
+  };
+}
+
+async function ensureProductoForMerma({ codigo, nombre_producto }) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const codigoClean = String(codigo || "").trim();
+  const nombreClean = String(nombre_producto || "").trim();
+
+  if (!nombreClean) throw new Error("nombre_producto es obligatorio");
+
+  if (codigoClean) {
+    const byCodigo = await getDocs(
+      query(
+        collection(firebaseDb, "productos"),
+        where("codigo", "==", codigoClean),
+        limit(1),
+      ),
+    );
+    if (!byCodigo.empty) return byCodigo.docs[0]?.id || null;
+  }
+
+  const byNombre = await getDocs(
+    query(
+      collection(firebaseDb, "productos"),
+      where("nombre_producto", "==", nombreClean),
+      limit(1),
+    ),
+  );
+  if (!byNombre.empty) return byNombre.docs[0]?.id || null;
+  throw new Error(
+    "Producto no registrado. Crea el producto antes de registrar la merma.",
+  );
+}
+
+export async function createMerma(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const codigo = String(payload?.codigo || "").trim();
+  const nombre_producto = String(payload?.nombre_producto || "").trim();
+  const lote = String(payload?.lote || "").trim();
+  const fecha_caducidad = String(payload?.fecha_caducidad || "").trim();
+  const motivo = String(payload?.motivo || "").trim();
+  const unidadRaw = String(payload?.unidad || "")
+    .trim()
+    .toLowerCase();
+  const unidad = unidadRaw === "peso" ? "peso" : "unidad";
+  const cantidadNum =
+    typeof payload?.cantidad === "number"
+      ? payload.cantidad
+      : Number(String(payload?.cantidad || "").trim());
+  const cantidad = Number.isFinite(cantidadNum) ? cantidadNum : 0;
+
+  if (!codigo) throw new Error("codigo es obligatorio");
+  if (!nombre_producto) throw new Error("nombre_producto es obligatorio");
+  if (!cantidad) throw new Error("cantidad es obligatoria");
+
+  const productoId = await ensureProductoForMerma({
+    codigo,
+    nombre_producto,
+  });
+
+  const ref = doc(collection(firebaseDb, "merma"));
+  const id = ref.id;
+
+  await setDoc(ref, {
+    id,
+    producto_id: productoId || "",
+    codigo,
+    nombre_producto,
+    lote,
+    fecha_caducidad,
+    cantidad,
+    unidad,
+    motivo,
+    estado: "Pendiente",
+    creado_por: String(payload?.creado_por || "Testing"),
+    modificado_por: "",
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return await fetchMermaById(id);
+}
+
+export async function updateMermaById(id, updates) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "merma", String(id));
+  const current = await fetchMermaById(id);
+  if (!current) return null;
+
+  const codigo = String(updates?.codigo || "").trim();
+  const nombre_producto = String(updates?.nombre_producto || "").trim();
+  const lote = String(updates?.lote || "").trim();
+  const fecha_caducidad = String(updates?.fecha_caducidad || "").trim();
+  const motivo = String(updates?.motivo || "").trim();
+  const unidadRaw = String(updates?.unidad || "")
+    .trim()
+    .toLowerCase();
+  const unidad = unidadRaw === "peso" ? "peso" : "unidad";
+  const cantidadNum =
+    typeof updates?.cantidad === "number"
+      ? updates.cantidad
+      : Number(String(updates?.cantidad || "").trim());
+  const cantidad = Number.isFinite(cantidadNum) ? cantidadNum : 0;
+  const estadoRaw = String(updates?.estado || "").trim();
+  const estadoLower = estadoRaw.toLowerCase();
+  const estado =
+    estadoLower === "atendido"
+      ? "Atendido"
+      : estadoLower === "pendiente"
+        ? "Pendiente"
+        : estadoRaw
+          ? `${estadoLower.charAt(0).toUpperCase()}${estadoLower.slice(1)}`
+          : current.estado || "Pendiente";
+
+  const patch = {
+    ...(typeof updates?.codigo !== "undefined" ? { codigo } : {}),
+    ...(typeof updates?.nombre_producto !== "undefined"
+      ? { nombre_producto }
+      : {}),
+    ...(typeof updates?.lote !== "undefined" ? { lote } : {}),
+    ...(typeof updates?.fecha_caducidad !== "undefined"
+      ? { fecha_caducidad }
+      : {}),
+    ...(typeof updates?.cantidad !== "undefined" ? { cantidad } : {}),
+    ...(typeof updates?.unidad !== "undefined" ? { unidad } : {}),
+    ...(typeof updates?.motivo !== "undefined" ? { motivo } : {}),
+    ...(typeof updates?.estado !== "undefined" ? { estado } : {}),
+    modificado_por: String(updates?.modificado_por || ""),
+    fecha_modificacion: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await updateDoc(ref, patch);
+  return await fetchMermaById(id);
+}
+
+export async function deleteMermaById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "merma", String(id));
+  await deleteDoc(ref);
+  return { ok: true };
+}
+
+export async function deleteProductoById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "productos", String(id));
+  await deleteDoc(ref);
+  return { ok: true };
+}
+
+function normalizeProductoEstado(value) {
+  const lower = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!lower) return "disponible";
+  if (lower === "no disponible") return "no disponible";
+  if (lower === "disponible") return "disponible";
+  if (lower === "pendiente") return "disponible";
+  if (lower === "validado") return "disponible";
+  return "disponible";
+}
+
+export async function fetchAllProductos() {
+  const docs = await getAllDocsOrdered({
+    collectionName: "productos",
+    orderField: "fecha_creacion",
+  });
+  return docs.map(({ docId, data }) => ({
+    ...mapCommonAudit(data, docId),
+    codigo: data.codigo || "",
+    nombre_producto: data.nombre_producto || "",
+    familia: data.familia || "",
+    composicion: data.composicion || "",
+    alergenos: data.alergenos || "",
+    estado: normalizeProductoEstado(data.estado),
+  }));
+}
+
+export async function fetchProductoById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "productos", String(id));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() || {};
+  return {
+    ...mapCommonAudit(data, snap.id),
+    codigo: data.codigo || "",
+    nombre_producto: data.nombre_producto || "",
+    familia: data.familia || "",
+    composicion: data.composicion || "",
+    alergenos: data.alergenos || "",
+    estado: normalizeProductoEstado(data.estado),
+  };
+}
+
+export async function createProducto(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const codigo = String(payload?.codigo || "").trim();
+  const nombre_producto = String(payload?.nombre_producto || "").trim();
+  const familia = String(payload?.familia || "").trim();
+  const composicion = String(payload?.composicion || "").trim();
+  const alergenos = String(payload?.alergenos || "").trim();
+  const estado = normalizeProductoEstado(payload?.estado || "disponible");
+  if (!nombre_producto) throw new Error("nombre_producto es obligatorio");
+
+  const ref = doc(collection(firebaseDb, "productos"));
+  const id = ref.id;
+  await setDoc(ref, {
+    id,
+    ...(codigo ? { codigo } : {}),
+    nombre_producto,
+    familia,
+    composicion,
+    alergenos,
+    estado,
+    creado_por: String(payload?.creado_por || "Testing"),
+    modificado_por: "",
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return await fetchProductoById(id);
+}
+
+export async function updateProductoById(id, updates) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const canonicalProductId = String(id);
+  const ref = doc(firebaseDb, "productos", canonicalProductId);
+  const current = await fetchProductoById(id);
+  if (!current) return null;
+
+  const patch = {
+    ...(typeof updates?.codigo !== "undefined"
+      ? { codigo: String(updates.codigo || "").trim() }
+      : {}),
+    ...(typeof updates?.nombre_producto !== "undefined"
+      ? { nombre_producto: String(updates.nombre_producto || "").trim() }
+      : {}),
+    ...(typeof updates?.familia !== "undefined"
+      ? { familia: String(updates.familia || "").trim() }
+      : {}),
+    ...(typeof updates?.composicion !== "undefined"
+      ? { composicion: String(updates.composicion || "").trim() }
+      : {}),
+    ...(typeof updates?.alergenos !== "undefined"
+      ? { alergenos: String(updates.alergenos || "").trim() }
+      : {}),
+    ...(typeof updates?.estado !== "undefined"
+      ? {
+          estado: normalizeProductoEstado(updates.estado),
+        }
+      : {}),
+    modificado_por: String(updates?.modificado_por || ""),
+    fecha_modificacion: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await updateDoc(ref, patch);
+  const updated = await fetchProductoById(id);
+  await propagateProductoNombreToMermas({
+    canonicalProductId,
+    productIdCandidates: [
+      canonicalProductId,
+      String(current?.id || "").trim(),
+      String(updated?.id || "").trim(),
+    ].filter(Boolean),
+    nombre_producto: String(updated?.nombre_producto || ""),
+    codigoCandidates: [
+      String(updated?.codigo || "").trim(),
+      String(current?.codigo || "").trim(),
+    ].filter(Boolean),
+    oldNombreCandidates: [String(current?.nombre_producto || "").trim()].filter(
+      Boolean,
+    ),
+  }).catch(() => {});
+  return updated;
+}
+
+async function propagateProductoNombreToMermas({
+  canonicalProductId,
+  productIdCandidates,
+  nombre_producto,
+  codigoCandidates,
+  oldNombreCandidates,
+}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const promises = [];
+  const productIds = Array.from(
+    new Set(
+      (Array.isArray(productIdCandidates) ? productIdCandidates : []).filter(
+        Boolean,
+      ),
+    ),
+  );
+  for (const pid of productIds) {
+    const snapById = await getDocs(
+      query(
+        collection(firebaseDb, "merma"),
+        where("producto_id", "==", pid),
+        limit(500),
+      ),
+    );
+    snapById.forEach((d) => {
+      promises.push(
+        updateDoc(doc(firebaseDb, "merma", d.id), {
+          nombre_producto,
+          producto_id: canonicalProductId,
+          fecha_modificacion: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+  }
+  const codigos = Array.from(
+    new Set(
+      (Array.isArray(codigoCandidates) ? codigoCandidates : []).filter(Boolean),
+    ),
+  );
+  for (const codigo of codigos) {
+    const snapByCodigo = await getDocs(
+      query(
+        collection(firebaseDb, "merma"),
+        where("codigo", "==", codigo),
+        limit(500),
+      ),
+    );
+    snapByCodigo.forEach((d) => {
+      promises.push(
+        updateDoc(doc(firebaseDb, "merma", d.id), {
+          nombre_producto,
+          producto_id: canonicalProductId,
+          fecha_modificacion: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+  }
+
+  const oldNombres = Array.from(
+    new Set(
+      (Array.isArray(oldNombreCandidates) ? oldNombreCandidates : []).filter(
+        Boolean,
+      ),
+    ),
+  );
+  for (const oldNombre of oldNombres) {
+    const snapByOldNombre = await getDocs(
+      query(
+        collection(firebaseDb, "merma"),
+        where("nombre_producto", "==", oldNombre),
+        limit(500),
+      ),
+    );
+    snapByOldNombre.forEach((d) => {
+      promises.push(
+        updateDoc(doc(firebaseDb, "merma", d.id), {
+          nombre_producto,
+          producto_id: canonicalProductId,
+          fecha_modificacion: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    });
+  }
+  if (promises.length > 0) await Promise.allSettled(promises);
 }

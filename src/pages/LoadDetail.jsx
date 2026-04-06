@@ -99,10 +99,10 @@ function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
         .filter((n) => n !== "")
         .slice(0, 30)
     : [];
-  const buildRows = (offset) => {
+  const buildRows = () => {
     const rows = [];
-    for (let i = 0; i < 15; i += 1) {
-      const n = nums[offset + i] ?? "";
+    for (let i = 0; i < 30; i += 1) {
+      const n = nums[i] ?? "";
       rows.push(`
         <tr>
           <td class="c-num">${escapeHtml(n)}</td>
@@ -117,51 +117,41 @@ function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
   const ths = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
   return `
     <div class="page sheet-page">
-      <div class="sheet-rot">
-        <div class="sheet-top">
-          <div></div>
-          <div class="sheet-title">HOJA DE CARGA</div>
-        </div>
+      <div class="sheet-top">
+        <div></div>
+        <div class="sheet-title">HOJA DE CARGA</div>
+      </div>
 
-        <div class="sheet-meta">
-          <div class="meta-row">
-            <span class="meta-label">CLIENTE:</span>
-            <span class="meta-value">${escapeHtml(cliente || "-")}</span>
-          </div>
-          <div class="meta-row">
-            <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
-            <span class="meta-value">${escapeHtml(
-              fechaPrevistaEntrega || "-",
-            )}</span>
-          </div>
-          <div class="meta-row">
-            <span class="meta-label">CARGADOR FINAL:</span>
-            <span class="meta-value"></span>
-          </div>
-          <div class="meta-row">
-            <span class="meta-label">FECHA DE CARGA FINAL:</span>
-            <span class="meta-value"></span>
-          </div>
+      <div class="sheet-meta">
+        <div class="meta-row">
+          <span class="meta-label">CLIENTE:</span>
+          <span class="meta-value">${escapeHtml(cliente || "-")}</span>
         </div>
-
-        <div class="sheet-grid">
-          <table class="sheet-table" aria-label="Tabla palets 1-15">
-            <thead><tr>${ths}</tr></thead>
-            <tbody>${buildRows(0)}</tbody>
-          </table>
-          <table class="sheet-table" aria-label="Tabla palets 16-30">
-            <thead><tr>${ths}</tr></thead>
-            <tbody>${buildRows(15)}</tbody>
-          </table>
+        <div class="meta-row">
+          <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
+          <span class="meta-value">${escapeHtml(fechaPrevistaEntrega || "-")}</span>
         </div>
+        <div class="meta-row">
+          <span class="meta-label">CARGADOR FINAL:</span>
+          <span class="meta-value"></span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">FECHA DE CARGA FINAL:</span>
+          <span class="meta-value"></span>
+        </div>
+      </div>
 
-        <div class="sheet-footer">
-          <div class="footer-title">PALETS QUE SE REMONTAN:</div>
-          <div class="footer-lines">
-            <div class="line"></div>
-            <div class="line"></div>
-            <div class="line"></div>
-          </div>
+      <table class="sheet-table" aria-label="Tabla palets 1-30">
+        <thead><tr>${ths}</tr></thead>
+        <tbody>${buildRows()}</tbody>
+      </table>
+
+      <div class="sheet-footer">
+        <div class="footer-title">PALETS QUE SE REMONTAN:</div>
+        <div class="footer-lines">
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
         </div>
       </div>
     </div>
@@ -226,6 +216,7 @@ function buildFoliosHtml({
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Números</title>
       <style>
+        @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
         body { margin: 0; background: #e5e7eb; font-family: Arial, Helvetica, sans-serif; }
         .wrap { display: grid; gap: 16px; padding: 16px; }
@@ -240,47 +231,31 @@ function buildFoliosHtml({
           overflow: hidden;
         }
         .sheet-page {
-          padding: 0;
-        }
-        .sheet-rot {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 297mm;
-          height: 210mm;
-          transform: translate(-50%, -50%) rotate(-90deg);
-          transform-origin: center;
-          padding: 12mm 12mm 14mm;
+          padding: 16mm 18mm 14mm;
         }
         .sheet-top {
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
-          margin-bottom: 6mm;
+          margin-bottom: 4mm;
         }
         .sheet-title {
           font-weight: 700;
-          font-size: 28px;
+          font-size: 20px;
           letter-spacing: 0.5px;
           color: #111827;
           text-transform: uppercase;
         }
         .sheet-meta {
           display: grid;
-          gap: 4px;
-          font-size: 13px;
+          gap: 3px;
+          font-size: 11px;
           color: #111827;
-          margin-bottom: 8mm;
+          margin-bottom: 4mm;
         }
         .meta-row { display: flex; gap: 8px; }
         .meta-label { font-weight: 700; white-space: nowrap; }
         .meta-value { font-weight: 700; }
-        .sheet-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10mm;
-          align-items: start;
-        }
         .sheet-table {
           width: 100%;
           border-collapse: collapse;
@@ -291,7 +266,7 @@ function buildFoliosHtml({
         .sheet-table th,
         .sheet-table td {
           border: 1px solid #111827;
-          padding: 3px 4px;
+          padding: 2px 4px;
         }
         .sheet-table th {
           text-align: center;
@@ -300,7 +275,7 @@ function buildFoliosHtml({
           line-height: 1.15;
         }
         .sheet-table td {
-          height: 18px;
+          height: 24px;
           vertical-align: middle;
         }
         .c-num { width: 12%; text-align: center; font-weight: 700; }
@@ -308,19 +283,19 @@ function buildFoliosHtml({
         .c-quien { width: 28%; }
         .c-camion { width: 16%; }
         .sheet-footer {
-          margin-top: 10mm;
+          margin-top: 4mm;
           display: grid;
           gap: 6px;
         }
-        .footer-title { font-weight: 700; font-size: 12px; }
+        .footer-title { font-weight: 700; font-size: 11px; }
         .footer-lines {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: 12mm;
+          gap: 10mm;
         }
         .footer-lines .line {
           border-bottom: 1px solid #111827;
-          height: 18px;
+          height: 14px;
         }
         .top {
           position: absolute;
@@ -340,20 +315,24 @@ function buildFoliosHtml({
           text-transform: lowercase;
         }
         .small-circle {
-          width: 54px;
-          height: 54px;
-          border: 3px solid #111827;
+          width: 108px;
+          height: 108px;
+          border: 5px solid #111827;
           border-radius: 999px;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 800;
-          font-size: 24px;
+          font-size: 54px;
         }
         .ship {
-          margin-top: 20mm;
+          position: absolute;
+          top: 58mm;
+          left: 18mm;
+          right: 18mm;
+          margin-top: 0;
           text-align: center;
-          font-size: 56px;
+          font-size: 78px;
           font-weight: 500;
           letter-spacing: 2px;
           color: #111827;
@@ -363,12 +342,17 @@ function buildFoliosHtml({
           word-break: break-word;
         }
         .big {
-          margin-top: 38mm;
+          position: absolute;
+          left: 50%;
+          top: 52%;
+          transform: translate(-50%, -50%);
+          width: 100%;
+          margin-top: 0;
           text-align: center;
-          font-size: 280px;
+          font-size: clamp(420px, 70vh, 900px);
           font-weight: 800;
           color: #111827;
-          line-height: 1;
+          line-height: 0.9;
         }
         .bottom {
           position: absolute;
@@ -393,7 +377,7 @@ function buildFoliosHtml({
         .value { font-weight: 800; }
 
         @media print {
-          body { background: white; }
+          html, body { background: white; margin: 0; padding: 0; }
           .wrap { padding: 0; gap: 0; }
           .page { margin: 0; border: none; page-break-after: always; }
         }
@@ -824,7 +808,11 @@ export default function LoadDetail() {
     const dateLabel = formatDateLabel(load?.fecha_de_carga);
     const puerto = String(terminal?.puerto || "").trim();
     const nombre = String(terminal?.nombre || "").trim();
-    const portLabel = (puerto || nombre || "-").toUpperCase();
+    const portLabelRaw =
+      puerto && nombre && puerto.toLowerCase() !== nombre.toLowerCase()
+        ? `${puerto} - ${nombre}`
+        : puerto || nombre || "-";
+    const portLabel = portLabelRaw.toUpperCase();
     return { shipName, dateLabel, portLabel };
   }, [load, ships, locations]);
 

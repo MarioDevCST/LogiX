@@ -30,23 +30,22 @@ export default function Sidebar({ collapsed }) {
           <span className="nav-label">Dashboard</span>
         </NavLink>
 
+        {meId && (
+          <NavLink
+            to="/app/mi-perfil"
+            title="Mi perfil"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              account_circle
+            </span>
+            <span className="nav-label">Mi perfil</span>
+          </NavLink>
+        )}
+
         <div className="nav-section">Administración</div>
         {role === ROLES.ALMACEN ? (
           <>
-            {meId && (
-              <NavLink
-                to={`/app/admin/usuarios/${meId}`}
-                title="Mi perfil"
-                className={({ isActive }) =>
-                  `nav-item ${isActive ? "active" : ""}`
-                }
-              >
-                <span className="nav-icon material-symbols-outlined">
-                  account_circle
-                </span>
-                <span className="nav-label">Mi perfil</span>
-              </NavLink>
-            )}
             <NavLink
               to="/app/admin/barcos"
               title="Barcos"
@@ -170,6 +169,26 @@ export default function Sidebar({ collapsed }) {
             inventory_2
           </span>
           <span className="nav-label">Palets</span>
+        </NavLink>
+
+        <div className="nav-section">Productos</div>
+        <NavLink
+          to="/app/productos"
+          title="Productos"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
+          <span className="nav-icon material-symbols-outlined">
+            shopping_bag
+          </span>
+          <span className="nav-label">Productos</span>
+        </NavLink>
+        <NavLink
+          to="/app/mermas"
+          title="Mermas"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
+          <span className="nav-icon material-symbols-outlined">delete</span>
+          <span className="nav-label">Mermas</span>
         </NavLink>
       </nav>
     </aside>

@@ -13,6 +13,7 @@ import {
 
 const titleMap = {
   app: "Dashboard",
+  "mi-perfil": "Mi perfil",
   admin: "Administración",
   usuarios: "Usuarios",
   colecciones: "Colecciones",
@@ -26,6 +27,8 @@ const titleMap = {
   cargas: "Cargas",
   "carga-palets": "Carga de Palets",
   palets: "Palets",
+  productos: "Productos",
+  mermas: "Mermas",
 };
 
 const detailResolvers = {
@@ -71,7 +74,7 @@ export default function Breadcrumb() {
   const { pathname } = useLocation();
   const segments = useMemo(
     () => pathname.split("/").filter(Boolean),
-    [pathname]
+    [pathname],
   );
   const [labelByPath, setLabelByPath] = useState({});
 

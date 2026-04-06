@@ -23,6 +23,11 @@ import Messages from "./pages/Messages.jsx";
 import MessageDetail from "./pages/MessageDetail.jsx";
 import Collections from "./pages/Collections.jsx";
 import Interactions from "./pages/Interactions.jsx";
+import MyProfile from "./pages/MyProfile.jsx";
+import Products from "./pages/Products.jsx";
+import ProductDetail from "./pages/ProductDetail.jsx";
+import MermaDetail from "./pages/MermaDetail.jsx";
+import Waste from "./pages/Waste.jsx";
 import "./firebase/init.js";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -34,6 +39,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/inactive" element={<Inactive />} />
         <Route path="/app" element={<AppLayout />}>
           <Route index element={<Dashboard />} />
+          <Route path="mi-perfil" element={<MyProfile />} />
           {/* Administración */}
           <Route path="admin/usuarios" element={<Users />} />
           <Route path="admin/usuarios/:id" element={<UserDetail />} />
@@ -68,8 +74,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           {/* Palets */}
           <Route path="palets" element={<Pallets />} />
           <Route path="palets/:id" element={<PalletDetail />} />
+          {/* Productos */}
+          <Route path="productos" element={<Products />} />
+          <Route path="productos/:id" element={<ProductDetail />} />
+          <Route path="mermas" element={<Waste />} />
+          <Route path="mermas/:id" element={<MermaDetail />} />
         </Route>
       </Routes>
     </BrowserRouter>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

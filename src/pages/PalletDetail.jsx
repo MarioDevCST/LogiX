@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
-import { getCurrentUser } from "../utils/roles.js";
+import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 import {
   deletePalletById,
   fetchPalletById,
@@ -28,6 +28,8 @@ export default function PalletDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const role = getCurrentRole();
+  const isOffice = role === ROLES.OFICINA;
   const [pallet, setPallet] = useState(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -129,7 +131,9 @@ export default function PalletDetail() {
           base: p?.base || "Europeo",
           productos: String(p?.productos || ""),
         });
-        setProductosItems(Array.isArray(p?.productos_items) ? p.productos_items : []);
+        setProductosItems(
+          Array.isArray(p?.productos_items) ? p.productos_items : [],
+        );
       } catch {
         if (!mounted) return;
         setPallet(null);
@@ -143,6 +147,14 @@ export default function PalletDetail() {
 
   const submit = async () => {
     try {
+      if (isOffice) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para modificar palets",
+          type: "error",
+        });
+        return;
+      }
       const productosText =
         productosItems.length > 0
           ? buildProductosText(productosItems)
@@ -171,12 +183,20 @@ export default function PalletDetail() {
 
   const onDelete = async () => {
     try {
+      if (isOffice) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para borrar palets",
+          type: "error",
+        });
+        return;
+      }
       const confirmed = window.confirm(
-        "¿Seguro que quieres borrar este palet?"
+        "¿Seguro que quieres borrar este palet?",
       );
       if (!confirmed) return;
       const typed = window.prompt(
-        "Escribe BORRAR para confirmar la eliminación"
+        "Escribe BORRAR para confirmar la eliminación",
       );
       if (typed !== "BORRAR") {
         setSnack({
@@ -210,16 +230,20 @@ export default function PalletDetail() {
       <div className="card-header">
         <h2 className="card-title">Detalle palet</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="icon-button"
-            onClick={() => setOpen(true)}
-            title="Modificar"
-          >
-            <span className="material-symbols-outlined">edit</span>
-          </button>
-          <button className="icon-button" onClick={onDelete} title="Borrar">
-            <span className="material-symbols-outlined">delete</span>
-          </button>
+          {!isOffice && (
+            <>
+              <button
+                className="icon-button"
+                onClick={() => setOpen(true)}
+                title="Modificar"
+              >
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+              <button className="icon-button" onClick={onDelete} title="Borrar">
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </>
+          )}
           <button
             className="icon-button"
             onClick={() => navigate(-1)}
@@ -268,310 +292,327 @@ export default function PalletDetail() {
         </p>
       </div>
 
-      <Modal
-        open={open}
-        title="Modificar palet"
-        onClose={() => setOpen(false)}
-        onSubmit={submit}
-        submitLabel="Guardar"
-      >
-        <div>
-          <div className="label">Número de palet</div>
-          <input
-            className="input"
-            value={form.numero_palet}
-            onChange={(e) => setForm({ ...form, numero_palet: e.target.value })}
-          />
-        </div>
-        <div>
-          <div className="label">Tipo</div>
-          <select
-            className="select"
-            value={form.tipo}
-            onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-          >
-            <option value="Seco">Seco</option>
-            <option value="Refrigerado">Refrigerado</option>
-            <option value="Congelado">Congelado</option>
-            <option value="Técnico">Técnico</option>
-            <option value="Fruta y verdura">Fruta y verdura</option>
-            <option value="Repuestos">Repuestos</option>
-          </select>
-        </div>
-        <div>
-          <div className="label">Base</div>
-          <select
-            className="select"
-            value={form.base || "Europeo"}
-            onChange={(e) => setForm({ ...form, base: e.target.value })}
-          >
-            <option value="Europeo">Europeo</option>
-            <option value="Americano">Americano</option>
-          </select>
-        </div>
-        <div>
-          <div className="label">Productos</div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div style={{ flex: 1, position: "relative" }}>
+      {!isOffice && (
+        <Modal
+          open={open}
+          title="Modificar palet"
+          onClose={() => setOpen(false)}
+          onSubmit={submit}
+          submitLabel="Guardar"
+        >
+          <div>
+            <div className="label">Número de palet</div>
+            <input
+              className="input"
+              value={form.numero_palet}
+              onChange={(e) =>
+                setForm({ ...form, numero_palet: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <div className="label">Tipo</div>
+            <select
+              className="select"
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              <option value="Seco">Seco</option>
+              <option value="Refrigerado">Refrigerado</option>
+              <option value="Congelado">Congelado</option>
+              <option value="Técnico">Técnico</option>
+              <option value="Fruta y verdura">Fruta y verdura</option>
+              <option value="Repuestos">Repuestos</option>
+            </select>
+          </div>
+          <div>
+            <div className="label">Base</div>
+            <select
+              className="select"
+              value={form.base || "Europeo"}
+              onChange={(e) => setForm({ ...form, base: e.target.value })}
+            >
+              <option value="Europeo">Europeo</option>
+              <option value="Americano">Americano</option>
+            </select>
+          </div>
+          <div>
+            <div className="label">Productos</div>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div
+                style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+              >
+                <div style={{ flex: 1, position: "relative" }}>
+                  <input
+                    className="input"
+                    value={productoSearch}
+                    onChange={(e) => {
+                      setProductoSearch(String(e.target.value || ""));
+                      setProductoSuggestOpen(true);
+                      setSelectedProductoId("");
+                    }}
+                    placeholder="Buscar por código o nombre"
+                    onFocus={() => setProductoSuggestOpen(true)}
+                    onBlur={() =>
+                      setTimeout(() => setProductoSuggestOpen(false), 120)
+                    }
+                  />
+                  {productoSuggestOpen && productoSuggestions.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        left: 0,
+                        right: 0,
+                        zIndex: 50,
+                        background: "#fff",
+                        border: "1px solid var(--border)",
+                        borderRadius: 10,
+                        boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                        overflow: "hidden",
+                        maxHeight: 240,
+                        overflowY: "auto",
+                      }}
+                    >
+                      {productoSuggestions.map((p) => {
+                        const pid = String(p?.id || p?._id || "").trim();
+                        const code = String(p?.codigo || "").trim();
+                        const name = String(p?.nombre_producto || "").trim();
+                        const estado = String(p?.estado || "").trim();
+                        return (
+                          <button
+                            key={pid || `${code}-${name}`}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedProductoId(pid);
+                              setProductoSearch(
+                                `${code || "—"} — ${name || "—"}`.trim(),
+                              );
+                              setProductoSuggestOpen(false);
+                            }}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "10px 12px",
+                              border: "none",
+                              background: "#fff",
+                              cursor: "pointer",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                            }}
+                          >
+                            <span style={{ fontWeight: 800 }}>
+                              {code || name || "—"}
+                            </span>
+                            <span
+                              style={{
+                                color: "var(--text-secondary)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {code && name
+                                ? name
+                                : estado
+                                  ? `(${estado})`
+                                  : "—"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 <input
                   className="input"
-                  value={productoSearch}
-                  onChange={(e) => {
-                    setProductoSearch(String(e.target.value || ""));
-                    setProductoSuggestOpen(true);
-                    setSelectedProductoId("");
-                  }}
-                  placeholder="Buscar por código o nombre"
-                  onFocus={() => setProductoSuggestOpen(true)}
-                  onBlur={() =>
-                    setTimeout(() => setProductoSuggestOpen(false), 120)
+                  style={{ width: 140 }}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={productoCantidad}
+                  onChange={(e) =>
+                    setProductoCantidad(String(e.target.value || ""))
                   }
+                  placeholder="Cantidad"
                 />
-                {productoSuggestOpen && productoSuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 50,
-                      background: "#fff",
-                      border: "1px solid var(--border)",
-                      borderRadius: 10,
-                      boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                      overflow: "hidden",
-                      maxHeight: 240,
-                      overflowY: "auto",
-                    }}
-                  >
-                    {productoSuggestions.map((p) => {
-                      const pid = String(p?.id || p?._id || "").trim();
-                      const code = String(p?.codigo || "").trim();
-                      const name = String(p?.nombre_producto || "").trim();
-                      const estado = String(p?.estado || "").trim();
-                      return (
-                        <button
-                          key={pid || `${code}-${name}`}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSelectedProductoId(pid);
-                            setProductoSearch(
-                              `${code || "—"} — ${name || "—"}`.trim(),
-                            );
-                            setProductoSuggestOpen(false);
-                          }}
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            padding: "10px 12px",
-                            border: "none",
-                            background: "#fff",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 10,
-                          }}
-                        >
-                          <span style={{ fontWeight: 800 }}>
+
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const pid = String(selectedProductoId || "").trim();
+                    const qtyNum = Number(
+                      String(productoCantidad || "").trim(),
+                    );
+                    const cantidad = Number.isFinite(qtyNum) ? qtyNum : 0;
+                    if (!pid) {
+                      setSnack({
+                        open: true,
+                        message: "Selecciona un producto",
+                        type: "error",
+                      });
+                      return;
+                    }
+                    if (!cantidad) {
+                      setSnack({
+                        open: true,
+                        message: "La cantidad debe ser mayor que 0",
+                        type: "error",
+                      });
+                      return;
+                    }
+                    const selected = (
+                      Array.isArray(productosCatalogo) ? productosCatalogo : []
+                    ).find((p) => String(p?.id || p?._id || "").trim() === pid);
+                    if (!selected) {
+                      setSnack({
+                        open: true,
+                        message: "Producto no encontrado",
+                        type: "error",
+                      });
+                      return;
+                    }
+                    const code = String(selected?.codigo || "").trim();
+                    const name = String(selected?.nombre_producto || "").trim();
+                    setProductosItems((prev) => {
+                      const list = Array.isArray(prev) ? prev.slice() : [];
+                      const idx = list.findIndex(
+                        (it) =>
+                          String(it?.producto_id || "").trim() === pid ||
+                          String(it?.id || "").trim() === pid,
+                      );
+                      if (idx >= 0) {
+                        const prevQty =
+                          typeof list[idx]?.cantidad === "number"
+                            ? list[idx].cantidad
+                            : Number(String(list[idx]?.cantidad || "").trim());
+                        const nextQty =
+                          (Number.isFinite(prevQty) ? prevQty : 0) + cantidad;
+                        list[idx] = { ...list[idx], cantidad: nextQty };
+                        return list;
+                      }
+                      list.push({
+                        producto_id: pid,
+                        codigo: code,
+                        nombre_producto: name,
+                        cantidad,
+                      });
+                      return list;
+                    });
+                    setProductoSearch("");
+                    setSelectedProductoId("");
+                    setProductoCantidad("");
+                    setProductoSuggestOpen(false);
+                  }}
+                >
+                  Añadir
+                </button>
+              </div>
+
+              {productosItems.length > 0 ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {productosItems.map((it, idx) => {
+                    const pid = String(it?.producto_id || it?.id || idx);
+                    const code = String(it?.codigo || "").trim();
+                    const name = String(it?.nombre_producto || "").trim();
+                    const qty =
+                      typeof it?.cantidad === "number"
+                        ? it.cantidad
+                        : Number(String(it?.cantidad || "").trim());
+                    const cantidad = Number.isFinite(qty) ? qty : 0;
+                    return (
+                      <div
+                        key={pid}
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "center",
+                          border: "1px solid var(--border)",
+                          borderRadius: 10,
+                          padding: 10,
+                          background: "#fff",
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 800 }}>
                             {code || name || "—"}
-                          </span>
-                          <span
+                          </div>
+                          <div
                             style={{
                               color: "var(--text-secondary)",
+                              fontSize: 13,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             }}
                           >
-                            {code && name
-                              ? name
-                              : estado
-                                ? `(${estado})`
-                                : "—"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <input
-                className="input"
-                style={{ width: 140 }}
-                type="number"
-                step="0.01"
-                min="0"
-                value={productoCantidad}
-                onChange={(e) => setProductoCantidad(String(e.target.value || ""))}
-                placeholder="Cantidad"
-              />
-
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  const pid = String(selectedProductoId || "").trim();
-                  const qtyNum = Number(String(productoCantidad || "").trim());
-                  const cantidad = Number.isFinite(qtyNum) ? qtyNum : 0;
-                  if (!pid) {
-                    setSnack({
-                      open: true,
-                      message: "Selecciona un producto",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  if (!cantidad) {
-                    setSnack({
-                      open: true,
-                      message: "La cantidad debe ser mayor que 0",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  const selected = (Array.isArray(productosCatalogo)
-                    ? productosCatalogo
-                    : []
-                  ).find((p) => String(p?.id || p?._id || "").trim() === pid);
-                  if (!selected) {
-                    setSnack({
-                      open: true,
-                      message: "Producto no encontrado",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  const code = String(selected?.codigo || "").trim();
-                  const name = String(selected?.nombre_producto || "").trim();
-                  setProductosItems((prev) => {
-                    const list = Array.isArray(prev) ? prev.slice() : [];
-                    const idx = list.findIndex(
-                      (it) =>
-                        String(it?.producto_id || "").trim() === pid ||
-                        String(it?.id || "").trim() === pid,
-                    );
-                    if (idx >= 0) {
-                      const prevQty =
-                        typeof list[idx]?.cantidad === "number"
-                          ? list[idx].cantidad
-                          : Number(String(list[idx]?.cantidad || "").trim());
-                      const nextQty =
-                        (Number.isFinite(prevQty) ? prevQty : 0) + cantidad;
-                      list[idx] = { ...list[idx], cantidad: nextQty };
-                      return list;
-                    }
-                    list.push({
-                      producto_id: pid,
-                      codigo: code,
-                      nombre_producto: name,
-                      cantidad,
-                    });
-                    return list;
-                  });
-                  setProductoSearch("");
-                  setSelectedProductoId("");
-                  setProductoCantidad("");
-                  setProductoSuggestOpen(false);
-                }}
-              >
-                Añadir
-              </button>
-            </div>
-
-            {productosItems.length > 0 ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                {productosItems.map((it, idx) => {
-                  const pid = String(it?.producto_id || it?.id || idx);
-                  const code = String(it?.codigo || "").trim();
-                  const name = String(it?.nombre_producto || "").trim();
-                  const qty =
-                    typeof it?.cantidad === "number"
-                      ? it.cantidad
-                      : Number(String(it?.cantidad || "").trim());
-                  const cantidad = Number.isFinite(qty) ? qty : 0;
-                  return (
-                    <div
-                      key={pid}
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "center",
-                        border: "1px solid var(--border)",
-                        borderRadius: 10,
-                        padding: 10,
-                        background: "#fff",
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 800 }}>
-                          {code || name || "—"}
+                            {code && name ? name : pid}
+                          </div>
                         </div>
-                        <div
-                          style={{
-                            color: "var(--text-secondary)",
-                            fontSize: 13,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
+                        <input
+                          className="input"
+                          style={{ width: 140 }}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={String(cantidad)}
+                          onChange={(e) => {
+                            const next = Number(
+                              String(e.target.value || "").trim(),
+                            );
+                            setProductosItems((prev) => {
+                              const list = Array.isArray(prev)
+                                ? prev.slice()
+                                : [];
+                              const nextQty = Number.isFinite(next) ? next : 0;
+                              list[idx] = { ...list[idx], cantidad: nextQty };
+                              return list;
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="Borrar"
+                          onClick={() => {
+                            setProductosItems((prev) =>
+                              (Array.isArray(prev) ? prev : []).filter(
+                                (_, i) => i !== idx,
+                              ),
+                            );
                           }}
                         >
-                          {code && name ? name : pid}
-                        </div>
+                          <span className="material-symbols-outlined">
+                            delete
+                          </span>
+                        </button>
                       </div>
-                      <input
-                        className="input"
-                        style={{ width: 140 }}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={String(cantidad)}
-                        onChange={(e) => {
-                          const next = Number(String(e.target.value || "").trim());
-                          setProductosItems((prev) => {
-                            const list = Array.isArray(prev) ? prev.slice() : [];
-                            const nextQty = Number.isFinite(next) ? next : 0;
-                            list[idx] = { ...list[idx], cantidad: nextQty };
-                            return list;
-                          });
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="Borrar"
-                        onClick={() => {
-                          setProductosItems((prev) =>
-                            (Array.isArray(prev) ? prev : []).filter(
-                              (_, i) => i !== idx,
-                            ),
-                          );
-                        }}
-                      >
-                        <span className="material-symbols-outlined">delete</span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-                No hay productos añadidos.
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+                  No hay productos añadidos.
+                </div>
+              )}
 
-            <textarea
-              className="input"
-              rows="4"
-              value={form.productos}
-              onChange={(e) => setForm({ ...form, productos: e.target.value })}
-              placeholder="Texto libre (opcional)"
-            />
+              <textarea
+                className="input"
+                rows="4"
+                value={form.productos}
+                onChange={(e) =>
+                  setForm({ ...form, productos: e.target.value })
+                }
+                placeholder="Texto libre (opcional)"
+              />
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       <Snackbar
         open={snack.open}

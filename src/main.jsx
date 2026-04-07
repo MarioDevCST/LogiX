@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Inactive from "./pages/Inactive.jsx";
@@ -29,6 +29,7 @@ import ProductDetail from "./pages/ProductDetail.jsx";
 import MermaDetail from "./pages/MermaDetail.jsx";
 import Waste from "./pages/Waste.jsx";
 import "./firebase/init.js";
+import { ROLES, getCurrentRole } from "./utils/roles.js";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -41,35 +42,149 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route index element={<Dashboard />} />
           <Route path="mi-perfil" element={<MyProfile />} />
           {/* Administración */}
-          <Route path="admin/usuarios" element={<Users />} />
-          <Route path="admin/usuarios/:id" element={<UserDetail />} />
-          <Route path="admin/interacciones" element={<Interactions />} />
-          <Route path="admin/colecciones" element={<Collections />} />
+          <Route
+            path="admin/usuarios"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Users />
+              )
+            }
+          />
+          <Route
+            path="admin/usuarios/:id"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <UserDetail />
+              )
+            }
+          />
+          <Route
+            path="admin/interacciones"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Interactions />
+              )
+            }
+          />
+          <Route
+            path="admin/colecciones"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Collections />
+              )
+            }
+          />
           <Route
             path="admin/consignatarios"
-            element={<Collections initialTab="consignees" />}
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Collections initialTab="consignees" />
+              )
+            }
           />
           <Route
             path="admin/consignatarios/:id"
-            element={<ConsigneeDetail />}
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <ConsigneeDetail />
+              )
+            }
           />
-          <Route path="admin/barcos" element={<Ships />} />
-          <Route path="admin/barcos/:id" element={<ShipDetail />} />
+          <Route
+            path="admin/barcos"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Ships />
+              )
+            }
+          />
+          <Route
+            path="admin/barcos/:id"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <ShipDetail />
+              )
+            }
+          />
           <Route
             path="admin/empresas"
-            element={<Collections initialTab="companies" />}
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Collections initialTab="companies" />
+              )
+            }
           />
-          <Route path="admin/empresas/:id" element={<CompanyDetail />} />
+          <Route
+            path="admin/empresas/:id"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <CompanyDetail />
+              )
+            }
+          />
           <Route
             path="admin/localizaciones"
-            element={<Collections initialTab="locations" />}
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Collections initialTab="locations" />
+              )
+            }
           />
-          <Route path="admin/localizaciones/:id" element={<LocationDetail />} />
+          <Route
+            path="admin/localizaciones/:id"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <LocationDetail />
+              )
+            }
+          />
           <Route path="admin/mensajes" element={<Messages />} />
           <Route path="admin/mensajes/:id" element={<MessageDetail />} />
           {/* Logística */}
-          <Route path="logistica/cargas" element={<Loads />} />
-          <Route path="logistica/cargas/:id" element={<LoadDetail />} />
+          <Route
+            path="logistica/cargas"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <Loads />
+              )
+            }
+          />
+          <Route
+            path="logistica/cargas/:id"
+            element={
+              getCurrentRole() === ROLES.ALMACEN ? (
+                <Navigate to="/app" replace />
+              ) : (
+                <LoadDetail />
+              )
+            }
+          />
           <Route path="logistica/carga-palets" element={<PalletLoading />} />
           {/* Palets */}
           <Route path="palets" element={<Pallets />} />

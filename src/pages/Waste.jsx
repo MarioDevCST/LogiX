@@ -9,7 +9,7 @@ import {
   fetchAllMerma,
   fetchAllProductos,
 } from "../firebase/auth.js";
-import { getCurrentUser } from "../utils/roles.js";
+import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 
 function formatDateDMY(value) {
   if (!value) return "-";
@@ -78,6 +78,9 @@ const MOTIVE_OPTIONS = [
 
 export default function Waste() {
   const navigate = useNavigate();
+  const role = getCurrentRole();
+  const isWarehouse = role === ROLES.ALMACEN;
+  const isOffice = role === ROLES.OFICINA;
 
   const columns = [
     { key: "codigo", header: "Código" },
@@ -401,20 +404,22 @@ export default function Waste() {
               </option>
             ))}
           </select>
-          <button
-            className="secondary-button"
-            title={showHistory ? "Ver solo pendientes" : "Ver historial"}
-            onClick={() => {
-              setShowHistory((prev) => {
-                const next = !prev;
-                setEstadoFilter(next ? "" : "pendiente");
-                return next;
-              });
-            }}
-          >
-            <span className="material-symbols-outlined">history</span>
-            {showHistory ? "Solo pendientes" : "Historial"}
-          </button>
+          {!isWarehouse && !isOffice && (
+            <button
+              className="secondary-button"
+              title={showHistory ? "Ver solo pendientes" : "Ver historial"}
+              onClick={() => {
+                setShowHistory((prev) => {
+                  const next = !prev;
+                  setEstadoFilter(next ? "" : "pendiente");
+                  return next;
+                });
+              }}
+            >
+              <span className="material-symbols-outlined">history</span>
+              {showHistory ? "Solo pendientes" : "Historial"}
+            </button>
+          )}
         </div>
       </div>
 

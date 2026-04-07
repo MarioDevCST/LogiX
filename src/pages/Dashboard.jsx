@@ -4,6 +4,7 @@ import Calendar from "../components/Calendar.jsx";
 import DataTable from "../components/DataTable.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import { fetchAllLoads, fetchAllShips } from "../firebase/auth.js";
+import { ROLES, getCurrentRole } from "../utils/roles.js";
 
 const ESTADO_CARGA_OPTIONS = [
   "Preparando",
@@ -47,7 +48,8 @@ function startEndForRange(rangeValue) {
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
 
-  if (rangeValue === "today") return { startMs: start.getTime(), endMs: end.getTime() };
+  if (rangeValue === "today")
+    return { startMs: start.getTime(), endMs: end.getTime() };
   if (rangeValue === "week") {
     const day = start.getDay();
     const diffToMonday = (day + 6) % 7;
@@ -69,12 +71,19 @@ function startEndForRange(rangeValue) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const role = getCurrentRole();
+  const isWarehouse = role === ROLES.ALMACEN;
+  const isOffice = role === ROLES.OFICINA;
   const [range, setRange] = useState("today");
   const [month, setMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [loads, setLoads] = useState([]);
   const [ships, setShips] = useState([]);
-  const [snack, setSnack] = useState({ open: false, message: "", type: "success" });
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -94,7 +103,11 @@ export default function Dashboard() {
         if (!mounted) return;
         setLoads([]);
         setShips([]);
-        setSnack({ open: true, message: "Error cargando datos", type: "error" });
+        setSnack({
+          open: true,
+          message: "Error cargando datos",
+          type: "error",
+        });
       })
       .finally(() => {
         if (!mounted) return;
@@ -107,7 +120,7 @@ export default function Dashboard() {
 
   const shipById = useMemo(() => {
     return new Map(
-      ships.map((s) => [String(s?._id || s?.id || ""), s]).filter((p) => p[0])
+      ships.map((s) => [String(s?._id || s?.id || ""), s]).filter((p) => p[0]),
     );
   }, [ships]);
 
@@ -125,15 +138,20 @@ export default function Dashboard() {
 
   const calendarItems = useMemo(() => {
     return loadsInRange.map((l) => {
-      const ship = shipById.get(String(l?.barco?._id || l?.barco || "")) || null;
+      const ship =
+        shipById.get(String(l?.barco?._id || l?.barco || "")) || null;
       const fechaCargaKey = toIsoDateKey(l?.fecha_de_carga);
       const fechaDescargaKey = toIsoDateKey(l?.fecha_de_descarga);
       return {
         id: String(l?._id || l?.id || ""),
         fecha_de_carga: fechaCargaKey ? `${fechaCargaKey}T00:00:00` : "",
-        fecha_de_descarga: fechaDescargaKey ? `${fechaDescargaKey}T00:00:00` : "",
+        fecha_de_descarga: fechaDescargaKey
+          ? `${fechaDescargaKey}T00:00:00`
+          : "",
         barco: ship?.nombre_del_barco || "",
-        entrega: Array.isArray(l?.entrega) ? l.entrega.filter(Boolean).join(", ") : "",
+        entrega: Array.isArray(l?.entrega)
+          ? l.entrega.filter(Boolean).join(", ")
+          : "",
         estado_viaje: String(l?.estado_viaje || "Preparando"),
       };
     });
@@ -159,14 +177,19 @@ export default function Dashboard() {
       const aKey = toIsoDateKey(a?.fecha_de_carga) || "9999-99-99";
       const bKey = toIsoDateKey(b?.fecha_de_carga) || "9999-99-99";
       if (aKey !== bKey) return aKey.localeCompare(bKey);
-      return String(a?.hora_de_carga || "").localeCompare(String(b?.hora_de_carga || ""));
+      return String(a?.hora_de_carga || "").localeCompare(
+        String(b?.hora_de_carga || ""),
+      );
     });
     return sorted.slice(0, 25).map((l) => {
-      const ship = shipById.get(String(l?.barco?._id || l?.barco || "")) || null;
+      const ship =
+        shipById.get(String(l?.barco?._id || l?.barco || "")) || null;
       return {
         id: String(l?._id || l?.id || ""),
         barco: ship?.nombre_del_barco || "",
-        entrega: Array.isArray(l?.entrega) ? l.entrega.filter(Boolean).join(", ") : "",
+        entrega: Array.isArray(l?.entrega)
+          ? l.entrega.filter(Boolean).join(", ")
+          : "",
         estado_viaje: String(l?.estado_viaje || "Preparando"),
         fecha_de_carga: toIsoDateKey(l?.fecha_de_carga) || "",
         hora_de_carga: String(l?.hora_de_carga || ""),
@@ -182,7 +205,7 @@ export default function Dashboard() {
       { key: "fecha_de_carga", header: "Fecha carga" },
       { key: "hora_de_carga", header: "Hora" },
     ],
-    []
+    [],
   );
 
   return (
@@ -213,19 +236,22 @@ export default function Dashboard() {
               </option>
             ))}
           </select>
-          <button
-            className="primary-button"
-            onClick={() => navigate("/app/logistica/cargas")}
-          >
-            Ir a Cargas
-          </button>
+          {!isWarehouse && !isOffice && (
+            <button
+              className="primary-button"
+              onClick={() => navigate("/app/logistica/cargas")}
+            >
+              Ir a Cargas
+            </button>
+          )}
         </div>
       </div>
 
       <section className="card">
         <div className="card-header">
           <h2 className="card-title">
-            Resumen · {RANGE_OPTIONS.find((o) => o.value === range)?.label || "Hoy"}
+            Resumen ·{" "}
+            {RANGE_OPTIONS.find((o) => o.value === range)?.label || "Hoy"}
           </h2>
         </div>
         <div className="card-grid">
@@ -236,7 +262,10 @@ export default function Dashboard() {
                 <div className="card-item-title" style={{ fontSize: 18 }}>
                   Total
                 </div>
-                <div className="card-item-sub" style={{ fontSize: 26, color: "var(--text-primary)" }}>
+                <div
+                  className="card-item-sub"
+                  style={{ fontSize: 26, color: "var(--text-primary)" }}
+                >
                   {stats.total}
                 </div>
               </div>
@@ -249,7 +278,10 @@ export default function Dashboard() {
                 <div className="card-item-title" style={{ fontSize: 18 }}>
                   En preparación
                 </div>
-                <div className="card-item-sub" style={{ fontSize: 26, color: "var(--text-primary)" }}>
+                <div
+                  className="card-item-sub"
+                  style={{ fontSize: 26, color: "var(--text-primary)" }}
+                >
                   {stats.enPreparacion}
                 </div>
               </div>
@@ -258,12 +290,19 @@ export default function Dashboard() {
           {ESTADO_CARGA_OPTIONS.map((k) => (
             <div key={k} className="card-item">
               <div className="card-item-header">
-                <div className="avatar">{String(k || "?").slice(0, 1).toUpperCase()}</div>
+                <div className="avatar">
+                  {String(k || "?")
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </div>
                 <div>
                   <div className="card-item-title" style={{ fontSize: 18 }}>
                     {k}
                   </div>
-                  <div className="card-item-sub" style={{ fontSize: 26, color: "var(--text-primary)" }}>
+                  <div
+                    className="card-item-sub"
+                    style={{ fontSize: 26, color: "var(--text-primary)" }}
+                  >
                     {stats.porEstado[k] || 0}
                   </div>
                 </div>

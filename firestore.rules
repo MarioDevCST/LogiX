@@ -9,6 +9,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/user/$(request.auth.uid));
     }
 
+    function userRole() {
+      return isSignedIn() ? userDoc().data.role : null;
+    }
+
+    function isWarehouse() {
+      return isSignedIn() && userRole() == 'warehouse';
+    }
+
     function isAdmin() {
       return isSignedIn() && userDoc().data.role == 'admin';
     }
@@ -65,7 +73,8 @@ service cloud.firestore {
     }
 
     match /messages/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && !isWarehouse();
     }
 
     match /merma/{id} {
@@ -77,7 +86,8 @@ service cloud.firestore {
     }
 
     match /productos/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && !isWarehouse();
     }
   }
 }

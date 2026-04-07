@@ -5,7 +5,7 @@ import Modal from "../components/Modal.jsx";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import { createProducto, fetchAllProductos } from "../firebase/auth.js";
-import { getCurrentUser } from "../utils/roles.js";
+import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 
 function statusChip(estadoValue) {
   const raw = String(estadoValue || "").trim();
@@ -37,6 +37,10 @@ function statusChip(estadoValue) {
 
 export default function Products() {
   const navigate = useNavigate();
+  const role = getCurrentRole();
+  const isWarehouse = role === ROLES.ALMACEN;
+  const isOffice = role === ROLES.OFICINA;
+  const isReadOnly = isWarehouse || isOffice;
 
   const columns = [
     { key: "codigo", header: "Código" },
@@ -150,6 +154,14 @@ export default function Products() {
 
   const submit = async () => {
     try {
+      if (isReadOnly) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para crear productos",
+          type: "error",
+        });
+        return;
+      }
       const payload = {
         codigo: form.codigo,
         nombre_producto: form.nombre_producto,
@@ -229,8 +241,8 @@ export default function Products() {
         columns={columns}
         data={tableRows}
         loading={loading}
-        createLabel="Crear producto"
-        onCreate={onCreate}
+        createLabel={isReadOnly ? undefined : "Crear producto"}
+        onCreate={isReadOnly ? undefined : onCreate}
         onRowClick={(row) => {
           const id = String(row?.id || "").trim();
           if (!id) return;
@@ -249,87 +261,92 @@ export default function Products() {
         }}
       />
 
-      <Modal
-        open={open}
-        title="Crear producto"
-        onClose={() => setOpen(false)}
-        onSubmit={submit}
-        submitLabel="Crear"
-      >
-        <div>
-          <div className="label">Código</div>
-          <input
-            className="input"
-            value={form.codigo}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, codigo: e.target.value }))
-            }
-            placeholder="Código"
-          />
-        </div>
-        <div>
-          <div className="label">Nombre del producto</div>
-          <input
-            className="input"
-            value={form.nombre_producto}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, nombre_producto: e.target.value }))
-            }
-            placeholder="Nombre del producto"
-          />
-        </div>
-        <div>
-          <div className="label">Familia</div>
-          <input
-            className="input"
-            value={form.familia}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, familia: e.target.value }))
-            }
-            placeholder="Familia"
-          />
-        </div>
-        <div>
-          <div className="label">Composición</div>
-          <input
-            className="input"
-            value={form.composicion}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, composicion: e.target.value }))
-            }
-            placeholder="Composición"
-          />
-        </div>
-        <div>
-          <div className="label">Alérgenos</div>
-          <input
-            className="input"
-            value={form.alergenos}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, alergenos: e.target.value }))
-            }
-            placeholder="Alérgenos"
-          />
-        </div>
-        <div>
-          <div className="label">Estado</div>
-          <select
-            className="input"
-            value={form.estado}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                estado: String(e.target.value || "")
-                  .trim()
-                  .toLowerCase(),
-              }))
-            }
-          >
-            <option value="disponible">Disponible</option>
-            <option value="no disponible">No disponible</option>
-          </select>
-        </div>
-      </Modal>
+      {!isReadOnly && (
+        <Modal
+          open={open}
+          title="Crear producto"
+          onClose={() => setOpen(false)}
+          onSubmit={submit}
+          submitLabel="Crear"
+        >
+          <div>
+            <div className="label">Código</div>
+            <input
+              className="input"
+              value={form.codigo}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, codigo: e.target.value }))
+              }
+              placeholder="Código"
+            />
+          </div>
+          <div>
+            <div className="label">Nombre del producto</div>
+            <input
+              className="input"
+              value={form.nombre_producto}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  nombre_producto: e.target.value,
+                }))
+              }
+              placeholder="Nombre del producto"
+            />
+          </div>
+          <div>
+            <div className="label">Familia</div>
+            <input
+              className="input"
+              value={form.familia}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, familia: e.target.value }))
+              }
+              placeholder="Familia"
+            />
+          </div>
+          <div>
+            <div className="label">Composición</div>
+            <input
+              className="input"
+              value={form.composicion}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, composicion: e.target.value }))
+              }
+              placeholder="Composición"
+            />
+          </div>
+          <div>
+            <div className="label">Alérgenos</div>
+            <input
+              className="input"
+              value={form.alergenos}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, alergenos: e.target.value }))
+              }
+              placeholder="Alérgenos"
+            />
+          </div>
+          <div>
+            <div className="label">Estado</div>
+            <select
+              className="input"
+              value={form.estado}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  estado: String(e.target.value || "")
+                    .trim()
+                    .toLowerCase(),
+                }))
+              }
+            >
+              <option value="disponible">Disponible</option>
+              <option value="no disponible">No disponible</option>
+            </select>
+          </div>
+        </Modal>
+      )}
 
       <Snackbar
         open={snack.open}

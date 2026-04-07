@@ -7,6 +7,7 @@ import {
   hasPermission,
   PERMISSIONS,
   getCurrentUser,
+  ROLES,
 } from "../utils/roles.js";
 import {
   fetchAllConsignees,
@@ -772,18 +773,25 @@ export default function LoadDetail() {
 
   const currentUser = getCurrentUser();
   const role = getCurrentRole() || currentUser?.role || null;
+  const roleNormalized = String(role || "")
+    .trim()
+    .toLowerCase();
+  const isOffice = roleNormalized === ROLES.OFICINA;
   const canManageLoads =
-    hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
-    String(role || "")
-      .trim()
-      .toLowerCase() === "dispatcher";
+    !isOffice &&
+    (hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
+      String(role || "")
+        .trim()
+        .toLowerCase() === "dispatcher");
   const canManagePallets =
-    hasPermission(role, PERMISSIONS.MANAGE_PALLETS) ||
-    canManageLoads ||
-    String(role || "")
-      .trim()
-      .toLowerCase() === "dispatcher";
+    !isOffice &&
+    (hasPermission(role, PERMISSIONS.MANAGE_PALLETS) ||
+      canManageLoads ||
+      String(role || "")
+        .trim()
+        .toLowerCase() === "dispatcher");
   const canDeleteLoad =
+    !isOffice &&
     String(role || "")
       .trim()
       .toLowerCase() === "dispatcher";
@@ -1744,7 +1752,7 @@ export default function LoadDetail() {
       <div className="card-header">
         <h2 className="card-title">Detalle carga</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          {canManageLoads && (
+          {!isOffice && canManageLoads && (
             <button
               className="icon-button"
               onClick={() => {
@@ -1756,7 +1764,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">edit</span>
             </button>
           )}
-          {canManagePallets && (
+          {!isOffice && canManagePallets && (
             <button
               className="icon-button"
               onClick={openFuseModal}
@@ -1765,14 +1773,16 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">call_merge</span>
             </button>
           )}
-          <button
-            className="icon-button"
-            onClick={() => setOpenCreatePallet(true)}
-            title="Crear palet"
-          >
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
-          {canManageLoads && (
+          {!isOffice && (
+            <button
+              className="icon-button"
+              onClick={() => setOpenCreatePallet(true)}
+              title="Crear palet"
+            >
+              <span className="material-symbols-outlined">add_box</span>
+            </button>
+          )}
+          {!isOffice && canManageLoads && (
             <button
               className="icon-button"
               onClick={openFolioModal}
@@ -1781,7 +1791,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">description</span>
             </button>
           )}
-          {hasLoadReport && (
+          {!isOffice && hasLoadReport && (
             <button
               className="icon-button"
               onClick={openLoadReportPreview}
@@ -1791,7 +1801,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">receipt_long</span>
             </button>
           )}
-          {canDeleteLoad && (
+          {!isOffice && canDeleteLoad && (
             <button
               className="icon-button"
               onClick={handleDelete}
@@ -2589,12 +2599,14 @@ export default function LoadDetail() {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button
-                className="secondary-button"
-                onClick={() => setFolioStep("config")}
-              >
-                Cambiar rango
-              </button>
+              {!isOffice && (
+                <button
+                  className="secondary-button"
+                  onClick={() => setFolioStep("config")}
+                >
+                  Cambiar rango
+                </button>
+              )}
               <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
                 Vista previa
               </div>
@@ -2637,7 +2649,7 @@ export default function LoadDetail() {
             <div style={{ color: "var(--text-secondary)" }}>
               No hay informe para esta carga
             </div>
-            {(impliedHasLoadReport || canManageLoads) && (
+            {!isOffice && (impliedHasLoadReport || canManageLoads) && (
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   type="button"
@@ -2669,15 +2681,17 @@ export default function LoadDetail() {
                 Finalizado: {formatMaybeDateTime(loadReport.finished_at) || "-"}
               </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={exportLoadReportPdf}
-              >
-                Exportar PDF
-              </button>
-            </div>
+            {!isOffice && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={exportLoadReportPdf}
+                >
+                  Exportar PDF
+                </button>
+              </div>
+            )}
 
             <div
               style={{

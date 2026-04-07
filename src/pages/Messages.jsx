@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable from "../components/DataTable.jsx";
 import CardGrid from "../components/CardGrid.jsx";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
-import { ROLES, ROLE_LABELS, getCurrentUser } from "../utils/roles.js";
+import {
+  ROLES,
+  ROLE_LABELS,
+  getCurrentRole,
+  getCurrentUser,
+} from "../utils/roles.js";
 import {
   createMessage,
   deleteMessageById,
@@ -16,21 +21,30 @@ import {
 
 export default function Messages() {
   const navigate = useNavigate();
-  const buildCuerpoPreview = (value) => {
+  const role = getCurrentRole();
+  const isWarehouse = role === ROLES.ALMACEN;
+  const isOffice = role === ROLES.OFICINA;
+  const isReadOnly = isWarehouse || isOffice;
+  const buildCuerpoPreview = useCallback((value) => {
     const normalized = String(value || "")
       .replace(/\s+/g, " ")
       .trim();
     if (!normalized) return "-";
     const max = 120;
-    return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized;
-  };
+    return normalized.length > max
+      ? `${normalized.slice(0, max)}…`
+      : normalized;
+  }, []);
 
-  const columns = [
-    { key: "titulo", header: "Título" },
-    { key: "cuerpo_preview", header: "Cuerpo" },
-    { key: "roles", header: "Roles" },
-    { key: "acciones", header: "Acciones" },
-  ];
+  const columns = useMemo(() => {
+    const base = [
+      { key: "titulo", header: "Título" },
+      { key: "cuerpo_preview", header: "Cuerpo" },
+      { key: "roles", header: "Roles" },
+    ];
+    if (isReadOnly) return base;
+    return [...base, { key: "acciones", header: "Acciones" }];
+  }, [isReadOnly]);
 
   const [view, setView] = useState("table");
   const [rows, setRows] = useState([]);
@@ -55,40 +69,48 @@ export default function Messages() {
     type: "success",
   });
 
-  const startEdit = async (id) => {
-    try {
-      const m = await fetchMessageById(id);
-      if (!m) return;
-      setEditingId(m._id || m.id || id);
-      setEditForm({
-        titulo: m.titulo || "",
-        cuerpo: m.cuerpo || "",
-        roles: Array.isArray(m.roles) ? m.roles : [],
-      });
-      setOpenEdit(true);
-    } catch (e) {
-      setSnack({
-        open: true,
-        message: "Error cargando mensaje",
-        type: "error",
-      });
-    }
-  };
+  const startEdit = useCallback(
+    async (id) => {
+      try {
+        if (isReadOnly) return;
+        const m = await fetchMessageById(id);
+        if (!m) return;
+        setEditingId(m._id || m.id || id);
+        setEditForm({
+          titulo: m.titulo || "",
+          cuerpo: m.cuerpo || "",
+          roles: Array.isArray(m.roles) ? m.roles : [],
+        });
+        setOpenEdit(true);
+      } catch (e) {
+        setSnack({
+          open: true,
+          message: "Error cargando mensaje",
+          type: "error",
+        });
+      }
+    },
+    [isReadOnly],
+  );
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Seguro que deseas borrar este mensaje?")) return;
-    try {
-      await deleteMessageById(id);
-      setRows((prev) => prev.filter((r) => r.id !== id));
-      setSnack({ open: true, message: "Mensaje borrado", type: "success" });
-    } catch (e) {
-      setSnack({
-        open: true,
-        message: "Error borrando mensaje",
-        type: "error",
-      });
-    }
-  };
+  const handleDelete = useCallback(
+    async (id) => {
+      if (isReadOnly) return;
+      if (!window.confirm("¿Seguro que deseas borrar este mensaje?")) return;
+      try {
+        await deleteMessageById(id);
+        setRows((prev) => prev.filter((r) => r.id !== id));
+        setSnack({ open: true, message: "Mensaje borrado", type: "success" });
+      } catch (e) {
+        setSnack({
+          open: true,
+          message: "Error borrando mensaje",
+          type: "error",
+        });
+      }
+    },
+    [isReadOnly],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -120,30 +142,36 @@ export default function Messages() {
               Array.isArray(m?.roles) && m.roles.length > 0
                 ? m.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
                 : "Todos",
-            acciones: (
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  className="icon-button"
-                  title="Editar"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEdit(rowId);
-                  }}
-                >
-                  <span className="material-symbols-outlined">edit</span>
-                </button>
-                <button
-                  className="icon-button"
-                  title="Borrar"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(rowId);
-                  }}
-                >
-                  <span className="material-symbols-outlined">delete</span>
-                </button>
-              </div>
-            ),
+            ...(isReadOnly
+              ? {}
+              : {
+                  acciones: (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="icon-button"
+                        title="Editar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEdit(rowId);
+                        }}
+                      >
+                        <span className="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        className="icon-button"
+                        title="Borrar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(rowId);
+                        }}
+                      >
+                        <span className="material-symbols-outlined">
+                          delete
+                        </span>
+                      </button>
+                    </div>
+                  ),
+                }),
           };
         };
         setRows(list.map(rowFromMessage));
@@ -158,7 +186,7 @@ export default function Messages() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [buildCuerpoPreview, handleDelete, isReadOnly, startEdit]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -175,6 +203,14 @@ export default function Messages() {
 
   const submit = async () => {
     try {
+      if (isReadOnly) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para crear mensajes",
+          type: "error",
+        });
+        return;
+      }
       if (!form.titulo || !form.cuerpo) {
         setSnack({
           open: true,
@@ -221,30 +257,6 @@ export default function Messages() {
             Array.isArray(created.roles) && created.roles.length > 0
               ? created.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
               : "Todos",
-          acciones: (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className="icon-button"
-                title="Editar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startEdit(createdId);
-                }}
-              >
-                <span className="material-symbols-outlined">edit</span>
-              </button>
-              <button
-                className="icon-button"
-                title="Borrar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(createdId);
-                }}
-              >
-                <span className="material-symbols-outlined">delete</span>
-              </button>
-            </div>
-          ),
         },
         ...prev,
       ]);
@@ -262,6 +274,14 @@ export default function Messages() {
 
   const submitEdit = async () => {
     try {
+      if (isReadOnly) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para modificar mensajes",
+          type: "error",
+        });
+        return;
+      }
       if (!editingId) return;
       if (!editForm.titulo || !editForm.cuerpo) {
         setSnack({
@@ -310,8 +330,8 @@ export default function Messages() {
                     ? updated.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
                     : "Todos",
               }
-            : r
-        )
+            : r,
+        ),
       );
       setOpenEdit(false);
       setEditingId(null);
@@ -386,8 +406,8 @@ export default function Messages() {
           columns={columns}
           data={paginated}
           loading={loading}
-          createLabel={"Crear mensaje"}
-          onCreate={onCreate}
+          createLabel={isReadOnly ? undefined : "Crear mensaje"}
+          onCreate={isReadOnly ? undefined : onCreate}
           onRowClick={(row) => navigate(`/app/admin/mensajes/${row.id}`)}
         />
       ) : (
@@ -395,8 +415,8 @@ export default function Messages() {
           title="Mensajes"
           items={paginated.map((i) => ({ ...i, name: i.titulo }))}
           loading={loading}
-          createLabel={"Crear mensaje"}
-          onCreate={onCreate}
+          createLabel={isReadOnly ? undefined : "Crear mensaje"}
+          onCreate={isReadOnly ? undefined : onCreate}
           onCardClick={(item) => navigate(`/app/admin/mensajes/${item.id}`)}
         />
       )}
@@ -412,109 +432,113 @@ export default function Messages() {
         }}
       />
 
-      <Modal
-        open={open}
-        title="Crear mensaje"
-        onClose={() => setOpen(false)}
-        onSubmit={submit}
-        submitLabel="Crear"
-      >
-        <div>
-          <div className="label">Título</div>
-          <input
-            className="input"
-            value={form.titulo}
-            onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-            placeholder="Título"
-          />
-        </div>
-        <div>
-          <div className="label">Cuerpo</div>
-          <textarea
-            className="input"
-            style={{ width: "100%", resize: "vertical", minHeight: 140 }}
-            value={form.cuerpo}
-            onChange={(e) => setForm({ ...form, cuerpo: e.target.value })}
-            placeholder="Contenido del mensaje"
-            rows={5}
-          />
-        </div>
-        <div>
-          <div className="label">Roles destinatarios</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {Object.values(ROLES).map((role) => (
-              <label
-                key={role}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.roles.includes(role)}
-                  onChange={() => toggleRole(role)}
-                />
-                {ROLE_LABELS[role] || role}
-              </label>
-            ))}
+      {!isReadOnly && (
+        <Modal
+          open={open}
+          title="Crear mensaje"
+          onClose={() => setOpen(false)}
+          onSubmit={submit}
+          submitLabel="Crear"
+        >
+          <div>
+            <div className="label">Título</div>
+            <input
+              className="input"
+              value={form.titulo}
+              onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+              placeholder="Título"
+            />
           </div>
-          <small>
-            Si no seleccionas ningún rol, el mensaje será visible para todos.
-          </small>
-        </div>
-      </Modal>
+          <div>
+            <div className="label">Cuerpo</div>
+            <textarea
+              className="input"
+              style={{ width: "100%", resize: "vertical", minHeight: 140 }}
+              value={form.cuerpo}
+              onChange={(e) => setForm({ ...form, cuerpo: e.target.value })}
+              placeholder="Contenido del mensaje"
+              rows={5}
+            />
+          </div>
+          <div>
+            <div className="label">Roles destinatarios</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {Object.values(ROLES).map((role) => (
+                <label
+                  key={role}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.roles.includes(role)}
+                    onChange={() => toggleRole(role)}
+                  />
+                  {ROLE_LABELS[role] || role}
+                </label>
+              ))}
+            </div>
+            <small>
+              Si no seleccionas ningún rol, el mensaje será visible para todos.
+            </small>
+          </div>
+        </Modal>
+      )}
 
-      <Modal
-        open={openEdit}
-        title="Editar mensaje"
-        onClose={() => setOpenEdit(false)}
-        onSubmit={submitEdit}
-        submitLabel="Guardar"
-      >
-        <div>
-          <div className="label">Título</div>
-          <input
-            className="input"
-            value={editForm.titulo}
-            onChange={(e) =>
-              setEditForm({ ...editForm, titulo: e.target.value })
-            }
-            placeholder="Título"
-          />
-        </div>
-        <div>
-          <div className="label">Cuerpo</div>
-          <textarea
-            className="input"
-            style={{ width: "100%", resize: "vertical", minHeight: 140 }}
-            value={editForm.cuerpo}
-            onChange={(e) =>
-              setEditForm({ ...editForm, cuerpo: e.target.value })
-            }
-            placeholder="Contenido del mensaje"
-            rows={5}
-          />
-        </div>
-        <div>
-          <div className="label">Roles destinatarios</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {Object.values(ROLES).map((role) => (
-              <label
-                key={role}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={editForm.roles.includes(role)}
-                  onChange={() => toggleRoleEdit(role)}
-                />
-                {ROLE_LABELS[role] || role}
-              </label>
-            ))}
+      {!isReadOnly && (
+        <Modal
+          open={openEdit}
+          title="Editar mensaje"
+          onClose={() => setOpenEdit(false)}
+          onSubmit={submitEdit}
+          submitLabel="Guardar"
+        >
+          <div>
+            <div className="label">Título</div>
+            <input
+              className="input"
+              value={editForm.titulo}
+              onChange={(e) =>
+                setEditForm({ ...editForm, titulo: e.target.value })
+              }
+              placeholder="Título"
+            />
           </div>
-          <small>
-            Si no seleccionas ningún rol, el mensaje será visible para todos.
-          </small>
-        </div>
-      </Modal>
+          <div>
+            <div className="label">Cuerpo</div>
+            <textarea
+              className="input"
+              style={{ width: "100%", resize: "vertical", minHeight: 140 }}
+              value={editForm.cuerpo}
+              onChange={(e) =>
+                setEditForm({ ...editForm, cuerpo: e.target.value })
+              }
+              placeholder="Contenido del mensaje"
+              rows={5}
+            />
+          </div>
+          <div>
+            <div className="label">Roles destinatarios</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {Object.values(ROLES).map((role) => (
+                <label
+                  key={role}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editForm.roles.includes(role)}
+                    onChange={() => toggleRoleEdit(role)}
+                  />
+                  {ROLE_LABELS[role] || role}
+                </label>
+              ))}
+            </div>
+            <small>
+              Si no seleccionas ningún rol, el mensaje será visible para todos.
+            </small>
+          </div>
+        </Modal>
+      )}
 
       <Snackbar
         open={snack.open}

@@ -11,6 +11,7 @@ import {
   hasPermission,
   PERMISSIONS,
   getCurrentUser,
+  ROLES,
 } from "../utils/roles.js";
 import {
   createLoad,
@@ -78,7 +79,7 @@ function SearchableSelect({
     return list.filter((o) =>
       String(o?.label || "")
         .toLowerCase()
-        .includes(q)
+        .includes(q),
     );
   }, [options, query]);
 
@@ -244,7 +245,7 @@ export default function Loads() {
       { key: "hora_de_descarga", header: "Hora de descarga" },
       { key: "estado_carga", header: "Carga completa" },
     ],
-    []
+    [],
   );
 
   const navigate = useNavigate();
@@ -329,7 +330,7 @@ export default function Loads() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const allColumnKeys = useMemo(
     () => allColumns.map((c) => c.key),
-    [allColumns]
+    [allColumns],
   );
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => {
     try {
@@ -345,7 +346,7 @@ export default function Loads() {
     try {
       localStorage.setItem(
         "loads_table_columns",
-        JSON.stringify(visibleColumnKeys)
+        JSON.stringify(visibleColumnKeys),
       );
     } catch {
       return;
@@ -371,13 +372,13 @@ export default function Loads() {
     setCalMonth((d) =>
       calMode === "week"
         ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7)
-        : new Date(d.getFullYear(), d.getMonth() - 1, 1)
+        : new Date(d.getFullYear(), d.getMonth() - 1, 1),
     );
   const nextPeriod = () =>
     setCalMonth((d) =>
       calMode === "week"
         ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7)
-        : new Date(d.getFullYear(), d.getMonth() + 1, 1)
+        : new Date(d.getFullYear(), d.getMonth() + 1, 1),
     );
 
   // nuevos estados base para recomputar filas con palets
@@ -420,7 +421,7 @@ export default function Loads() {
           fetchAllResponsables(),
         ]);
         const values = results.map((r) =>
-          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : []
+          r.status === "fulfilled" && Array.isArray(r.value) ? r.value : [],
         );
         const [
           loadsList,
@@ -470,13 +471,16 @@ export default function Loads() {
   const roleNormalized = String(role || "")
     .trim()
     .toLowerCase();
+  const isOffice = roleNormalized === ROLES.OFICINA;
   const canExportAgenda =
-    roleNormalized === "admin" || roleNormalized === "dispatcher";
+    !isOffice &&
+    (roleNormalized === "admin" || roleNormalized === "dispatcher");
   const canManageLoads =
-    hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
-    String(role || "")
-      .trim()
-      .toLowerCase() === "dispatcher";
+    !isOffice &&
+    (hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
+      String(role || "")
+        .trim()
+        .toLowerCase() === "dispatcher");
   const debugInfo = useMemo(() => {
     if (!openDebug) return null;
     const authRaw = String(localStorage.getItem("auth") || "");
@@ -743,7 +747,7 @@ export default function Loads() {
         return;
       }
       const company = companies.find(
-        (c) => String(c._id || c.id) === String(shipForm.empresa)
+        (c) => String(c._id || c.id) === String(shipForm.empresa),
       );
       const created = await createShipFirebase({
         ...shipForm,
@@ -831,10 +835,10 @@ export default function Loads() {
         code === "auth/email-already-in-use"
           ? "El email ya está en uso"
           : code === "auth/invalid-email"
-          ? "Email inválido"
-          : code === "auth/weak-password"
-          ? "Contraseña demasiado débil"
-          : msg;
+            ? "Email inválido"
+            : code === "auth/weak-password"
+              ? "Contraseña demasiado débil"
+              : msg;
       setSnack({
         open: true,
         message: friendly || "Error creando usuario",
@@ -920,26 +924,28 @@ export default function Loads() {
   // Derivar filas con todos los campos y conteo correcto de palets
   const rows = useMemo(() => {
     const shipById = new Map(
-      ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0])
+      ships.map((s) => [String(s._id || s.id || ""), s]).filter((p) => p[0]),
     );
     const userById = new Map(
-      users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0])
+      users.map((u) => [String(u._id || u.id || ""), u]).filter((p) => p[0]),
     );
     const consigneeById = new Map(
       consignees
         .map((c) => [String(c._id || c.id || ""), c])
-        .filter((p) => p[0])
+        .filter((p) => p[0]),
     );
     const locationById = new Map(
-      locations.map((l) => [String(l._id || l.id || ""), l]).filter((p) => p[0])
+      locations
+        .map((l) => [String(l._id || l.id || ""), l])
+        .filter((p) => p[0]),
     );
     const existingPalletIds = new Set(
-      pallets.map((p) => String(p?._id || p?.id || "").trim()).filter(Boolean)
+      pallets.map((p) => String(p?._id || p?.id || "").trim()).filter(Boolean),
     );
     const palletById = new Map(
       pallets
         .map((p) => [String(p?._id || p?.id || "").trim(), p])
-        .filter((pair) => pair[0])
+        .filter((pair) => pair[0]),
     );
     const tipoForms = {
       Seco: ["seco", "secos"],
@@ -952,13 +958,13 @@ export default function Loads() {
     return loadDocs.map((l) => {
       const paletsArray = Array.isArray(l.palets) ? l.palets : [];
       const byRelation = pallets.filter(
-        (p) => String(p.carga?._id || p.carga) === String(l._id)
+        (p) => String(p.carga?._id || p.carga) === String(l._id),
       );
       const listFromArrayAll = paletsArray
         .map((p) => String(p?._id || p?.id || p || "").trim())
         .filter(Boolean);
       const listFromArray = listFromArrayAll.filter((pid) =>
-        existingPalletIds.has(String(pid))
+        existingPalletIds.has(String(pid)),
       );
       const listFromRelation = byRelation
         .map((p) => String(p?._id || p?.id || "").trim())
@@ -985,10 +991,10 @@ export default function Loads() {
       const barcoId = String(l.barco?._id || l.barco || "");
       const choferId = String(l.chofer?._id || l.chofer || "");
       const consignatarioId = String(
-        l.consignatario?._id || l.consignatario || ""
+        l.consignatario?._id || l.consignatario || "",
       );
       const terminalId = String(
-        l.terminal_entrega?._id || l.terminal_entrega || ""
+        l.terminal_entrega?._id || l.terminal_entrega || "",
       );
 
       const ship = shipById.get(barcoId) || null;
@@ -1044,7 +1050,7 @@ export default function Loads() {
     const scopedRows = rows.filter((r) =>
       showHistory
         ? isHistoryStatus(r.estado_viaje)
-        : !isHistoryStatus(r.estado_viaje)
+        : !isHistoryStatus(r.estado_viaje),
     );
     return scopedRows.filter((r) => {
       const textOk =
@@ -1084,7 +1090,7 @@ export default function Loads() {
   useEffect(() => {
     if (exportMode !== "select") return;
     setExportSelectedIds((prev) =>
-      prev.map((v) => String(v)).filter((id) => exportCandidateIdSet.has(id))
+      prev.map((v) => String(v)).filter((id) => exportCandidateIdSet.has(id)),
     );
   }, [exportMode, exportCandidateIdSet]);
 
@@ -1098,12 +1104,12 @@ export default function Loads() {
     return exportSelected.slice().sort((a, b) => {
       const d = String(a.fecha_de_carga_group || "").localeCompare(
         String(b.fecha_de_carga_group || ""),
-        "es"
+        "es",
       );
       if (d !== 0) return d;
       const t = String(a.hora_de_carga || "").localeCompare(
         String(b.hora_de_carga || ""),
-        "es"
+        "es",
       );
       if (t !== 0) return t;
       return String(a.barco || "").localeCompare(String(b.barco || ""), "es");
@@ -1114,7 +1120,7 @@ export default function Loads() {
     const totalCargas = exportPreviewRows.length;
     const totalPalets = exportPreviewRows.reduce(
       (acc, r) => acc + (Number(r.total_palets) || 0),
-      0
+      0,
     );
     const porEstado = exportPreviewRows.reduce((acc, r) => {
       const k = String(r.estado_viaje || "Sin estado");
@@ -1158,7 +1164,7 @@ export default function Loads() {
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "es"))
       .map(
         ([k, v]) =>
-          `<span class="pill">${escapeHtml(k)}: ${escapeHtml(v)}</span>`
+          `<span class="pill">${escapeHtml(k)}: ${escapeHtml(v)}</span>`,
       )
       .join("");
 
@@ -1170,12 +1176,12 @@ export default function Loads() {
           <section class="load">
             <div class="load-head">
               <div class="load-title">${escapeHtml(
-                r.nombre || `Carga ${idx + 1}`
+                r.nombre || `Carga ${idx + 1}`,
               )}</div>
               <div class="load-meta">
                 <span class="pill">${escapeHtml(r.estado_viaje || "")}</span>
                 <span class="pill">${escapeHtml(
-                  r.fecha_de_carga || ""
+                  r.fecha_de_carga || "",
                 )} ${escapeHtml(r.hora_de_carga || "")}</span>
                 <span class="pill">${escapeHtml(r.barco || "")}</span>
               </div>
@@ -1188,7 +1194,7 @@ export default function Loads() {
               <div>
                 <div class="label">Terminal entrega</div>
                 <div class="value">${escapeHtml(
-                  r.terminal_entrega || "—"
+                  r.terminal_entrega || "—",
                 )}</div>
               </div>
               <div>
@@ -1214,7 +1220,7 @@ export default function Loads() {
               <div>
                 <div class="label">Descarga</div>
                 <div class="value">${escapeHtml(
-                  r.fecha_de_descarga || ""
+                  r.fecha_de_descarga || "",
                 )} ${escapeHtml(r.hora_de_descarga || "")}</div>
               </div>
             </div>
@@ -1260,15 +1266,15 @@ export default function Loads() {
         <body>
           <h1>Agenda diaria ${escapeHtml(titleRange)}</h1>
           <div class="sub">${escapeHtml(filtrosLabel)} · Generado: ${escapeHtml(
-      generatedAt
-    )}</div>
+            generatedAt,
+          )}</div>
           <div class="summary">
             <div class="row">
               <span class="pill">Cargas: ${escapeHtml(
-                exportSummary.totalCargas
+                exportSummary.totalCargas,
               )}</span>
               <span class="pill">Palets: ${escapeHtml(
-                exportSummary.totalPalets
+                exportSummary.totalPalets,
               )}</span>
             </div>
             <div class="row">${estadosHtml}</div>
@@ -1400,7 +1406,7 @@ export default function Loads() {
             {(showHistory
               ? ["Entregado", "Cancelado"]
               : ESTADO_VIAJE_OPTIONS.filter(
-                  (s) => s !== "Entregado" && s !== "Cancelado"
+                  (s) => s !== "Entregado" && s !== "Cancelado",
                 )
             )
               .slice()
@@ -1426,10 +1432,10 @@ export default function Loads() {
                       ? r.estado_viaje === "Entregado" ||
                         r.estado_viaje === "Cancelado"
                       : r.estado_viaje !== "Entregado" &&
-                        r.estado_viaje !== "Cancelado"
+                        r.estado_viaje !== "Cancelado",
                   )
-                  .map((r) => r.barco)
-              )
+                  .map((r) => r.barco),
+              ),
             )
               .filter(Boolean)
               .sort(esCompare)
@@ -1455,7 +1461,7 @@ export default function Loads() {
               Agrupar por fecha de descarga
             </option>
           </select>
-          {view === "table" && (
+          {!isOffice && view === "table" && (
             <div ref={columnsMenuRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -1556,86 +1562,96 @@ export default function Loads() {
               )}
             </div>
           )}
-          <button
-            className="icon-button"
-            title="Vista tabla"
-            onClick={() => setView("table")}
-          >
-            <span className="material-symbols-outlined">table</span>
-          </button>
-          <button
-            className="icon-button"
-            title="Vista tarjetas"
-            onClick={() => setView("cards")}
-          >
-            <span className="material-symbols-outlined">view_agenda</span>
-          </button>
-          <button
-            className="icon-button"
-            title="Vista calendario"
-            onClick={() => setView("calendar")}
-          >
-            <span className="material-symbols-outlined">calendar_month</span>
-          </button>
-          <button
-            className="icon-button"
-            title="Vista por días"
-            onClick={() => setView("day_list")}
-          >
-            <span className="material-symbols-outlined">event_note</span>
-          </button>
-          {canExportAgenda && (
-            <button
-              className="icon-button"
-              title="Exportar agenda (PDF)"
-              onClick={openExportAgendaModal}
-            >
-              <span className="material-symbols-outlined">picture_as_pdf</span>
-            </button>
+          {!isOffice && (
+            <>
+              <button
+                className="icon-button"
+                title="Vista tabla"
+                onClick={() => setView("table")}
+              >
+                <span className="material-symbols-outlined">table</span>
+              </button>
+              <button
+                className="icon-button"
+                title="Vista tarjetas"
+                onClick={() => setView("cards")}
+              >
+                <span className="material-symbols-outlined">view_agenda</span>
+              </button>
+              <button
+                className="icon-button"
+                title="Vista calendario"
+                onClick={() => setView("calendar")}
+              >
+                <span className="material-symbols-outlined">
+                  calendar_month
+                </span>
+              </button>
+              <button
+                className="icon-button"
+                title="Vista por días"
+                onClick={() => setView("day_list")}
+              >
+                <span className="material-symbols-outlined">event_note</span>
+              </button>
+              {canExportAgenda && (
+                <button
+                  className="icon-button"
+                  title="Exportar agenda (PDF)"
+                  onClick={openExportAgendaModal}
+                >
+                  <span className="material-symbols-outlined">
+                    picture_as_pdf
+                  </span>
+                </button>
+              )}
+              {canManageLoads && (
+                <button
+                  className="icon-button"
+                  title="Crear carga"
+                  onClick={onCreate}
+                >
+                  <span className="material-symbols-outlined">add_box</span>
+                </button>
+              )}
+              {debugEnabled && (
+                <button
+                  className="icon-button"
+                  title="Debug permisos"
+                  onClick={() => setOpenDebug(true)}
+                >
+                  <span className="material-symbols-outlined">bug_report</span>
+                </button>
+              )}
+              {view === "calendar" && (
+                <button
+                  className="icon-button"
+                  title={
+                    calMode === "month"
+                      ? "Cambiar a vista semanal"
+                      : "Cambiar a vista mensual"
+                  }
+                  onClick={() =>
+                    setCalMode((m) => (m === "month" ? "week" : "month"))
+                  }
+                >
+                  <span className="material-symbols-outlined">
+                    calendar_view_week
+                  </span>
+                </button>
+              )}
+              <button
+                className="icon-button"
+                title={showHistory ? "Ver cargas activas" : "Ver historial"}
+                aria-label={
+                  showHistory ? "Ver cargas activas" : "Ver historial"
+                }
+                onClick={() => setShowHistory((v) => !v)}
+              >
+                <span className="material-symbols-outlined">history</span>
+              </button>
+            </>
           )}
-          {canManageLoads && (
-            <button
-              className="icon-button"
-              title="Crear carga"
-              onClick={onCreate}
-            >
-              <span className="material-symbols-outlined">add_box</span>
-            </button>
-          )}
-          {debugEnabled && (
-            <button
-              className="icon-button"
-              title="Debug permisos"
-              onClick={() => setOpenDebug(true)}
-            >
-              <span className="material-symbols-outlined">bug_report</span>
-            </button>
-          )}
-          {view === "calendar" && (
-            <button
-              className="icon-button"
-              title={
-                calMode === "month"
-                  ? "Cambiar a vista semanal"
-                  : "Cambiar a vista mensual"
-              }
-              onClick={() =>
-                setCalMode((m) => (m === "month" ? "week" : "month"))
-              }
-            >
-              <span className="material-symbols-outlined">
-                calendar_view_week
-              </span>
-            </button>
-          )}
-          <button
-            className="icon-button"
-            title={showHistory ? "Ver cargas activas" : "Ver historial"}
-            aria-label={showHistory ? "Ver cargas activas" : "Ver historial"}
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            <span className="material-symbols-outlined">history</span>
-          </button>
         </div>
       </div>
 
@@ -1676,7 +1692,7 @@ export default function Loads() {
                 d && !isNaN(d.getTime())
                   ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
                       2,
-                      "0"
+                      "0",
                     )}-${String(d.getDate()).padStart(2, "0")}`
                   : "Sin fecha";
               if (!groups[key]) groups[key] = [];
@@ -1745,7 +1761,7 @@ export default function Loads() {
                           </span>
                           <span
                             className={`status-badge status-${String(
-                              item.estado_viaje
+                              item.estado_viaje,
                             )
                               .toLowerCase()
                               .replace(" ", "-")}`}
@@ -1917,7 +1933,7 @@ export default function Loads() {
                     onChange={(e) => {
                       if (e.target.checked) {
                         setExportSelectedIds(
-                          exportCandidates.map((r) => String(r.id))
+                          exportCandidates.map((r) => String(r.id)),
                         );
                       } else {
                         setExportSelectedIds([]);
@@ -1948,26 +1964,26 @@ export default function Loads() {
                       .slice()
                       .sort((a, b) => {
                         const d = String(
-                          a.fecha_de_carga_group || ""
+                          a.fecha_de_carga_group || "",
                         ).localeCompare(
                           String(b.fecha_de_carga_group || ""),
-                          "es"
+                          "es",
                         );
                         if (d !== 0) return d;
                         const t = String(a.hora_de_carga || "").localeCompare(
                           String(b.hora_de_carga || ""),
-                          "es"
+                          "es",
                         );
                         if (t !== 0) return t;
                         return String(a.barco || "").localeCompare(
                           String(b.barco || ""),
-                          "es"
+                          "es",
                         );
                       })
                       .map((r) => {
                         const id = String(r.id);
                         const checked = exportSelectedIds.some(
-                          (v) => String(v) === id
+                          (v) => String(v) === id,
                         );
                         return (
                           <label
@@ -1989,7 +2005,7 @@ export default function Loads() {
                                 onChange={() => {
                                   setExportSelectedIds((prev) => {
                                     const set = new Set(
-                                      prev.map((x) => String(x))
+                                      prev.map((x) => String(x)),
                                     );
                                     if (set.has(id)) set.delete(id);
                                     else set.add(id);
@@ -2188,7 +2204,7 @@ export default function Loads() {
                   canManageLoads: !!debugInfo?.canManageLoads,
                 },
                 null,
-                2
+                2,
               )}
             </pre>
           </div>
@@ -2237,8 +2253,8 @@ export default function Loads() {
                   .sort((a, b) =>
                     String(a?.nombre_del_barco || "").localeCompare(
                       String(b?.nombre_del_barco || ""),
-                      "es"
-                    )
+                      "es",
+                    ),
                   )
                   .map((s) => ({
                     value: String(s?._id || s?.id || ""),
@@ -2344,8 +2360,8 @@ export default function Loads() {
                   .sort((a, b) =>
                     String(a?.nombre || "").localeCompare(
                       String(b?.nombre || ""),
-                      "es"
-                    )
+                      "es",
+                    ),
                   )
                   .map((r) => ({
                     value: String(r?._id || r?.id || ""),
@@ -2371,8 +2387,8 @@ export default function Loads() {
                   .sort((a, b) =>
                     String(a?.name || "").localeCompare(
                       String(b?.name || ""),
-                      "es"
-                    )
+                      "es",
+                    ),
                   )
                   .map((u) => ({
                     value: String(u?._id || u?.id || ""),
@@ -2397,8 +2413,8 @@ export default function Loads() {
                   .sort((a, b) =>
                     String(a?.nombre || "").localeCompare(
                       String(b?.nombre || ""),
-                      "es"
-                    )
+                      "es",
+                    ),
                   )
                   .map((c) => ({
                     value: String(c?._id || c?.id || ""),
@@ -2423,12 +2439,12 @@ export default function Loads() {
                   .sort((a, b) => {
                     const ap = String(a?.puerto || "").localeCompare(
                       String(b?.puerto || ""),
-                      "es"
+                      "es",
                     );
                     if (ap !== 0) return ap;
                     return String(a?.nombre || "").localeCompare(
                       String(b?.nombre || ""),
-                      "es"
+                      "es",
                     );
                   })
                   .map((l) => {

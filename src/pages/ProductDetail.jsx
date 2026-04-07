@@ -7,7 +7,7 @@ import {
   fetchProductoById,
   updateProductoById,
 } from "../firebase/auth.js";
-import { getCurrentUser } from "../utils/roles.js";
+import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 
 function toLabelDate(value) {
   if (!value) return "-";
@@ -55,6 +55,10 @@ function normalizeEstadoProducto(value) {
 export default function ProductDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const role = getCurrentRole();
+  const isWarehouse = role === ROLES.ALMACEN;
+  const isOffice = role === ROLES.OFICINA;
+  const isReadOnly = isWarehouse || isOffice;
 
   const [loading, setLoading] = useState(true);
   const [producto, setProducto] = useState(null);
@@ -126,6 +130,14 @@ export default function ProductDetail() {
 
   const submitEdit = async () => {
     try {
+      if (isReadOnly) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para modificar productos",
+          type: "error",
+        });
+        return;
+      }
       if (!editForm.nombre_producto) {
         setSnack({
           open: true,
@@ -169,6 +181,14 @@ export default function ProductDetail() {
   };
 
   const handleDelete = async () => {
+    if (isReadOnly) {
+      setSnack({
+        open: true,
+        message: "No tienes permisos para borrar productos",
+        type: "error",
+      });
+      return;
+    }
     const label = producto?.nombre_producto || producto?.codigo || "";
     if (
       !window.confirm(
@@ -198,20 +218,24 @@ export default function ProductDetail() {
         <div className="card-header">
           <h2 className="card-title">Detalle producto</h2>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              className="icon-button"
-              onClick={() => setOpenEdit(true)}
-              title="Modificar"
-            >
-              <span className="material-symbols-outlined">edit</span>
-            </button>
-            <button
-              className="icon-button"
-              onClick={handleDelete}
-              title="Borrar"
-            >
-              <span className="material-symbols-outlined">delete</span>
-            </button>
+            {!isReadOnly && (
+              <>
+                <button
+                  className="icon-button"
+                  onClick={() => setOpenEdit(true)}
+                  title="Modificar"
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={handleDelete}
+                  title="Borrar"
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </>
+            )}
             <button
               className="icon-button"
               onClick={() => navigate(-1)}
@@ -236,88 +260,93 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      <Modal
-        open={openEdit}
-        title="Modificar producto"
-        onClose={() => setOpenEdit(false)}
-        onSubmit={submitEdit}
-        submitLabel="Guardar"
-      >
-        <div>
-          <div className="label">Código</div>
-          <input
-            className="input"
-            value={editForm.codigo}
-            onChange={(e) =>
-              setEditForm((prev) => ({ ...prev, codigo: e.target.value }))
-            }
-            placeholder="Código"
-          />
-        </div>
-        <div>
-          <div className="label">Nombre del producto</div>
-          <input
-            className="input"
-            value={editForm.nombre_producto}
-            onChange={(e) =>
-              setEditForm((prev) => ({
-                ...prev,
-                nombre_producto: e.target.value,
-              }))
-            }
-            placeholder="Nombre del producto"
-          />
-        </div>
-        <div>
-          <div className="label">Familia</div>
-          <input
-            className="input"
-            value={editForm.familia}
-            onChange={(e) =>
-              setEditForm((prev) => ({ ...prev, familia: e.target.value }))
-            }
-            placeholder="Familia"
-          />
-        </div>
-        <div>
-          <div className="label">Composición</div>
-          <input
-            className="input"
-            value={editForm.composicion}
-            onChange={(e) =>
-              setEditForm((prev) => ({ ...prev, composicion: e.target.value }))
-            }
-            placeholder="Composición"
-          />
-        </div>
-        <div>
-          <div className="label">Alérgenos</div>
-          <input
-            className="input"
-            value={editForm.alergenos}
-            onChange={(e) =>
-              setEditForm((prev) => ({ ...prev, alergenos: e.target.value }))
-            }
-            placeholder="Alérgenos"
-          />
-        </div>
-        <div>
-          <div className="label">Estado</div>
-          <select
-            className="input"
-            value={editForm.estado}
-            onChange={(e) =>
-              setEditForm((prev) => ({
-                ...prev,
-                estado: normalizeEstadoProducto(e.target.value),
-              }))
-            }
-          >
-            <option value="disponible">Disponible</option>
-            <option value="no disponible">No disponible</option>
-          </select>
-        </div>
-      </Modal>
+      {!isReadOnly && (
+        <Modal
+          open={openEdit}
+          title="Modificar producto"
+          onClose={() => setOpenEdit(false)}
+          onSubmit={submitEdit}
+          submitLabel="Guardar"
+        >
+          <div>
+            <div className="label">Código</div>
+            <input
+              className="input"
+              value={editForm.codigo}
+              onChange={(e) =>
+                setEditForm((prev) => ({ ...prev, codigo: e.target.value }))
+              }
+              placeholder="Código"
+            />
+          </div>
+          <div>
+            <div className="label">Nombre del producto</div>
+            <input
+              className="input"
+              value={editForm.nombre_producto}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  nombre_producto: e.target.value,
+                }))
+              }
+              placeholder="Nombre del producto"
+            />
+          </div>
+          <div>
+            <div className="label">Familia</div>
+            <input
+              className="input"
+              value={editForm.familia}
+              onChange={(e) =>
+                setEditForm((prev) => ({ ...prev, familia: e.target.value }))
+              }
+              placeholder="Familia"
+            />
+          </div>
+          <div>
+            <div className="label">Composición</div>
+            <input
+              className="input"
+              value={editForm.composicion}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  composicion: e.target.value,
+                }))
+              }
+              placeholder="Composición"
+            />
+          </div>
+          <div>
+            <div className="label">Alérgenos</div>
+            <input
+              className="input"
+              value={editForm.alergenos}
+              onChange={(e) =>
+                setEditForm((prev) => ({ ...prev, alergenos: e.target.value }))
+              }
+              placeholder="Alérgenos"
+            />
+          </div>
+          <div>
+            <div className="label">Estado</div>
+            <select
+              className="input"
+              value={editForm.estado}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  estado: normalizeEstadoProducto(e.target.value),
+                }))
+              }
+            >
+              <option value="disponible">Disponible</option>
+              <option value="no disponible">No disponible</option>
+            </select>
+          </div>
+        </Modal>
+      )}
 
       <Snackbar
         open={snack.open}

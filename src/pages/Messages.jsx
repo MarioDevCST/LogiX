@@ -12,198 +12,425 @@ import {
   getCurrentUser,
 } from "../utils/roles.js";
 import {
+  buildMessageAudienceKeysForUser,
   createMessage,
   deleteMessageById,
-  fetchAllMessages,
-  fetchMessageById,
+  ensureRecentMessagesAudienceBackfill,
+  fetchAllUsers,
+  fetchMessagesPage,
+  getMessagesCount,
+  subscribeMessagesPage,
   updateMessageById,
 } from "../firebase/auth.js";
+
+const PRIORITY_OPTIONS = [
+  { value: "info", label: "Info" },
+  { value: "warning", label: "Aviso" },
+  { value: "urgent", label: "Urgente" },
+];
+
+const MESSAGE_ROLE_OPTIONS = [
+  ROLES.OFICINA,
+  ROLES.LOGISTICA,
+  ROLES.CONDUCTOR,
+  ROLES.ALMACEN,
+  ROLES.MOZO,
+];
 
 export default function Messages() {
   const navigate = useNavigate();
   const role = getCurrentRole();
-  const isWarehouse = role === ROLES.ALMACEN;
-  const isOffice = role === ROLES.OFICINA;
-  const isReadOnly = isWarehouse || isOffice;
+  const currentUser = getCurrentUser();
+  const currentUserId = String(
+    currentUser?._id || currentUser?.id || "",
+  ).trim();
+  const canManageMessages = role === ROLES.LOGISTICA;
   const buildCuerpoPreview = useCallback((value) => {
     const normalized = String(value || "")
       .replace(/\s+/g, " ")
       .trim();
     if (!normalized) return "-";
-    const max = 120;
+    const max = 140;
     return normalized.length > max
       ? `${normalized.slice(0, max)}…`
       : normalized;
   }, []);
 
-  const columns = useMemo(() => {
-    const base = [
-      { key: "titulo", header: "Título" },
-      { key: "cuerpo_preview", header: "Cuerpo" },
-      { key: "roles", header: "Roles" },
-    ];
-    if (isReadOnly) return base;
-    return [...base, { key: "acciones", header: "Acciones" }];
-  }, [isReadOnly]);
+  const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    try {
+      const d =
+        typeof value?.toDate === "function"
+          ? value.toDate()
+          : value instanceof Date
+            ? value
+            : new Date(String(value));
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+      const pad = (n) => String(n).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const fromDateTimeLocal = (value) => {
+    const v = String(value || "").trim();
+    if (!v) return null;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  };
 
   const [view, setView] = useState("table");
-  const [rows, setRows] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ titulo: "", cuerpo: "", roles: [] });
+  const [users, setUsers] = useState([]);
+  const [includeInactive, setIncludeInactive] = useState(false);
 
+  const emptyForm = useMemo(
+    () => ({
+      titulo: "",
+      cuerpo: "",
+      roles: [],
+      target_user_id: "",
+      priority: "info",
+      pinned: false,
+      active: true,
+      expires_at: "",
+    }),
+    [],
+  );
+  const [form, setForm] = useState(emptyForm);
   const [openEdit, setOpenEdit] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({
-    titulo: "",
-    cuerpo: "",
-    roles: [],
-  });
+  const [editForm, setEditForm] = useState(emptyForm);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [snack, setSnack] = useState({
     open: false,
     message: "",
     type: "success",
   });
 
-  const startEdit = useCallback(
-    async (id) => {
-      try {
-        if (isReadOnly) return;
-        const m = await fetchMessageById(id);
-        if (!m) return;
-        setEditingId(m._id || m.id || id);
-        setEditForm({
-          titulo: m.titulo || "",
-          cuerpo: m.cuerpo || "",
-          roles: Array.isArray(m.roles) ? m.roles : [],
-        });
-        setOpenEdit(true);
-      } catch (e) {
-        setSnack({
-          open: true,
-          message: "Error cargando mensaje",
-          type: "error",
-        });
-      }
-    },
-    [isReadOnly],
+  const audienceKeys = useMemo(
+    () =>
+      buildMessageAudienceKeysForUser({
+        userId: currentUserId,
+        role,
+      }),
+    [currentUserId, role],
   );
 
   const handleDelete = useCallback(
     async (id) => {
-      if (isReadOnly) return;
+      if (!canManageMessages) {
+        setSnack({
+          open: true,
+          message: "No tienes permisos para borrar mensajes",
+          type: "error",
+        });
+        return;
+      }
       if (!window.confirm("¿Seguro que deseas borrar este mensaje?")) return;
       try {
         await deleteMessageById(id);
-        setRows((prev) => prev.filter((r) => r.id !== id));
+        setMessages((prev) => prev.filter((m) => (m?._id || m?.id) !== id));
         setSnack({ open: true, message: "Mensaje borrado", type: "success" });
       } catch (e) {
         setSnack({
           open: true,
-          message: "Error borrando mensaje",
+          message: String(e?.message || "Error borrando mensaje"),
           type: "error",
         });
       }
     },
-    [isReadOnly],
+    [canManageMessages],
   );
 
   useEffect(() => {
+    if (!canManageMessages) return;
     let mounted = true;
+    fetchAllUsers()
+      .then((list) => {
+        if (!mounted) return;
+        const normalized = Array.isArray(list) ? list : [];
+        normalized.sort((a, b) =>
+          String(a?.name || "").localeCompare(String(b?.name || "")),
+        );
+        setUsers(normalized);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setUsers([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [canManageMessages]);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    if (canManageMessages) {
+      ensureRecentMessagesAudienceBackfill({ limitCount: 200 }).catch(
+        () => null,
+      );
+    }
+    getMessagesCount({
+      audienceKeys,
+      includeInactive,
+      canManage: canManageMessages,
+    })
+      .then((n) => {
+        if (!mounted) return;
+        setTotal(n);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setTotal(0);
+        setSnack({
+          open: true,
+          message: "Error cargando mensajes (count)",
+          type: "error",
+        });
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [audienceKeys, canManageMessages, includeInactive]);
+
+  // Sin estado de cursores para evitar bucles: resolvemos cursor dentro del efecto de suscripción
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe = null;
     const run = async () => {
       try {
         setLoading(true);
-        const list = await fetchAllMessages();
-        if (!mounted) return;
-        const rowFromMessage = (m) => {
-          const rowId = m?._id || m?.id;
-          const cuerpoPreviewText = buildCuerpoPreview(m?.cuerpo);
-          return {
-            id: rowId,
-            titulo: m?.titulo || "",
-            cuerpo_preview: (
-              <div
-                style={{
-                  maxWidth: 420,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-                title={String(m?.cuerpo || "").trim()}
-              >
-                {cuerpoPreviewText}
-              </div>
-            ),
-            roles:
-              Array.isArray(m?.roles) && m.roles.length > 0
-                ? m.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
-                : "Todos",
-            ...(isReadOnly
-              ? {}
-              : {
-                  acciones: (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        className="icon-button"
-                        title="Editar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEdit(rowId);
-                        }}
-                      >
-                        <span className="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        className="icon-button"
-                        title="Borrar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(rowId);
-                        }}
-                      >
-                        <span className="material-symbols-outlined">
-                          delete
-                        </span>
-                      </button>
-                    </div>
-                  ),
-                }),
-          };
-        };
-        setRows(list.map(rowFromMessage));
-      } catch {
-        if (!mounted) return;
-        setRows([]);
-      } finally {
-        if (mounted) setLoading(false);
+        let cursor = null;
+        if (page > 1) {
+          let prev = null;
+          for (let p = 1; p < page; p += 1) {
+            const res = await fetchMessagesPage({
+              audienceKeys,
+              pageSize,
+              cursor: prev,
+              includeInactive,
+              canManage: canManageMessages,
+            });
+            prev = res.lastDoc;
+            if (!prev) break;
+          }
+          cursor = cursor || prev;
+        }
+        if (!active) return;
+        unsubscribe = subscribeMessagesPage(
+          {
+            audienceKeys,
+            pageSize,
+            cursor,
+            includeInactive,
+            canManage: canManageMessages,
+          },
+          {
+            onChange: ({ items, lastDoc }) => {
+              if (!active) return;
+              setMessages(items);
+              setLoading(false);
+            },
+            onError: () => {
+              if (!active) return;
+              setMessages([]);
+              setLoading(false);
+              setSnack({
+                open: true,
+                message: "Error cargando mensajes (realtime)",
+                type: "error",
+              });
+            },
+          },
+        );
+      } catch (e) {
+        if (!active) return;
+        setMessages([]);
+        setLoading(false);
+        setSnack({
+          open: true,
+          message: String(e?.message || "Error cargando mensajes"),
+          type: "error",
+        });
       }
     };
     run();
     return () => {
-      mounted = false;
+      active = false;
+      if (typeof unsubscribe === "function") unsubscribe();
     };
-  }, [buildCuerpoPreview, handleDelete, isReadOnly, startEdit]);
+  }, [audienceKeys, canManageMessages, includeInactive, page, pageSize]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => q === "" || r.titulo.toLowerCase().includes(q));
-  }, [rows, query]);
+    return messages
+      .filter((m) => {
+        if (!canManageMessages) return true;
+        if (includeInactive) return true;
+        return typeof m?.active === "boolean" ? m.active : true;
+      })
+      .filter(
+        (m) =>
+          q === "" ||
+          String(m?.titulo || "")
+            .toLowerCase()
+            .includes(q),
+      );
+  }, [canManageMessages, includeInactive, messages, query]);
 
-  const paginated = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return filtered.slice(start, end);
-  }, [filtered, page, pageSize]);
+  const usersById = useMemo(() => {
+    const map = new Map();
+    for (const u of users) {
+      const id = String(u?._id || u?.id || "").trim();
+      if (!id) continue;
+      map.set(id, u);
+    }
+    return map;
+  }, [users]);
 
-  const onCreate = () => setOpen(true);
+  const formatAudienceLabel = useCallback(
+    (m) => {
+      const targetId = String(m?.target_user_id || "").trim();
+      if (targetId) {
+        const u = usersById.get(targetId);
+        const label = String(u?.name || "").trim();
+        const extra = String(u?.email || "").trim();
+        return `Usuario: ${label || targetId}${extra ? ` (${extra})` : ""}`;
+      }
+      const roles = Array.isArray(m?.roles) ? m.roles : [];
+      if (roles.length === 0) return "Todos";
+      return roles.map((r) => ROLE_LABELS[r] || r).join(", ");
+    },
+    [usersById],
+  );
+
+  const rows = useMemo(() => {
+    return filtered.map((m) => {
+      const id = m?._id || m?.id;
+      const priorityLabel =
+        PRIORITY_OPTIONS.find((p) => p.value === m?.priority)?.label ||
+        String(m?.priority || "Info");
+      return {
+        id,
+        titulo: m?.titulo || "",
+        cuerpo_preview: buildCuerpoPreview(m?.cuerpo),
+        destinatarios: formatAudienceLabel(m),
+        prioridad: priorityLabel,
+        fijado: m?.pinned ? "Sí" : "No",
+        activo: m?.active === false ? "No" : "Sí",
+        ...(canManageMessages
+          ? {
+              acciones: (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className="icon-button"
+                    title="Editar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(id);
+                      setEditForm({
+                        titulo: m?.titulo || "",
+                        cuerpo: m?.cuerpo || "",
+                        roles: Array.isArray(m?.roles) ? m.roles : [],
+                        target_user_id: String(m?.target_user_id || "").trim(),
+                        priority: String(m?.priority || "info"),
+                        pinned: !!m?.pinned,
+                        active:
+                          typeof m?.active === "boolean" ? m.active : true,
+                        expires_at: toDateTimeLocal(m?.expires_at),
+                      });
+                      setOpenEdit(true);
+                    }}
+                  >
+                    <span className="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    className="icon-button"
+                    title="Borrar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(id);
+                    }}
+                  >
+                    <span className="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              ),
+            }
+          : {}),
+      };
+    });
+  }, [
+    buildCuerpoPreview,
+    canManageMessages,
+    filtered,
+    formatAudienceLabel,
+    handleDelete,
+  ]);
+
+  const toggleRoleCreate = useCallback((roleId) => {
+    const rid = String(roleId || "").trim();
+    if (!rid) return;
+    setForm((prev) => {
+      const current = Array.isArray(prev?.roles) ? prev.roles : [];
+      const has = current.includes(rid);
+      return {
+        ...prev,
+        roles: has ? current.filter((r) => r !== rid) : [...current, rid],
+      };
+    });
+  }, []);
+
+  const toggleRoleEdit = useCallback((roleId) => {
+    const rid = String(roleId || "").trim();
+    if (!rid) return;
+    setEditForm((prev) => {
+      const current = Array.isArray(prev?.roles) ? prev.roles : [];
+      const has = current.includes(rid);
+      return {
+        ...prev,
+        roles: has ? current.filter((r) => r !== rid) : [...current, rid],
+      };
+    });
+  }, []);
+
+  const columns = useMemo(() => {
+    const base = [
+      { key: "titulo", header: "Título" },
+      { key: "cuerpo_preview", header: "Cuerpo" },
+      { key: "destinatarios", header: "Destinatarios" },
+      { key: "prioridad", header: "Prioridad" },
+      { key: "fijado", header: "Fijado" },
+    ];
+    const maybeActive = canManageMessages
+      ? [...base, { key: "activo", header: "Activo" }]
+      : base;
+    if (!canManageMessages) return maybeActive;
+    return [...maybeActive, { key: "acciones", header: "Acciones" }];
+  }, [canManageMessages]);
 
   const submit = async () => {
     try {
-      if (isReadOnly) {
+      if (!canManageMessages) {
         setSnack({
           open: true,
           message: "No tienes permisos para crear mensajes",
@@ -222,8 +449,14 @@ export default function Messages() {
       const payload = {
         titulo: form.titulo,
         cuerpo: form.cuerpo,
-        roles: form.roles,
+        roles: String(form.target_user_id || "").trim() ? [] : form.roles,
+        target_user_id: String(form.target_user_id || "").trim(),
+        priority: form.priority,
+        pinned: !!form.pinned,
+        active: typeof form.active === "boolean" ? form.active : true,
+        expires_at: fromDateTimeLocal(form.expires_at),
         creado_por: getCurrentUser()?.name || "Testing",
+        created_by_uid: currentUserId,
       };
       const created = await createMessage(payload);
       if (!created) {
@@ -234,47 +467,22 @@ export default function Messages() {
         });
         return;
       }
-      const createdId = created._id || created.id;
-      const cuerpoPreviewText = buildCuerpoPreview(created?.cuerpo);
-      setRows((prev) => [
-        {
-          id: createdId,
-          titulo: created.titulo || "",
-          cuerpo_preview: (
-            <div
-              style={{
-                maxWidth: 420,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              title={String(created?.cuerpo || "").trim()}
-            >
-              {cuerpoPreviewText}
-            </div>
-          ),
-          roles:
-            Array.isArray(created.roles) && created.roles.length > 0
-              ? created.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
-              : "Todos",
-        },
-        ...prev,
-      ]);
       setOpen(false);
-      setForm({ titulo: "", cuerpo: "", roles: [] });
+      setForm(emptyForm);
+      setPage(1);
       setSnack({ open: true, message: "Mensaje creado", type: "success" });
     } catch (e) {
       const message =
         e?.message === "titulo y cuerpo son obligatorios"
           ? "Título y cuerpo son obligatorios"
-          : "Error creando mensaje";
+          : String(e?.message || "Error creando mensaje");
       setSnack({ open: true, message, type: "error" });
     }
   };
 
   const submitEdit = async () => {
     try {
-      if (isReadOnly) {
+      if (!canManageMessages) {
         setSnack({
           open: true,
           message: "No tienes permisos para modificar mensajes",
@@ -294,8 +502,16 @@ export default function Messages() {
       const payload = {
         titulo: editForm.titulo,
         cuerpo: editForm.cuerpo,
-        roles: editForm.roles,
+        roles: String(editForm.target_user_id || "").trim()
+          ? []
+          : editForm.roles,
+        target_user_id: String(editForm.target_user_id || "").trim(),
+        priority: editForm.priority,
+        pinned: !!editForm.pinned,
+        active: typeof editForm.active === "boolean" ? editForm.active : true,
+        expires_at: fromDateTimeLocal(editForm.expires_at),
         modificado_por: getCurrentUser()?.name || "Testing",
+        updated_by_uid: currentUserId,
       };
       const updated = await updateMessageById(editingId, payload);
       if (!updated) {
@@ -306,61 +522,29 @@ export default function Messages() {
         });
         return;
       }
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === editingId
-            ? {
-                ...r,
-                titulo: updated.titulo,
-                cuerpo_preview: (
-                  <div
-                    style={{
-                      maxWidth: 420,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                    title={String(updated?.cuerpo || "").trim()}
-                  >
-                    {buildCuerpoPreview(updated?.cuerpo)}
-                  </div>
-                ),
-                roles:
-                  Array.isArray(updated.roles) && updated.roles.length > 0
-                    ? updated.roles.map((r) => ROLE_LABELS[r] || r).join(", ")
-                    : "Todos",
-              }
-            : r,
-        ),
-      );
       setOpenEdit(false);
       setEditingId(null);
       setSnack({ open: true, message: "Mensaje actualizado", type: "success" });
     } catch (e) {
       setSnack({
         open: true,
-        message: "Error actualizando mensaje",
+        message: String(e?.message || "Error actualizando mensaje"),
         type: "error",
       });
     }
   };
 
-  const toggleRole = (role) => {
-    const has = form.roles.includes(role);
-    setForm({
-      ...form,
-      roles: has ? form.roles.filter((r) => r !== role) : [...form.roles, role],
-    });
-  };
-
-  const toggleRoleEdit = (role) => {
-    const has = editForm.roles.includes(role);
-    setEditForm({
-      ...editForm,
-      roles: has
-        ? editForm.roles.filter((r) => r !== role)
-        : [...editForm.roles, role],
-    });
+  const onCreate = () => {
+    if (!canManageMessages) {
+      setSnack({
+        open: true,
+        message: "No tienes permisos para crear mensajes",
+        type: "error",
+      });
+      return;
+    }
+    setForm(emptyForm);
+    setOpen(true);
   };
 
   return (
@@ -381,6 +565,19 @@ export default function Messages() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {canManageMessages && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(e) => {
+                  setIncludeInactive(!!e.target.checked);
+                  setPage(1);
+                }}
+              />
+              Ver archivados
+            </label>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -404,27 +601,53 @@ export default function Messages() {
         <DataTable
           title="Mensajes"
           columns={columns}
-          data={paginated}
+          data={rows}
           loading={loading}
-          createLabel={isReadOnly ? undefined : "Crear mensaje"}
-          onCreate={isReadOnly ? undefined : onCreate}
-          onRowClick={(row) => navigate(`/app/admin/mensajes/${row.id}`)}
+          createLabel={canManageMessages ? "Crear mensaje" : undefined}
+          onCreate={canManageMessages ? onCreate : undefined}
+          onRowClick={(row) => {
+            const rid = String(row?.id || "").trim();
+            if (!rid) {
+              setSnack({
+                open: true,
+                message: "No se pudo abrir el mensaje",
+                type: "error",
+              });
+              return;
+            }
+            window.setTimeout(() => {
+              navigate(`/app/admin/mensajes/${encodeURIComponent(rid)}`);
+            }, 0);
+          }}
         />
       ) : (
         <CardGrid
           title="Mensajes"
-          items={paginated.map((i) => ({ ...i, name: i.titulo }))}
+          items={rows.map((i) => ({ ...i, name: i.titulo }))}
           loading={loading}
-          createLabel={isReadOnly ? undefined : "Crear mensaje"}
-          onCreate={isReadOnly ? undefined : onCreate}
-          onCardClick={(item) => navigate(`/app/admin/mensajes/${item.id}`)}
+          createLabel={canManageMessages ? "Crear mensaje" : undefined}
+          onCreate={canManageMessages ? onCreate : undefined}
+          onCardClick={(item) => {
+            const rid = String(item?.id || "").trim();
+            if (!rid) {
+              setSnack({
+                open: true,
+                message: "No se pudo abrir el mensaje",
+                type: "error",
+              });
+              return;
+            }
+            window.setTimeout(() => {
+              navigate(`/app/admin/mensajes/${encodeURIComponent(rid)}`);
+            }, 0);
+          }}
         />
       )}
 
       <Pagination
         page={page}
         pageSize={pageSize}
-        total={filtered.length}
+        total={total}
         onPageChange={(p) => setPage(Math.max(1, p))}
         onPageSizeChange={(s) => {
           setPageSize(s);
@@ -432,110 +655,318 @@ export default function Messages() {
         }}
       />
 
-      {!isReadOnly && (
+      {canManageMessages && (
         <Modal
           open={open}
           title="Crear mensaje"
           onClose={() => setOpen(false)}
           onSubmit={submit}
           submitLabel="Crear"
+          width={860}
         >
-          <div>
-            <div className="label">Título</div>
-            <input
-              className="input"
-              value={form.titulo}
-              onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-              placeholder="Título"
-            />
-          </div>
-          <div>
-            <div className="label">Cuerpo</div>
-            <textarea
-              className="input"
-              style={{ width: "100%", resize: "vertical", minHeight: 140 }}
-              value={form.cuerpo}
-              onChange={(e) => setForm({ ...form, cuerpo: e.target.value })}
-              placeholder="Contenido del mensaje"
-              rows={5}
-            />
-          </div>
-          <div>
-            <div className="label">Roles destinatarios</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {Object.values(ROLES).map((role) => (
-                <label
-                  key={role}
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.roles.includes(role)}
-                    onChange={() => toggleRole(role)}
-                  />
-                  {ROLE_LABELS[role] || role}
-                </label>
-              ))}
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
+          >
+            <div style={{ display: "grid", gap: 12 }}>
+              <div>
+                <div className="label">Título</div>
+                <input
+                  className="input"
+                  value={form.titulo}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, titulo: e.target.value }))
+                  }
+                  placeholder="Título"
+                />
+              </div>
+              <div>
+                <div className="label">Cuerpo</div>
+                <textarea
+                  className="input"
+                  style={{ width: "100%", resize: "vertical", minHeight: 220 }}
+                  value={form.cuerpo}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, cuerpo: e.target.value }))
+                  }
+                  placeholder="Contenido del mensaje"
+                  rows={10}
+                />
+              </div>
             </div>
-            <small>
-              Si no seleccionas ningún rol, el mensaje será visible para todos.
-            </small>
+            <div style={{ display: "grid", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div className="label">Prioridad</div>
+                  <select
+                    className="input"
+                    value={form.priority}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, priority: e.target.value }))
+                    }
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="label">Caduca (opcional)</div>
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    value={form.expires_at}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        expires_at: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="label">Usuario específico (opcional)</div>
+                <select
+                  className="input"
+                  value={form.target_user_id}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      target_user_id: nextId,
+                      roles: nextId ? [] : prev.roles,
+                    }));
+                  }}
+                >
+                  <option value="">Ninguno</option>
+                  {users.map((u) => {
+                    const uid = String(u?._id || u?.id || "").trim();
+                    if (!uid) return null;
+                    const label = String(u?.name || "").trim() || uid;
+                    const extra = String(u?.email || "").trim();
+                    return (
+                      <option key={uid} value={uid}>
+                        {label}
+                        {extra ? ` (${extra})` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <div className="label">Roles destinatarios</div>
+                <div
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    padding: 10,
+                    display: "grid",
+                    gap: 8,
+                    maxHeight: 200,
+                    overflow: "auto",
+                    opacity: String(form.target_user_id || "").trim() ? 0.5 : 1,
+                    pointerEvents: String(form.target_user_id || "").trim()
+                      ? "none"
+                      : "auto",
+                  }}
+                >
+                  {MESSAGE_ROLE_OPTIONS.map((r) => (
+                    <label
+                      key={r}
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          Array.isArray(form.roles) && form.roles.includes(r)
+                        }
+                        onChange={() => toggleRoleCreate(r)}
+                      />
+                      <span>{ROLE_LABELS[r] || r}</span>
+                    </label>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-secondary)",
+                    marginTop: 6,
+                  }}
+                >
+                  Si no seleccionas roles ni usuario, el mensaje será visible
+                  para todos.
+                </div>
+              </div>
+            </div>
           </div>
         </Modal>
       )}
 
-      {!isReadOnly && (
+      {canManageMessages && (
         <Modal
           open={openEdit}
           title="Editar mensaje"
           onClose={() => setOpenEdit(false)}
           onSubmit={submitEdit}
           submitLabel="Guardar"
+          width={860}
         >
-          <div>
-            <div className="label">Título</div>
-            <input
-              className="input"
-              value={editForm.titulo}
-              onChange={(e) =>
-                setEditForm({ ...editForm, titulo: e.target.value })
-              }
-              placeholder="Título"
-            />
-          </div>
-          <div>
-            <div className="label">Cuerpo</div>
-            <textarea
-              className="input"
-              style={{ width: "100%", resize: "vertical", minHeight: 140 }}
-              value={editForm.cuerpo}
-              onChange={(e) =>
-                setEditForm({ ...editForm, cuerpo: e.target.value })
-              }
-              placeholder="Contenido del mensaje"
-              rows={5}
-            />
-          </div>
-          <div>
-            <div className="label">Roles destinatarios</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {Object.values(ROLES).map((role) => (
-                <label
-                  key={role}
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editForm.roles.includes(role)}
-                    onChange={() => toggleRoleEdit(role)}
-                  />
-                  {ROLE_LABELS[role] || role}
-                </label>
-              ))}
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
+          >
+            <div style={{ display: "grid", gap: 12 }}>
+              <div>
+                <div className="label">Título</div>
+                <input
+                  className="input"
+                  value={editForm.titulo}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, titulo: e.target.value }))
+                  }
+                  placeholder="Título"
+                />
+              </div>
+              <div>
+                <div className="label">Cuerpo</div>
+                <textarea
+                  className="input"
+                  style={{ width: "100%", resize: "vertical", minHeight: 220 }}
+                  value={editForm.cuerpo}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, cuerpo: e.target.value }))
+                  }
+                  placeholder="Contenido del mensaje"
+                  rows={10}
+                />
+              </div>
             </div>
-            <small>
-              Si no seleccionas ningún rol, el mensaje será visible para todos.
-            </small>
+            <div style={{ display: "grid", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div className="label">Prioridad</div>
+                  <select
+                    className="input"
+                    value={editForm.priority}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        priority: e.target.value,
+                      }))
+                    }
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="label">Caduca (opcional)</div>
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    value={editForm.expires_at}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        expires_at: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="label">Usuario específico (opcional)</div>
+                <select
+                  className="input"
+                  value={editForm.target_user_id}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setEditForm((prev) => ({
+                      ...prev,
+                      target_user_id: nextId,
+                      roles: nextId ? [] : prev.roles,
+                    }));
+                  }}
+                >
+                  <option value="">Ninguno</option>
+                  {users.map((u) => {
+                    const uid = String(u?._id || u?.id || "").trim();
+                    if (!uid) return null;
+                    const label = String(u?.name || "").trim() || uid;
+                    const extra = String(u?.email || "").trim();
+                    return (
+                      <option key={uid} value={uid}>
+                        {label}
+                        {extra ? ` (${extra})` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <div className="label">Roles destinatarios</div>
+                <div
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    padding: 10,
+                    display: "grid",
+                    gap: 8,
+                    maxHeight: 200,
+                    overflow: "auto",
+                    opacity: String(editForm.target_user_id || "").trim()
+                      ? 0.5
+                      : 1,
+                    pointerEvents: String(editForm.target_user_id || "").trim()
+                      ? "none"
+                      : "auto",
+                  }}
+                >
+                  {MESSAGE_ROLE_OPTIONS.map((r) => (
+                    <label
+                      key={r}
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          Array.isArray(editForm.roles) &&
+                          editForm.roles.includes(r)
+                        }
+                        onChange={() => toggleRoleEdit(r)}
+                      />
+                      <span>{ROLE_LABELS[r] || r}</span>
+                    </label>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-secondary)",
+                    marginTop: 6,
+                  }}
+                >
+                  Si no seleccionas roles ni usuario, el mensaje será visible
+                  para todos.
+                </div>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

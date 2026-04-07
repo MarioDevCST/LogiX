@@ -12,6 +12,7 @@ const ROLE_OPTIONS = [
   { label: "Oficina", value: "dispatcher" },
   { label: "Conductor", value: "driver" },
   { label: "Almacén", value: "warehouse" },
+  { label: "Mozo", value: "mozo" },
   { label: "Logistica", value: "logistic" },
 ];
 

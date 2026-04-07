@@ -6,6 +6,7 @@ export const ROLES = {
   MANAGER: "manager",
   CONDUCTOR: "driver",
   ALMACEN: "warehouse",
+  MOZO: "mozo",
   CONSIGNATARIO: "consignee",
   LOGISTICA: "logistic",
 };
@@ -16,6 +17,7 @@ export const ROLE_LABELS = {
   [ROLES.MANAGER]: "Manager",
   [ROLES.CONDUCTOR]: "Conductor",
   [ROLES.ALMACEN]: "Almacén",
+  [ROLES.MOZO]: "Mozo",
   [ROLES.CONSIGNATARIO]: "Consignatario",
   [ROLES.LOGISTICA]: "Logistica",
 };
@@ -27,6 +29,7 @@ export const ROLE_COLORS = {
   [ROLES.MANAGER]: "#3949ab", // índigo
   [ROLES.CONDUCTOR]: "#8e24aa", // morado
   [ROLES.ALMACEN]: "#fb8c00", // naranja
+  [ROLES.MOZO]: "#64748b", // gris
   [ROLES.CONSIGNATARIO]: "#6d4c41", // marrón
   [ROLES.LOGISTICA]: "#43a047", // verde
 };
@@ -73,6 +76,7 @@ export const ROLE_PERMISSIONS = {
   ],
   [ROLES.CONDUCTOR]: [PERMISSIONS.VIEW_LOGISTICS],
   [ROLES.ALMACEN]: [PERMISSIONS.MANAGE_PALLETS],
+  [ROLES.MOZO]: [PERMISSIONS.VIEW_LOGISTICS, PERMISSIONS.MANAGE_PALLETS],
   [ROLES.CONSIGNATARIO]: [PERMISSIONS.VIEW_LOGISTICS],
 };
 

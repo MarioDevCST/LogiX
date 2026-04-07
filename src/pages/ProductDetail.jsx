@@ -52,6 +52,22 @@ function normalizeEstadoProducto(value) {
   return "disponible";
 }
 
+function normalizeTipoProducto(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Seco";
+  const key = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (key === "seco") return "Seco";
+  if (key === "refrigerado") return "Refrigerado";
+  if (key === "congelado") return "Congelado";
+  if (key === "tecnico" || key === "técnico") return "Técnico";
+  return "Seco";
+}
+
+const TIPO_OPTIONS = ["Seco", "Refrigerado", "Congelado", "Técnico"];
+
 export default function ProductDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -67,6 +83,7 @@ export default function ProductDetail() {
     codigo: "",
     nombre_producto: "",
     familia: "",
+    tipo: "Seco",
     composicion: "",
     alergenos: "",
     estado: "disponible",
@@ -89,6 +106,7 @@ export default function ProductDetail() {
           codigo: p?.codigo || "",
           nombre_producto: p?.nombre_producto || "",
           familia: p?.familia || "",
+          tipo: normalizeTipoProducto(p?.tipo),
           composicion: p?.composicion || "",
           alergenos: p?.alergenos || "",
           estado: normalizeEstadoProducto(p?.estado),
@@ -116,6 +134,7 @@ export default function ProductDetail() {
       { label: "Código", value: producto?.codigo || "-" },
       { label: "Nombre del producto", value: producto?.nombre_producto || "-" },
       { label: "Familia", value: producto?.familia || "-" },
+      { label: "Tipo", value: producto?.tipo || "-" },
       { label: "Composición", value: producto?.composicion || "-" },
       { label: "Alérgenos", value: producto?.alergenos || "-" },
       { label: "Estado", value: formatEstadoLabel(producto?.estado) },
@@ -150,6 +169,7 @@ export default function ProductDetail() {
         codigo: editForm.codigo,
         nombre_producto: editForm.nombre_producto,
         familia: editForm.familia,
+        tipo: editForm.tipo,
         composicion: editForm.composicion,
         alergenos: editForm.alergenos,
         estado: editForm.estado,
@@ -303,6 +323,25 @@ export default function ProductDetail() {
               }
               placeholder="Familia"
             />
+          </div>
+          <div>
+            <div className="label">Tipo</div>
+            <select
+              className="input"
+              value={editForm.tipo}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  tipo: normalizeTipoProducto(e.target.value),
+                }))
+              }
+            >
+              {TIPO_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <div className="label">Composición</div>

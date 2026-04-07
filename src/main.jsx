@@ -186,8 +186,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route
             path="logistica/cargas"
             element={
-              getCurrentRole() === ROLES.ALMACEN ? (
-                <Navigate to="/app" replace />
+              getCurrentRole() === ROLES.ALMACEN ||
+              getCurrentRole() === ROLES.MOZO ? (
+                <Navigate to="/app/palets" replace />
               ) : (
                 <Loads />
               )
@@ -196,8 +197,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route
             path="logistica/cargas/:id"
             element={
-              getCurrentRole() === ROLES.ALMACEN ? (
-                <Navigate to="/app" replace />
+              getCurrentRole() === ROLES.ALMACEN ||
+              getCurrentRole() === ROLES.MOZO ? (
+                <Navigate to="/app/palets" replace />
               ) : (
                 <LoadDetail />
               )
@@ -206,7 +208,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route
             path="logistica/carga-palets"
             element={
-              getCurrentRole() === ROLES.CONDUCTOR ? (
+              getCurrentRole() === ROLES.CONDUCTOR ||
+              getCurrentRole() === ROLES.MOZO ? (
                 <Navigate to="/app/logistica/cargas" replace />
               ) : (
                 <PalletLoading />

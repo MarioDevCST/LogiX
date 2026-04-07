@@ -2647,6 +2647,7 @@ export default function Loads() {
             onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
           >
             <option value="driver">Chofer</option>
+            <option value="mozo">Mozo</option>
             <option value="consignee">Consignatario</option>
             <option value="dispatcher">Dispatcher</option>
             <option value="manager">Manager</option>

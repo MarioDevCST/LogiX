@@ -16,11 +16,13 @@ import {
   deleteDoc,
   getDoc,
   getDocs,
+  getCountFromServer,
   onSnapshot,
   getFirestore,
   limit,
   orderBy,
   query,
+  startAfter,
   where,
   serverTimestamp,
   setDoc,
@@ -2468,7 +2470,62 @@ export async function fetchAllMessages() {
     titulo: data.titulo || "",
     cuerpo: data.cuerpo || "",
     roles: Array.isArray(data.roles) ? data.roles : [],
+    target_user_id: String(data.target_user_id || "").trim(),
+    audience: Array.isArray(data.audience) ? data.audience : [],
+    priority: String(data.priority || "info").trim() || "info",
+    pinned: !!data.pinned,
+    active: typeof data.active === "boolean" ? data.active : true,
+    expires_at: data.expires_at || null,
+    created_by_uid: String(data.created_by_uid || "").trim(),
+    updated_by_uid: String(data.updated_by_uid || "").trim(),
   }));
+}
+
+function normalizeMessagePriority(value) {
+  const v = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (v === "urgent") return "urgent";
+  if (v === "warning") return "warning";
+  return "info";
+}
+
+function normalizeMessageRoles(value) {
+  const list = Array.isArray(value) ? value : [];
+  return list.map((r) => String(r || "").trim()).filter(Boolean);
+}
+
+function buildMessageAudience({ roles, target_user_id }) {
+  const target = String(target_user_id || "").trim();
+  if (target) return [`user:${target}`];
+  const normalizedRoles = normalizeMessageRoles(roles);
+  if (normalizedRoles.length > 0) {
+    return normalizedRoles.map((r) => `role:${r}`);
+  }
+  return ["all"];
+}
+
+function mapMessageDoc({ docId, data }) {
+  const roles = Array.isArray(data?.roles) ? data.roles : [];
+  const target_user_id = String(data?.target_user_id || "").trim();
+  const audience =
+    Array.isArray(data?.audience) && data.audience.length > 0
+      ? data.audience
+      : buildMessageAudience({ roles, target_user_id });
+  return {
+    ...mapCommonAudit(data, docId),
+    titulo: data?.titulo || "",
+    cuerpo: data?.cuerpo || "",
+    roles,
+    target_user_id,
+    audience,
+    priority: normalizeMessagePriority(data?.priority),
+    pinned: !!data?.pinned,
+    active: typeof data?.active === "boolean" ? data.active : true,
+    expires_at: data?.expires_at || null,
+    created_by_uid: String(data?.created_by_uid || "").trim(),
+    updated_by_uid: String(data?.updated_by_uid || "").trim(),
+  };
 }
 
 export async function fetchMessageById(id) {
@@ -2476,13 +2533,7 @@ export async function fetchMessageById(id) {
   const ref = doc(firebaseDb, "messages", String(id));
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
-  const data = snap.data() || {};
-  return {
-    ...mapCommonAudit(data, snap.id),
-    titulo: data.titulo || "",
-    cuerpo: data.cuerpo || "",
-    roles: Array.isArray(data.roles) ? data.roles : [],
-  };
+  return mapMessageDoc({ docId: snap.id, data: snap.data() || {} });
 }
 
 export async function createMessage(payload) {
@@ -2491,9 +2542,13 @@ export async function createMessage(payload) {
   const cuerpo = String(payload?.cuerpo || "").trim();
   if (!titulo || !cuerpo) throw new Error("titulo y cuerpo son obligatorios");
 
-  const roles = Array.isArray(payload?.roles)
-    ? payload.roles.map((r) => String(r)).filter(Boolean)
-    : [];
+  const roles = normalizeMessageRoles(payload?.roles);
+  const target_user_id = String(payload?.target_user_id || "").trim();
+  const priority = normalizeMessagePriority(payload?.priority);
+  const pinned = !!payload?.pinned;
+  const active = typeof payload?.active === "boolean" ? payload.active : true;
+  const expires_at = payload?.expires_at || null;
+  const audience = buildMessageAudience({ roles, target_user_id });
 
   const ref = doc(collection(firebaseDb, "messages"));
   const id = ref.id;
@@ -2503,8 +2558,16 @@ export async function createMessage(payload) {
     titulo,
     cuerpo,
     roles,
+    target_user_id,
+    priority,
+    pinned,
+    active,
+    expires_at,
+    audience,
     creado_por: String(payload?.creado_por || "Testing"),
     modificado_por: "",
+    created_by_uid: String(payload?.created_by_uid || "").trim(),
+    updated_by_uid: "",
     fecha_creacion: serverTimestamp(),
     fecha_modificacion: serverTimestamp(),
     createdAt: serverTimestamp(),
@@ -2534,14 +2597,51 @@ export async function updateMessageById(id, updates) {
   const current = await fetchMessageById(id);
   if (!current) return null;
 
+  const nextRoles =
+    typeof updates?.roles !== "undefined"
+      ? normalizeMessageRoles(updates.roles)
+      : current.roles;
+  const nextTargetUserId =
+    typeof updates?.target_user_id !== "undefined"
+      ? String(updates?.target_user_id || "").trim()
+      : String(current?.target_user_id || "").trim();
+  const shouldRebuildAudience =
+    typeof updates?.roles !== "undefined" ||
+    typeof updates?.target_user_id !== "undefined";
+
   const patch = {
     ...updates,
-    ...(typeof updates?.roles !== "undefined"
+    ...(typeof updates?.roles !== "undefined" ? { roles: nextRoles } : {}),
+    ...(typeof updates?.target_user_id !== "undefined"
+      ? { target_user_id: nextTargetUserId }
+      : {}),
+    ...(typeof updates?.priority !== "undefined"
+      ? { priority: normalizeMessagePriority(updates.priority) }
+      : {}),
+    ...(typeof updates?.pinned !== "undefined"
+      ? { pinned: !!updates.pinned }
+      : {}),
+    ...(typeof updates?.active !== "undefined"
       ? {
-          roles: Array.isArray(updates.roles)
-            ? updates.roles.map((r) => String(r)).filter(Boolean)
-            : [],
+          active:
+            typeof updates.active === "boolean"
+              ? updates.active
+              : !!updates.active,
         }
+      : {}),
+    ...(typeof updates?.expires_at !== "undefined"
+      ? { expires_at: updates.expires_at || null }
+      : {}),
+    ...(shouldRebuildAudience
+      ? {
+          audience: buildMessageAudience({
+            roles: nextRoles,
+            target_user_id: nextTargetUserId,
+          }),
+        }
+      : {}),
+    ...(typeof updates?.updated_by_uid !== "undefined"
+      ? { updated_by_uid: String(updates.updated_by_uid || "").trim() }
       : {}),
     fecha_modificacion: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -2572,6 +2672,232 @@ export async function deleteMessageById(id) {
     });
   }
   return { ok: true };
+}
+
+export function buildMessageAudienceKeysForUser({ userId, role }) {
+  const out = ["all"];
+  const rid = String(role || "").trim();
+  if (rid) out.push(`role:${rid}`);
+  const uid = String(userId || "").trim();
+  if (uid) out.push(`user:${uid}`);
+  return Array.from(new Set(out)).slice(0, 10);
+}
+
+export async function getMessagesCount({
+  audienceKeys,
+  includeInactive = false,
+  canManage = false,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const q = Array.isArray(audienceKeys) ? audienceKeys : [];
+  const base = [];
+  if (canManage) {
+    const snap = await getCountFromServer(collection(firebaseDb, "messages"));
+    return Number(snap.data().count || 0);
+  }
+  if (!canManage) {
+    base.push(where("active", "==", true));
+    if (q.length > 0) {
+      base.push(where("audience", "array-contains-any", q));
+      base.push(orderBy("createdAt", "desc"));
+    }
+  }
+  const snap = await getCountFromServer(
+    query(collection(firebaseDb, "messages"), ...base),
+  );
+  return Number(snap.data().count || 0);
+}
+
+export async function fetchMessagesPage({
+  audienceKeys,
+  pageSize = 10,
+  cursor,
+  includeInactive = false,
+  canManage = false,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const lim = Math.max(1, Number(pageSize) || 10);
+  const q = Array.isArray(audienceKeys) ? audienceKeys : [];
+  const constraints = [orderBy("createdAt", "desc"), limit(lim)];
+  if (!canManage) {
+    constraints.unshift(where("active", "==", true));
+    if (q.length > 0)
+      constraints.unshift(where("audience", "array-contains-any", q));
+  }
+  if (cursor) constraints.push(startAfter(cursor));
+  const snap = await getDocs(
+    query(collection(firebaseDb, "messages"), ...constraints),
+  );
+  const items = [];
+  snap.forEach((d) =>
+    items.push(mapMessageDoc({ docId: d.id, data: d.data() || {} })),
+  );
+  const lastDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+  return { items, lastDoc };
+}
+
+export function subscribeMessagesPage(
+  {
+    audienceKeys,
+    pageSize = 10,
+    cursor,
+    includeInactive = false,
+    canManage = false,
+  } = {},
+  { onChange, onError } = {},
+) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  const lim = Math.max(1, Number(pageSize) || 10);
+  const q = Array.isArray(audienceKeys) ? audienceKeys : [];
+  const constraints = [orderBy("createdAt", "desc"), limit(lim)];
+  if (!canManage) {
+    constraints.unshift(where("active", "==", true));
+    if (q.length > 0)
+      constraints.unshift(where("audience", "array-contains-any", q));
+  }
+  if (cursor) constraints.push(startAfter(cursor));
+  return onSnapshot(
+    query(collection(firebaseDb, "messages"), ...constraints),
+    (snap) => {
+      const items = [];
+      snap.forEach((d) =>
+        items.push(mapMessageDoc({ docId: d.id, data: d.data() || {} })),
+      );
+      const lastDoc =
+        snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+      onChange({ items, lastDoc });
+    },
+    (err) => {
+      if (typeof onError === "function") onError(err);
+    },
+  );
+}
+
+export function subscribeMessageById(id, { onChange, onError } = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const mid = String(id || "").trim();
+  if (!mid) throw new Error("id es obligatorio");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  return onSnapshot(
+    doc(firebaseDb, "messages", mid),
+    (snap) => {
+      if (!snap.exists()) {
+        onChange(null);
+        return;
+      }
+      onChange(mapMessageDoc({ docId: snap.id, data: snap.data() || {} }));
+    },
+    (err) => {
+      if (typeof onError === "function") onError(err);
+    },
+  );
+}
+
+export async function markMessageRead({ messageId, user } = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const mid = String(messageId || "").trim();
+  const uid = String(user?._id || user?.id || "").trim();
+  if (!mid) throw new Error("messageId es obligatorio");
+  if (!uid) return { ok: false, skipped: true };
+  const ref = doc(firebaseDb, "messages", mid, "reads", uid);
+  await setDoc(
+    ref,
+    {
+      user_id: uid,
+      name: String(user?.name || "").trim(),
+      email: String(user?.email || "").trim(),
+      role: String(user?.role || "").trim(),
+      read_at: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { ok: true };
+}
+
+export async function fetchMessageReads(messageId) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const mid = String(messageId || "").trim();
+  if (!mid) return [];
+  const snap = await getDocs(collection(firebaseDb, "messages", mid, "reads"));
+  const list = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    list.push({
+      id: d.id,
+      user_id: String(data.user_id || d.id).trim(),
+      name: String(data.name || "").trim(),
+      email: String(data.email || "").trim(),
+      role: String(data.role || "").trim(),
+      read_at: data.read_at || null,
+      createdAt: data.createdAt || null,
+    });
+  });
+  return list;
+}
+
+export function subscribeMessageReads(messageId, { onChange, onError } = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const mid = String(messageId || "").trim();
+  if (!mid) throw new Error("messageId es obligatorio");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  return onSnapshot(
+    collection(firebaseDb, "messages", mid, "reads"),
+    (snap) => {
+      const list = [];
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        list.push({
+          id: d.id,
+          user_id: String(data.user_id || d.id).trim(),
+          name: String(data.name || "").trim(),
+          email: String(data.email || "").trim(),
+          role: String(data.role || "").trim(),
+          read_at: data.read_at || null,
+          createdAt: data.createdAt || null,
+        });
+      });
+      onChange(list);
+    },
+    (err) => {
+      if (typeof onError === "function") onError(err);
+    },
+  );
+}
+
+export async function ensureRecentMessagesAudienceBackfill({
+  limitCount = 200,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const lim = Math.max(1, Number(limitCount) || 200);
+  const snap = await getDocs(
+    query(
+      collection(firebaseDb, "messages"),
+      orderBy("createdAt", "desc"),
+      limit(lim),
+    ),
+  );
+  const updates = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    const roles = Array.isArray(data.roles) ? data.roles : [];
+    const target_user_id = String(data.target_user_id || "").trim();
+    const audience = Array.isArray(data.audience) ? data.audience : [];
+    if (audience.length > 0) return;
+    updates.push(
+      updateDoc(doc(firebaseDb, "messages", d.id), {
+        audience: buildMessageAudience({ roles, target_user_id }),
+        fecha_modificacion: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+  await Promise.all(updates.map((p) => p.catch(() => null)));
+  return { ok: true, count: updates.length };
 }
 
 export async function fetchAllMerma() {
@@ -2812,6 +3138,20 @@ function normalizeProductoEstado(value) {
   return "disponible";
 }
 
+function normalizeProductoTipo(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Seco";
+  const key = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (key === "seco") return "Seco";
+  if (key === "refrigerado") return "Refrigerado";
+  if (key === "congelado") return "Congelado";
+  if (key === "tecnico" || key === "técnico") return "Técnico";
+  return "Seco";
+}
+
 export async function fetchAllProductos() {
   const docs = await getAllDocsOrdered({
     collectionName: "productos",
@@ -2824,6 +3164,7 @@ export async function fetchAllProductos() {
     familia: data.familia || "",
     composicion: data.composicion || "",
     alergenos: data.alergenos || "",
+    tipo: normalizeProductoTipo(data.tipo),
     estado: normalizeProductoEstado(data.estado),
   }));
 }
@@ -2841,6 +3182,7 @@ export async function fetchProductoById(id) {
     familia: data.familia || "",
     composicion: data.composicion || "",
     alergenos: data.alergenos || "",
+    tipo: normalizeProductoTipo(data.tipo),
     estado: normalizeProductoEstado(data.estado),
   };
 }
@@ -2852,6 +3194,7 @@ export async function createProducto(payload) {
   const familia = String(payload?.familia || "").trim();
   const composicion = String(payload?.composicion || "").trim();
   const alergenos = String(payload?.alergenos || "").trim();
+  const tipo = normalizeProductoTipo(payload?.tipo || "Seco");
   const estado = normalizeProductoEstado(payload?.estado || "disponible");
   if (!nombre_producto) throw new Error("nombre_producto es obligatorio");
 
@@ -2864,6 +3207,7 @@ export async function createProducto(payload) {
     familia,
     composicion,
     alergenos,
+    tipo,
     estado,
     creado_por: String(payload?.creado_por || "Testing"),
     modificado_por: "",
@@ -2897,6 +3241,9 @@ export async function updateProductoById(id, updates) {
       : {}),
     ...(typeof updates?.alergenos !== "undefined"
       ? { alergenos: String(updates.alergenos || "").trim() }
+      : {}),
+    ...(typeof updates?.tipo !== "undefined"
+      ? { tipo: normalizeProductoTipo(updates.tipo) }
       : {}),
     ...(typeof updates?.estado !== "undefined"
       ? {

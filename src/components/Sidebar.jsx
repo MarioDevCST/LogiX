@@ -14,6 +14,7 @@ export default function Sidebar({ collapsed }) {
   const user = getCurrentUser();
   const meId = user?._id || user?.id;
   const isWarehouse = role === ROLES.ALMACEN;
+  const isMozo = role === ROLES.MOZO;
   const isOffice = role === ROLES.OFICINA;
   const isDriver = role === ROLES.CONDUCTOR;
   const shouldShowMermaDot = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
@@ -76,6 +77,54 @@ export default function Sidebar({ collapsed }) {
               local_shipping
             </span>
             <span className="nav-label">Cargas</span>
+          </NavLink>
+        </nav>
+      </aside>
+    );
+  }
+
+  if (isMozo) {
+    return (
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+        <nav className="nav">
+          <div className="nav-section">Dashboard</div>
+          <NavLink
+            to="/app"
+            end
+            title="Dashboard"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              dashboard
+            </span>
+            <span className="nav-label">Dashboard</span>
+          </NavLink>
+
+          {meId && (
+            <NavLink
+              to="/app/mi-perfil"
+              title="Mi perfil"
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="nav-icon material-symbols-outlined">
+                account_circle
+              </span>
+              <span className="nav-label">Mi perfil</span>
+            </NavLink>
+          )}
+
+          <div className="nav-section">Logística</div>
+          <NavLink
+            to="/app/palets"
+            title="Palets (Preparando)"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              inventory_2
+            </span>
+            <span className="nav-label">Palets</span>
           </NavLink>
         </nav>
       </aside>

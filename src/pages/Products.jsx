@@ -42,10 +42,13 @@ export default function Products() {
   const isOffice = role === ROLES.OFICINA;
   const isReadOnly = isWarehouse || isOffice;
 
+  const TIPO_OPTIONS = ["Seco", "Refrigerado", "Congelado", "Técnico"];
+
   const columns = [
     { key: "codigo", header: "Código" },
     { key: "nombre_producto", header: "Nombre del producto" },
     { key: "familia", header: "Familia" },
+    { key: "tipo", header: "Tipo" },
     { key: "composicion", header: "Composición" },
     { key: "alergenos", header: "Alérgenos" },
     { key: "estado", header: "Estado" },
@@ -61,6 +64,7 @@ export default function Products() {
     codigo: "",
     nombre_producto: "",
     familia: "",
+    tipo: "Seco",
     composicion: "",
     alergenos: "",
     estado: "disponible",
@@ -119,6 +123,9 @@ export default function Products() {
         String(r?.familia || "")
           .toLowerCase()
           .includes(q) ||
+        String(r?.tipo || "")
+          .toLowerCase()
+          .includes(q) ||
         String(r?.composicion || "")
           .toLowerCase()
           .includes(q) ||
@@ -166,6 +173,7 @@ export default function Products() {
         codigo: form.codigo,
         nombre_producto: form.nombre_producto,
         familia: form.familia,
+        tipo: form.tipo,
         composicion: form.composicion,
         alergenos: form.alergenos,
         estado: form.estado,
@@ -194,6 +202,7 @@ export default function Products() {
         codigo: "",
         nombre_producto: "",
         familia: "",
+        tipo: "Seco",
         composicion: "",
         alergenos: "",
         estado: "disponible",
@@ -230,7 +239,7 @@ export default function Products() {
       >
         <input
           className="input"
-          placeholder="Buscar por código, nombre, familia, composición, alérgenos o estado"
+          placeholder="Buscar por código, nombre, familia, tipo, composición, alérgenos o estado"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -304,6 +313,22 @@ export default function Products() {
               }
               placeholder="Familia"
             />
+          </div>
+          <div>
+            <div className="label">Tipo</div>
+            <select
+              className="input"
+              value={form.tipo}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, tipo: e.target.value }))
+              }
+            >
+              {TIPO_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <div className="label">Composición</div>

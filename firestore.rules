@@ -21,6 +21,10 @@ service cloud.firestore {
       return isSignedIn() && userRole() == 'driver';
     }
 
+    function isLogistica() {
+      return isSignedIn() && userRole() == 'logistic';
+    }
+
     function isAdmin() {
       return isSignedIn() && userDoc().data.role == 'admin';
     }
@@ -99,7 +103,14 @@ service cloud.firestore {
 
     match /messages/{id} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn() && !isWarehouse();
+      allow create, update, delete: if isLogistica();
+      match /reads/{uid} {
+        allow read: if isLogistica() || (isSignedIn() && uid == request.auth.uid);
+        allow create, update: if isSignedIn() &&
+          uid == request.auth.uid &&
+          request.resource.data.user_id == request.auth.uid;
+        allow delete: if false;
+      }
     }
 
     match /merma/{id} {

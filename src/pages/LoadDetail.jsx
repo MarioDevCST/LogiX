@@ -87,7 +87,13 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
+function buildHojaCargaPageHtml({
+  cliente,
+  fechaPrevistaEntrega,
+  numeros,
+  logoUrl,
+  poweredLogoUrl,
+}) {
   const cols = [
     "Nº PALET",
     "SECO-REFRIGERADO-CONGELADO-REPUESTOS-TÉCNICO",
@@ -122,24 +128,32 @@ function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
         <div></div>
         <div class="sheet-title">HOJA DE CARGA</div>
       </div>
-
-      <div class="sheet-meta">
-        <div class="meta-row">
-          <span class="meta-label">CLIENTE:</span>
-          <span class="meta-value">${escapeHtml(cliente || "-")}</span>
+      <div class="sheet-head">
+        <div class="sheet-meta">
+          <div class="meta-row">
+            <span class="meta-label">CLIENTE:</span>
+            <span class="meta-value">${escapeHtml(cliente || "-")}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
+            <span class="meta-value">${escapeHtml(fechaPrevistaEntrega || "-")}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">CARGADOR FINAL:</span>
+            <span class="meta-value"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">FECHA DE CARGA FINAL:</span>
+            <span class="meta-value"></span>
+          </div>
         </div>
-        <div class="meta-row">
-          <span class="meta-label">FECHA PREVISTA DE ENTREGA:</span>
-          <span class="meta-value">${escapeHtml(fechaPrevistaEntrega || "-")}</span>
-        </div>
-        <div class="meta-row">
-          <span class="meta-label">CARGADOR FINAL:</span>
-          <span class="meta-value"></span>
-        </div>
-        <div class="meta-row">
-          <span class="meta-label">FECHA DE CARGA FINAL:</span>
-          <span class="meta-value"></span>
-        </div>
+        ${
+          String(logoUrl || "").trim()
+            ? `<img class="sheet-logo" src="${escapeHtml(
+                String(logoUrl || "").trim(),
+              )}" alt="" />`
+            : ""
+        }
       </div>
 
       <table class="sheet-table" aria-label="Tabla palets 1-30">
@@ -155,6 +169,16 @@ function buildHojaCargaPageHtml({ cliente, fechaPrevistaEntrega, numeros }) {
           <div class="line"></div>
         </div>
       </div>
+      ${
+        String(poweredLogoUrl || "").trim()
+          ? `<div class="powered-by">
+              <span>Powered by</span>
+              <img src="${escapeHtml(
+                String(poweredLogoUrl || "").trim(),
+              )}" alt="" />
+            </div>`
+          : ""
+      }
     </div>
   `;
 }
@@ -169,6 +193,8 @@ function buildFoliosHtml({
   hojaTo,
   includeHojaCarga,
   includeNumbers,
+  logoUrl,
+  poweredLogoUrl,
 }) {
   const pages = [];
   if (includeHojaCarga) {
@@ -182,6 +208,8 @@ function buildFoliosHtml({
           cliente: shipName,
           fechaPrevistaEntrega: dateLabel,
           numeros: nums,
+          logoUrl,
+          poweredLogoUrl,
         }),
       );
     }
@@ -193,6 +221,13 @@ function buildFoliosHtml({
         <div class="page numero-page">
           <div class="top">
             <div class="small-circle">${big}</div>
+            ${
+              String(logoUrl || "").trim()
+                ? `<img class="top-logo" src="${escapeHtml(
+                    String(logoUrl || "").trim(),
+                  )}" alt="" />`
+                : ""
+            }
           </div>
           <div class="ship">${escapeHtml(shipName || "")}</div>
           <div class="big">${big}</div>
@@ -206,6 +241,16 @@ function buildFoliosHtml({
               <span class="value">${escapeHtml(portLabel || "-")}</span>
             </div>
           </div>
+          ${
+            String(poweredLogoUrl || "").trim()
+              ? `<div class="powered-by">
+                  <span>Powered by</span>
+                  <img src="${escapeHtml(
+                    String(poweredLogoUrl || "").trim(),
+                  )}" alt="" />
+                </div>`
+              : ""
+          }
         </div>
       `);
     }
@@ -247,12 +292,25 @@ function buildFoliosHtml({
           color: #111827;
           text-transform: uppercase;
         }
+        .sheet-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10mm;
+          margin-bottom: 4mm;
+        }
         .sheet-meta {
           display: grid;
           gap: 3px;
           font-size: 11px;
           color: #111827;
-          margin-bottom: 4mm;
+          margin-bottom: 0;
+        }
+        .sheet-logo {
+          height: calc(18mm - 10px);
+          width: auto;
+          max-width: 80mm;
+          object-fit: contain;
         }
         .meta-row { display: flex; gap: 8px; }
         .meta-label { font-weight: 700; white-space: nowrap; }
@@ -287,6 +345,7 @@ function buildFoliosHtml({
           margin-top: 4mm;
           display: grid;
           gap: 6px;
+          padding-bottom: 14mm;
         }
         .footer-title { font-weight: 700; font-size: 11px; }
         .footer-lines {
@@ -306,6 +365,36 @@ function buildFoliosHtml({
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
+        }
+        .top-logo {
+          height: calc(24mm - 10px);
+          width: auto;
+          max-width: 80mm;
+          object-fit: contain;
+        }
+        .powered-by {
+          position: absolute;
+          right: 18mm;
+          bottom: 8mm;
+          display: flex;
+          align-items: flex-end;
+          gap: 6px;
+          font-size: 11px;
+          color: #6b7280;
+          background: rgba(255,255,255,0.75);
+          padding: 4px 8px;
+          border-radius: 10px;
+        }
+        .powered-by span {
+          display: inline-block;
+          line-height: 1;
+          padding-bottom: 1mm;
+          white-space: nowrap;
+        }
+        .powered-by img {
+          height: 10mm;
+          width: auto;
+          object-fit: contain;
         }
         .brand {
           font-weight: 800;
@@ -359,7 +448,7 @@ function buildFoliosHtml({
           position: absolute;
           left: 18mm;
           right: 18mm;
-          bottom: 18mm;
+          bottom: 30mm;
           border-top: 2px dashed #9ca3af;
           padding-top: 10mm;
           display: grid;
@@ -851,6 +940,25 @@ export default function LoadDetail() {
     const aSheet = Math.min(sheetFrom, sheetTo);
     const bSheet = Math.max(sheetFrom, sheetTo);
     if (folioIncludeLoadSheet && bSheet - aSheet > 500) return "";
+    const logoUrl = (() => {
+      try {
+        if (typeof window === "undefined") return "";
+        return new URL(
+          "/logo-eis-maritimo.png",
+          window.location.origin,
+        ).toString();
+      } catch {
+        return "";
+      }
+    })();
+    const poweredLogoUrl = (() => {
+      try {
+        if (typeof window === "undefined") return "";
+        return new URL("/logo.png", window.location.origin).toString();
+      } catch {
+        return "";
+      }
+    })();
     return buildFoliosHtml({
       shipName: folioMeta.shipName,
       dateLabel: folioMeta.dateLabel,
@@ -861,6 +969,8 @@ export default function LoadDetail() {
       hojaTo: folioIncludeLoadSheet ? bSheet : 1,
       includeHojaCarga: folioIncludeLoadSheet,
       includeNumbers: folioIncludeNumbers,
+      logoUrl,
+      poweredLogoUrl,
     });
   }, [
     openFolio,

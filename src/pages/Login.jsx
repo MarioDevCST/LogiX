@@ -14,6 +14,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [isRegistering, setIsRegistering] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [snack, setSnack] = useState({
     open: false,
     message: "",
@@ -25,30 +26,30 @@ export default function Login() {
     return code === "auth/invalid-credential"
       ? "Credenciales inválidas"
       : code === "auth/user-not-found"
-      ? "Usuario no encontrado"
-      : code === "auth/wrong-password"
-      ? "Contraseña incorrecta"
-      : code === "auth/email-already-in-use"
-      ? "Ese email ya está registrado"
-      : code === "auth/weak-password"
-      ? "La contraseña es demasiado débil"
-      : code === "auth/invalid-email"
-      ? "Email inválido"
-      : code === "auth/operation-not-allowed"
-      ? "En este proyecto no está habilitado Email/Contraseña en Firebase Auth"
-      : code === "auth/unauthorized-domain"
-      ? "Este dominio no está autorizado en Firebase Auth"
-      : code === "auth/invalid-api-key"
-      ? "API key inválida en la configuración de Firebase"
-      : code === "auth/network-request-failed"
-      ? "Error de red conectando con Firebase"
-      : code === "firestore/timeout"
-      ? "Firestore no responde (timeout). Revisa si Firestore está creado y las reglas"
-      : code === "permission-denied"
-      ? "Permiso denegado en Firestore. Revisa las reglas"
-      : code === "failed-precondition"
-      ? "Firestore no está listo o la API no está habilitada"
-      : "";
+        ? "Usuario no encontrado"
+        : code === "auth/wrong-password"
+          ? "Contraseña incorrecta"
+          : code === "auth/email-already-in-use"
+            ? "Ese email ya está registrado"
+            : code === "auth/weak-password"
+              ? "La contraseña es demasiado débil"
+              : code === "auth/invalid-email"
+                ? "Email inválido"
+                : code === "auth/operation-not-allowed"
+                  ? "En este proyecto no está habilitado Email/Contraseña en Firebase Auth"
+                  : code === "auth/unauthorized-domain"
+                    ? "Este dominio no está autorizado en Firebase Auth"
+                    : code === "auth/invalid-api-key"
+                      ? "API key inválida en la configuración de Firebase"
+                      : code === "auth/network-request-failed"
+                        ? "Error de red conectando con Firebase"
+                        : code === "firestore/timeout"
+                          ? "Firestore no responde (timeout). Revisa si Firestore está creado y las reglas"
+                          : code === "permission-denied"
+                            ? "Permiso denegado en Firestore. Revisa las reglas"
+                            : code === "failed-precondition"
+                              ? "Firestore no está listo o la API no está habilitada"
+                              : "";
   };
 
   const submit = async (e) => {
@@ -168,20 +169,49 @@ export default function Login() {
           </div>
           <div>
             <div className="label">Contraseña</div>
-            <input
-              className="input"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="••••••"
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                className="input"
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="••••••"
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                className="icon-button"
+                title={
+                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                }
+                aria-label={
+                  showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                }
+                onClick={() => setShowPassword((v) => !v)}
+                style={{
+                  position: "absolute",
+                  right: 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  height: 36,
+                  width: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span className="material-symbols-outlined">
+                  {showPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
           </div>
           <button className="primary-button" type="submit" disabled={loading}>
             {loading
               ? "Procesando..."
               : isRegistering
-              ? "Crear y entrar"
-              : "Entrar"}
+                ? "Crear y entrar"
+                : "Entrar"}
           </button>
 
           <button
@@ -190,6 +220,7 @@ export default function Login() {
             onClick={() => {
               setIsRegistering((v) => !v);
               setForm({ name: "", email: "", password: "" });
+              setShowPassword(false);
               setSnack({ open: false, message: "", type: "success" });
             }}
           >

@@ -26,6 +26,7 @@ import {
   fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
+  fetchLoadsByChoferId,
   logInteraction,
 } from "../firebase/auth.js";
 
@@ -405,34 +406,53 @@ export default function Loads() {
     base: "Europeo",
   });
 
+  const currentUser = getCurrentUser();
+  const currentUserId = String(
+    currentUser?._id || currentUser?.id || "",
+  ).trim();
+  const role = getCurrentRole() || currentUser?.role || null;
+  const roleNormalized = String(role || "")
+    .trim()
+    .toLowerCase();
+  const isOffice = roleNormalized === ROLES.OFICINA;
+  const isDriver = roleNormalized === ROLES.CONDUCTOR;
+  const isReadOnlyActions = isOffice || isDriver;
+
   useEffect(() => {
     let mounted = true;
     const run = async () => {
       try {
         setLoading(true);
-        const results = await Promise.allSettled([
-          fetchAllLoads(),
-          fetchAllShips(),
-          fetchAllPallets(),
-          fetchAllUsers(),
-          fetchAllCompanies(),
-          fetchAllConsignees(),
-          fetchAllLocations(),
-          fetchAllResponsables(),
-        ]);
+        const loadTask = isDriver
+          ? fetchLoadsByChoferId(currentUserId)
+          : fetchAllLoads();
+        const results = await Promise.allSettled(
+          [
+            loadTask,
+            fetchAllShips(),
+            fetchAllConsignees(),
+            fetchAllLocations(),
+            ...(isDriver
+              ? []
+              : [
+                  fetchAllPallets(),
+                  fetchAllUsers(),
+                  fetchAllCompanies(),
+                  fetchAllResponsables(),
+                ]),
+          ].filter(Boolean),
+        );
         const values = results.map((r) =>
           r.status === "fulfilled" && Array.isArray(r.value) ? r.value : [],
         );
-        const [
-          loadsList,
-          shipsList,
-          palletsList,
-          usersList,
-          companiesList,
-          consigneesList,
-          locationsList,
-          responsablesList,
-        ] = values;
+        const loadsList = values[0] || [];
+        const shipsList = values[1] || [];
+        const consigneesList = values[2] || [];
+        const locationsList = values[3] || [];
+        const palletsList = isDriver ? [] : values[4] || [];
+        const usersList = isDriver ? [] : values[5] || [];
+        const companiesList = isDriver ? [] : values[6] || [];
+        const responsablesList = isDriver ? [] : values[7] || [];
         if (!mounted) return;
         const normalize = (x) => ({
           ...x,
@@ -465,18 +485,13 @@ export default function Loads() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentUserId, isDriver]);
 
-  const role = getCurrentRole() || getCurrentUser()?.role || null;
-  const roleNormalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  const isOffice = roleNormalized === ROLES.OFICINA;
   const canExportAgenda =
-    !isOffice &&
+    !isReadOnlyActions &&
     (roleNormalized === "admin" || roleNormalized === "dispatcher");
   const canManageLoads =
-    !isOffice &&
+    !isReadOnlyActions &&
     (hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
       String(role || "")
         .trim()
@@ -957,36 +972,42 @@ export default function Loads() {
     };
     return loadDocs.map((l) => {
       const paletsArray = Array.isArray(l.palets) ? l.palets : [];
-      const byRelation = pallets.filter(
-        (p) => String(p.carga?._id || p.carga) === String(l._id),
-      );
-      const listFromArrayAll = paletsArray
-        .map((p) => String(p?._id || p?.id || p || "").trim())
-        .filter(Boolean);
-      const listFromArray = listFromArrayAll.filter((pid) =>
-        existingPalletIds.has(String(pid)),
-      );
-      const listFromRelation = byRelation
-        .map((p) => String(p?._id || p?.id || "").trim())
-        .filter(Boolean);
-      const uniqueIds = new Set([...listFromArray, ...listFromRelation]);
-      const totalPalets = uniqueIds.size;
-      const tipoCounts = {};
-      for (const pid of uniqueIds) {
-        const tipo = String(palletById.get(String(pid))?.tipo || "").trim();
-        if (!tipo) continue;
-        tipoCounts[tipo] = (tipoCounts[tipo] || 0) + 1;
+      let totalPalets = 0;
+      let paletsPorTipo = "";
+      if (isDriver) {
+        totalPalets = paletsArray.length;
+      } else {
+        const byRelation = pallets.filter(
+          (p) => String(p.carga?._id || p.carga) === String(l._id),
+        );
+        const listFromArrayAll = paletsArray
+          .map((p) => String(p?._id || p?.id || p || "").trim())
+          .filter(Boolean);
+        const listFromArray = listFromArrayAll.filter((pid) =>
+          existingPalletIds.has(String(pid)),
+        );
+        const listFromRelation = byRelation
+          .map((p) => String(p?._id || p?.id || "").trim())
+          .filter(Boolean);
+        const uniqueIds = new Set([...listFromArray, ...listFromRelation]);
+        totalPalets = uniqueIds.size;
+        const tipoCounts = {};
+        for (const pid of uniqueIds) {
+          const tipo = String(palletById.get(String(pid))?.tipo || "").trim();
+          if (!tipo) continue;
+          tipoCounts[tipo] = (tipoCounts[tipo] || 0) + 1;
+        }
+        paletsPorTipo = CARGA_OPTIONS.map((t) => {
+          const n = Number(tipoCounts[t] || 0);
+          if (!n) return null;
+          const forms = tipoForms[t] || [String(t || "").toLowerCase()];
+          const word =
+            n === 1 ? forms[0] : forms[1] || `${String(forms[0] || "")}s`;
+          return `${n} ${word}`;
+        })
+          .filter(Boolean)
+          .join(", ");
       }
-      const paletsPorTipo = CARGA_OPTIONS.map((t) => {
-        const n = Number(tipoCounts[t] || 0);
-        if (!n) return null;
-        const forms = tipoForms[t] || [String(t || "").toLowerCase()];
-        const word =
-          n === 1 ? forms[0] : forms[1] || `${String(forms[0] || "")}s`;
-        return `${n} ${word}`;
-      })
-        .filter(Boolean)
-        .join(", ");
 
       const barcoId = String(l.barco?._id || l.barco || "");
       const choferId = String(l.chofer?._id || l.chofer || "");
@@ -1019,7 +1040,12 @@ export default function Loads() {
         entrega: Array.isArray(l.entrega)
           ? l.entrega.join(", ")
           : l.entrega || "",
-        chofer: chofer?.name || l.chofer?.name || "",
+        chofer:
+          chofer?.name ||
+          l.chofer?.name ||
+          (isDriver && String(currentUser?.name || "").trim()) ||
+          "",
+        chofer_id: choferId,
         consignatario: consignatario?.nombre || l.consignatario?.nombre || "",
         terminal_entrega:
           (terminal?.puerto ? `${terminal.puerto} · ` : "") +
@@ -1042,7 +1068,16 @@ export default function Loads() {
         estado_carga: estadoCarga,
       };
     });
-  }, [loadDocs, pallets, ships, users, consignees, locations]);
+  }, [
+    consignees,
+    currentUser?.name,
+    isDriver,
+    loadDocs,
+    locations,
+    pallets,
+    ships,
+    users,
+  ]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1461,7 +1496,7 @@ export default function Loads() {
               Agrupar por fecha de descarga
             </option>
           </select>
-          {!isOffice && view === "table" && (
+          {!isReadOnlyActions && view === "table" && (
             <div ref={columnsMenuRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -1562,7 +1597,7 @@ export default function Loads() {
               )}
             </div>
           )}
-          {!isOffice && (
+          {!isReadOnlyActions && (
             <>
               <button
                 className="icon-button"
@@ -1651,6 +1686,16 @@ export default function Loads() {
                 <span className="material-symbols-outlined">history</span>
               </button>
             </>
+          )}
+          {isDriver && (
+            <button
+              className="icon-button"
+              title={showHistory ? "Ver cargas activas" : "Ver historial"}
+              aria-label={showHistory ? "Ver cargas activas" : "Ver historial"}
+              onClick={() => setShowHistory((v) => !v)}
+            >
+              <span className="material-symbols-outlined">history</span>
+            </button>
           )}
         </div>
       </div>

@@ -16,6 +16,7 @@ import {
   deleteDoc,
   getDoc,
   getDocs,
+  onSnapshot,
   getFirestore,
   limit,
   orderBy,
@@ -453,6 +454,62 @@ export async function fetchAllLoads() {
     estado_viaje: data.estado_viaje || "Preparando",
     last_informe_resumen: data.last_informe_resumen || null,
   }));
+}
+
+export async function fetchLoadsByChoferId(choferId) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const id = String(choferId || "").trim();
+  if (!id) return [];
+  let snap;
+  try {
+    snap = await getDocs(
+      query(
+        collection(firebaseDb, "loads"),
+        where("chofer", "==", id),
+        orderBy("fecha_creacion", "desc"),
+      ),
+    );
+  } catch {
+    snap = await getDocs(
+      query(collection(firebaseDb, "loads"), where("chofer", "==", id)),
+    );
+  }
+  const list = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    list.push({
+      ...mapCommonAudit(data, d.id),
+      nombre: data.nombre || "",
+      fecha_de_carga: data.fecha_de_carga || "",
+      hora_de_carga: data.hora_de_carga || "",
+      fecha_de_descarga: data.fecha_de_descarga || "",
+      hora_de_descarga: data.hora_de_descarga || "",
+      barco: data.barco || "",
+      entrega: Array.isArray(data.entrega) ? data.entrega : [],
+      chofer: data.chofer || "",
+      responsable: data.responsable || "",
+      palets: Array.isArray(data.palets) ? data.palets : [],
+      carga: Array.isArray(data.carga) ? data.carga : [],
+      consignatario: data.consignatario || "",
+      terminal_entrega: data.terminal_entrega || "",
+      cash: !!data.cash,
+      lancha: !!data.lancha,
+      estado_viaje: data.estado_viaje || "Preparando",
+      last_informe_resumen: data.last_informe_resumen || null,
+    });
+  });
+  const toMs = (value) => {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value.toDate === "function") {
+      const d = value.toDate();
+      return d instanceof Date ? d.getTime() : 0;
+    }
+    if (typeof value.seconds === "number") return value.seconds * 1000;
+    return 0;
+  };
+  list.sort((a, b) => toMs(b?.createdAt) - toMs(a?.createdAt));
+  return list;
 }
 
 export async function fetchLoadById(id) {
@@ -2535,6 +2592,42 @@ export async function fetchAllMerma() {
     motivo: data.motivo || "",
     estado: data.estado || "Pendiente",
   }));
+}
+
+export async function hasPendingMerma() {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const estadoCandidates = ["Pendiente", "pendiente"];
+  for (const estado of estadoCandidates) {
+    const snap = await getDocs(
+      query(
+        collection(firebaseDb, "merma"),
+        where("estado", "==", estado),
+        limit(1),
+      ),
+    );
+    if (!snap.empty) return true;
+  }
+  return false;
+}
+
+export function subscribeHasPendingMerma(onChange) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  const q = query(
+    collection(firebaseDb, "merma"),
+    where("estado", "==", "Pendiente"),
+    limit(1),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(!snap.empty);
+    },
+    () => {
+      onChange(false);
+    },
+  );
 }
 
 export async function fetchMermaById(id) {

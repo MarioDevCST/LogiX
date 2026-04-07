@@ -679,6 +679,21 @@ export default function LoadDetail() {
   const [loadReportLoading, setLoadReportLoading] = useState(false);
   const [loadReport, setLoadReport] = useState(null);
   const [loadReportExists, setLoadReportExists] = useState(false);
+  const [markViajandoSubmitting, setMarkViajandoSubmitting] = useState(false);
+  const [finalizeSubmitting, setFinalizeSubmitting] = useState(false);
+  const [openDriverFinalize, setOpenDriverFinalize] = useState(false);
+
+  const currentUser = getCurrentUser();
+  const currentUserId = String(
+    currentUser?._id || currentUser?.id || "",
+  ).trim();
+  const role = getCurrentRole() || currentUser?.role || null;
+  const roleNormalized = String(role || "")
+    .trim()
+    .toLowerCase();
+  const isOffice = roleNormalized === ROLES.OFICINA;
+  const isDriver = roleNormalized === ROLES.CONDUCTOR;
+  const isReadOnlyActions = isOffice || isDriver;
 
   // Carga detalle y precarga formulario
   useEffect(() => {
@@ -770,28 +785,21 @@ export default function LoadDetail() {
       mounted = false;
     };
   }, []);
-
-  const currentUser = getCurrentUser();
-  const role = getCurrentRole() || currentUser?.role || null;
-  const roleNormalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  const isOffice = roleNormalized === ROLES.OFICINA;
   const canManageLoads =
-    !isOffice &&
+    !isReadOnlyActions &&
     (hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
       String(role || "")
         .trim()
         .toLowerCase() === "dispatcher");
   const canManagePallets =
-    !isOffice &&
+    !isReadOnlyActions &&
     (hasPermission(role, PERMISSIONS.MANAGE_PALLETS) ||
       canManageLoads ||
       String(role || "")
         .trim()
         .toLowerCase() === "dispatcher");
   const canDeleteLoad =
-    !isOffice &&
+    !isReadOnlyActions &&
     String(role || "")
       .trim()
       .toLowerCase() === "dispatcher";
@@ -1281,7 +1289,11 @@ export default function LoadDetail() {
     }
   };
 
-  const totalPallets = palletsInLoad.length;
+  const totalPallets = isDriver
+    ? Array.isArray(load?.palets)
+      ? load.palets.length
+      : 0
+    : palletsInLoad.length;
   const tipoCounts = palletsInLoad.reduce((acc, p) => {
     const t = p.tipo || "Sin tipo";
     acc[t] = (acc[t] || 0) + 1;
@@ -1747,12 +1759,119 @@ export default function LoadDetail() {
     window.setTimeout(doPrint, 700);
   };
 
+  const markAsViajando = async () => {
+    if (!isDriver) return;
+    if (!load) return;
+    if (markViajandoSubmitting) return;
+    const assignedChoferId = String(
+      load?.chofer?._id || load?.chofer || "",
+    ).trim();
+    if (!assignedChoferId || assignedChoferId !== currentUserId) {
+      setSnack({
+        open: true,
+        message: "Esta carga no está asociada a tu usuario",
+        type: "error",
+      });
+      return;
+    }
+    const estadoKey = String(load?.estado_viaje || "")
+      .trim()
+      .toLowerCase();
+    if (estadoKey === "viajando") return;
+    if (!window.confirm('¿Marcar el estado del viaje como "Viajando"?')) return;
+    try {
+      setMarkViajandoSubmitting(true);
+      const updated = await updateLoadById(id, {
+        estado_viaje: "Viajando",
+        modificado_por:
+          String(currentUser?.name || "Testing").trim() || "Testing",
+      });
+      if (!updated) {
+        setSnack({
+          open: true,
+          message: "No se pudo actualizar la carga",
+          type: "error",
+        });
+        return;
+      }
+      setLoad(updated);
+      setSnack({
+        open: true,
+        message: "Estado actualizado a Viajando",
+        type: "success",
+      });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: String(e?.message || "Error actualizando el estado"),
+        type: "error",
+      });
+    } finally {
+      setMarkViajandoSubmitting(false);
+    }
+  };
+
+  const driverFinalizeTo = async (estado) => {
+    if (!isDriver) return;
+    if (!load) return;
+    if (finalizeSubmitting) return;
+    const assignedChoferId = String(
+      load?.chofer?._id || load?.chofer || "",
+    ).trim();
+    if (!assignedChoferId || assignedChoferId !== currentUserId) {
+      setSnack({
+        open: true,
+        message: "Esta carga no está asociada a tu usuario",
+        type: "error",
+      });
+      return;
+    }
+    const estadoKey = String(load?.estado_viaje || "")
+      .trim()
+      .toLowerCase();
+    if (estadoKey !== "viajando") return;
+    const next = String(estado || "").trim();
+    if (next !== "Entregado" && next !== "Cancelado") return;
+    if (!window.confirm(`¿Finalizar la carga como "${next}"?`)) return;
+    try {
+      setFinalizeSubmitting(true);
+      const updated = await updateLoadById(id, {
+        estado_viaje: next,
+        modificado_por:
+          String(currentUser?.name || "Testing").trim() || "Testing",
+      });
+      if (!updated) {
+        setSnack({
+          open: true,
+          message: "No se pudo actualizar la carga",
+          type: "error",
+        });
+        return;
+      }
+      setLoad(updated);
+      setOpenDriverFinalize(false);
+      setSnack({
+        open: true,
+        message: `Estado actualizado a ${next}`,
+        type: "success",
+      });
+    } catch (e) {
+      setSnack({
+        open: true,
+        message: String(e?.message || "Error actualizando el estado"),
+        type: "error",
+      });
+    } finally {
+      setFinalizeSubmitting(false);
+    }
+  };
+
   return (
     <section className="card">
       <div className="card-header">
         <h2 className="card-title">Detalle carga</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          {!isOffice && canManageLoads && (
+          {!isReadOnlyActions && canManageLoads && (
             <button
               className="icon-button"
               onClick={() => {
@@ -1764,7 +1883,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">edit</span>
             </button>
           )}
-          {!isOffice && canManagePallets && (
+          {!isReadOnlyActions && canManagePallets && (
             <button
               className="icon-button"
               onClick={openFuseModal}
@@ -1773,7 +1892,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">call_merge</span>
             </button>
           )}
-          {!isOffice && (
+          {!isReadOnlyActions && (
             <button
               className="icon-button"
               onClick={() => setOpenCreatePallet(true)}
@@ -1782,7 +1901,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">add_box</span>
             </button>
           )}
-          {!isOffice && canManageLoads && (
+          {!isReadOnlyActions && canManageLoads && (
             <button
               className="icon-button"
               onClick={openFolioModal}
@@ -1791,7 +1910,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">description</span>
             </button>
           )}
-          {!isOffice && hasLoadReport && (
+          {!isReadOnlyActions && hasLoadReport && (
             <button
               className="icon-button"
               onClick={openLoadReportPreview}
@@ -1801,7 +1920,7 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">receipt_long</span>
             </button>
           )}
-          {!isOffice && canDeleteLoad && (
+          {!isReadOnlyActions && canDeleteLoad && (
             <button
               className="icon-button"
               onClick={handleDelete}
@@ -1811,6 +1930,38 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">delete</span>
             </button>
           )}
+          {isDriver &&
+            String(load?.chofer?._id || load?.chofer || "").trim() ===
+              currentUserId && (
+              <button
+                className="secondary-button"
+                onClick={markAsViajando}
+                disabled={
+                  markViajandoSubmitting ||
+                  String(load?.estado_viaje || "")
+                    .trim()
+                    .toLowerCase() === "viajando"
+                }
+                title='Marcar como "Viajando"'
+              >
+                Marcar como Viajando
+              </button>
+            )}
+          {isDriver &&
+            String(load?.chofer?._id || load?.chofer || "").trim() ===
+              currentUserId &&
+            String(load?.estado_viaje || "")
+              .trim()
+              .toLowerCase() === "viajando" && (
+              <button
+                className="secondary-button"
+                onClick={() => setOpenDriverFinalize(true)}
+                disabled={finalizeSubmitting}
+                title="Finalizar"
+              >
+                Finalizar
+              </button>
+            )}
           <button
             className="icon-button"
             onClick={() => navigate(-1)}
@@ -2007,7 +2158,9 @@ export default function LoadDetail() {
                               : isDroppable
                                 ? "copy"
                                 : "not-allowed"
-                            : "pointer",
+                            : isReadOnlyActions
+                              ? "default"
+                              : "pointer",
                           borderLeft: `${
                             isAmericano ? 10 : 6
                           }px solid ${accent}`,
@@ -2061,6 +2214,7 @@ export default function LoadDetail() {
                           setDragOverPalletId("");
                         }}
                         onClick={(e) => {
+                          if (isReadOnlyActions) return;
                           if (!idStr) return;
                           if (isTouchMode) {
                             e.stopPropagation();
@@ -2599,7 +2753,7 @@ export default function LoadDetail() {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              {!isOffice && (
+              {!isReadOnlyActions && (
                 <button
                   className="secondary-button"
                   onClick={() => setFolioStep("config")}
@@ -2649,7 +2803,7 @@ export default function LoadDetail() {
             <div style={{ color: "var(--text-secondary)" }}>
               No hay informe para esta carga
             </div>
-            {!isOffice && (impliedHasLoadReport || canManageLoads) && (
+            {!isReadOnlyActions && (impliedHasLoadReport || canManageLoads) && (
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   type="button"
@@ -2681,7 +2835,7 @@ export default function LoadDetail() {
                 Finalizado: {formatMaybeDateTime(loadReport.finished_at) || "-"}
               </div>
             </div>
-            {!isOffice && (
+            {!isReadOnlyActions && (
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   type="button"
@@ -3223,6 +3377,39 @@ export default function LoadDetail() {
                 })
               }
             />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openDriverFinalize}
+        title="Finalizar carga"
+        onClose={() => setOpenDriverFinalize(false)}
+        cancelLabel="Cerrar"
+        width={520}
+        bodyStyle={{ gridTemplateColumns: "1fr" }}
+      >
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ fontSize: 15 }}>
+            Selecciona el estado final de la carga.
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={finalizeSubmitting}
+              onClick={() => driverFinalizeTo("Cancelado")}
+            >
+              Cancelado
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={finalizeSubmitting}
+              onClick={() => driverFinalizeTo("Entregado")}
+            >
+              Entregado
+            </button>
           </div>
         </div>
       </Modal>

@@ -162,8 +162,26 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               )
             }
           />
-          <Route path="admin/mensajes" element={<Messages />} />
-          <Route path="admin/mensajes/:id" element={<MessageDetail />} />
+          <Route
+            path="admin/mensajes"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <Messages />
+              )
+            }
+          />
+          <Route
+            path="admin/mensajes/:id"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <MessageDetail />
+              )
+            }
+          />
           {/* Logística */}
           <Route
             path="logistica/cargas"
@@ -185,15 +203,78 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               )
             }
           />
-          <Route path="logistica/carga-palets" element={<PalletLoading />} />
+          <Route
+            path="logistica/carga-palets"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <PalletLoading />
+              )
+            }
+          />
           {/* Palets */}
-          <Route path="palets" element={<Pallets />} />
-          <Route path="palets/:id" element={<PalletDetail />} />
+          <Route
+            path="palets"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <Pallets />
+              )
+            }
+          />
+          <Route
+            path="palets/:id"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <PalletDetail />
+              )
+            }
+          />
           {/* Productos */}
-          <Route path="productos" element={<Products />} />
-          <Route path="productos/:id" element={<ProductDetail />} />
-          <Route path="mermas" element={<Waste />} />
-          <Route path="mermas/:id" element={<MermaDetail />} />
+          <Route
+            path="productos"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <Products />
+              )
+            }
+          />
+          <Route
+            path="productos/:id"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <ProductDetail />
+              )
+            }
+          />
+          <Route
+            path="mermas"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <Waste />
+              )
+            }
+          />
+          <Route
+            path="mermas/:id"
+            element={
+              getCurrentRole() === ROLES.CONDUCTOR ? (
+                <Navigate to="/app/logistica/cargas" replace />
+              ) : (
+                <MermaDetail />
+              )
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -17,6 +17,10 @@ service cloud.firestore {
       return isSignedIn() && userRole() == 'warehouse';
     }
 
+    function isDriver() {
+      return isSignedIn() && userRole() == 'driver';
+    }
+
     function isAdmin() {
       return isSignedIn() && userDoc().data.role == 'admin';
     }
@@ -40,7 +44,28 @@ service cloud.firestore {
     }
 
     match /loads/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && (!isDriver() || resource.data.chofer == request.auth.uid);
+      allow create, delete: if isSignedIn() && !isDriver();
+      allow update: if isSignedIn() && (
+        !isDriver() ||
+        (
+          resource.data.chofer == request.auth.uid &&
+          (
+            request.resource.data.estado_viaje == 'Viajando' ||
+            (
+              resource.data.estado_viaje == 'Viajando' &&
+              request.resource.data.estado_viaje in ['Entregado', 'Cancelado']
+            )
+          ) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'estado_viaje',
+            'nombre',
+            'modificado_por',
+            'fecha_modificacion',
+            'updatedAt'
+          ])
+        )
+      );
     }
 
     match /pallets/{id} {

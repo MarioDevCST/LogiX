@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   getCurrentRole,
@@ -6,6 +7,7 @@ import {
   PERMISSIONS,
   ROLES,
 } from "../utils/roles.js";
+import { subscribeHasPendingMerma } from "../firebase/auth.js";
 
 export default function Sidebar({ collapsed }) {
   const role = getCurrentRole();
@@ -13,11 +15,72 @@ export default function Sidebar({ collapsed }) {
   const meId = user?._id || user?.id;
   const isWarehouse = role === ROLES.ALMACEN;
   const isOffice = role === ROLES.OFICINA;
+  const isDriver = role === ROLES.CONDUCTOR;
+  const shouldShowMermaDot = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
+  const [pendingMerma, setPendingMerma] = useState(false);
   const canViewAdmin = role
     ? hasPermission(role, PERMISSIONS.MANAGE_USERS)
     : false;
   const canViewInteractions =
     canViewAdmin && role !== ROLES.OFICINA && role !== ROLES.LOGISTICA;
+
+  useEffect(() => {
+    if (!shouldShowMermaDot) return;
+    const unsubscribe = subscribeHasPendingMerma((hasPending) => {
+      setPendingMerma(!!hasPending);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [shouldShowMermaDot]);
+
+  if (isDriver) {
+    return (
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+        <nav className="nav">
+          <div className="nav-section">Dashboard</div>
+          <NavLink
+            to="/app"
+            end
+            title="Dashboard"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              dashboard
+            </span>
+            <span className="nav-label">Dashboard</span>
+          </NavLink>
+
+          {meId && (
+            <NavLink
+              to="/app/mi-perfil"
+              title="Mi perfil"
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="nav-icon material-symbols-outlined">
+                account_circle
+              </span>
+              <span className="nav-label">Mi perfil</span>
+            </NavLink>
+          )}
+
+          <div className="nav-section">Logística</div>
+          <NavLink
+            to="/app/logistica/cargas"
+            title="Cargas"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              local_shipping
+            </span>
+            <span className="nav-label">Cargas</span>
+          </NavLink>
+        </nav>
+      </aside>
+    );
+  }
 
   if (isWarehouse) {
     return (
@@ -102,7 +165,23 @@ export default function Sidebar({ collapsed }) {
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
             <span className="nav-icon material-symbols-outlined">delete</span>
-            <span className="nav-label">Mermas</span>
+            <span
+              className="nav-label"
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              Mermas
+              {shouldShowMermaDot && pendingMerma && (
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: "#ef4444",
+                    display: "inline-block",
+                  }}
+                />
+              )}
+            </span>
           </NavLink>
         </nav>
       </aside>
@@ -264,7 +343,23 @@ export default function Sidebar({ collapsed }) {
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
             <span className="nav-icon material-symbols-outlined">delete</span>
-            <span className="nav-label">Mermas</span>
+            <span
+              className="nav-label"
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              Mermas
+              {shouldShowMermaDot && pendingMerma && (
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: "#ef4444",
+                    display: "inline-block",
+                  }}
+                />
+              )}
+            </span>
           </NavLink>
         )}
       </nav>

@@ -216,7 +216,12 @@ function buildFoliosHtml({
   }
   if (includeNumbers) {
     for (let n = numbersFrom; n <= numbersTo; n += 1) {
-      const big = escapeHtml(String(n));
+      const rawNumber = String(n);
+      const trimmedNumber = rawNumber.trim();
+      const big = escapeHtml(trimmedNumber);
+      const digits = trimmedNumber.length;
+      const bigClass =
+        digits >= 3 ? "big big-3" : digits === 2 ? "big big-2" : "big big-1";
       pages.push(`
         <div class="page numero-page">
           <div class="top">
@@ -230,7 +235,9 @@ function buildFoliosHtml({
             }
           </div>
           <div class="ship">${escapeHtml(shipName || "")}</div>
-          <div class="big">${big}</div>
+          <div class="big-area">
+            <div class="${bigClass}">${big}</div>
+          </div>
           <div class="bottom">
             <div class="row">
               <span class="label">FECHA PREVISTA DE CARGA:</span>
@@ -358,13 +365,16 @@ function buildFoliosHtml({
           height: 14px;
         }
         .top {
-          position: absolute;
-          top: 14mm;
-          left: 18mm;
-          right: 18mm;
+          position: static;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
+        }
+        .numero-page {
+          padding: 14mm 18mm 18mm;
+          display: grid;
+          grid-template-rows: 34mm 52mm 1fr auto;
+          align-content: stretch;
         }
         .top-logo {
           height: calc(24mm - 10px);
@@ -416,13 +426,9 @@ function buildFoliosHtml({
           font-size: 54px;
         }
         .ship {
-          position: absolute;
-          top: 58mm;
-          left: 18mm;
-          right: 18mm;
           margin-top: 0;
           text-align: center;
-          font-size: 78px;
+          font-size: 72px;
           font-weight: 500;
           letter-spacing: 2px;
           color: #111827;
@@ -430,25 +436,29 @@ function buildFoliosHtml({
           line-height: 1.05;
           padding: 0 8mm;
           word-break: break-word;
+          z-index: 3;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .big-area {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
         }
         .big {
-          position: absolute;
-          left: 50%;
-          top: 52%;
-          transform: translate(-50%, -50%);
-          width: 100%;
           margin-top: 0;
           text-align: center;
-          font-size: clamp(420px, 70vh, 900px);
           font-weight: 800;
           color: #111827;
-          line-height: 0.9;
+          line-height: 1;
+          z-index: 1;
         }
+        .big-1 { font-size: 155mm; }
+        .big-2 { font-size: 130mm; }
+        .big-3 { font-size: 110mm; }
         .bottom {
-          position: absolute;
-          left: 18mm;
-          right: 18mm;
-          bottom: 30mm;
           border-top: 2px dashed #9ca3af;
           padding-top: 10mm;
           display: grid;
@@ -456,6 +466,8 @@ function buildFoliosHtml({
           font-size: 24px;
           letter-spacing: 0.5px;
           color: #111827;
+          z-index: 3;
+          margin-bottom: 18mm;
         }
         .row {
           display: flex;
@@ -889,9 +901,12 @@ export default function LoadDetail() {
         .toLowerCase() === "dispatcher");
   const canDeleteLoad =
     !isReadOnlyActions &&
-    String(role || "")
+    (String(role || "")
       .trim()
-      .toLowerCase() === "dispatcher";
+      .toLowerCase() === ROLES.LOGISTICA ||
+      String(role || "")
+        .trim()
+        .toLowerCase() === ROLES.ADMIN);
 
   const folioMeta = useMemo(() => {
     if (!load) return { shipName: "", dateLabel: "-", portLabel: "-" };
@@ -1156,6 +1171,16 @@ export default function LoadDetail() {
       !window.confirm(
         `¿Seguro que deseas borrar la carga "${label || String(id || "")}"?`,
       )
+    )
+      return;
+    const confirmText = window.prompt(
+      'Escribe "BORRAR" para confirmar el borrado definitivo:',
+      "",
+    );
+    if (
+      String(confirmText || "")
+        .trim()
+        .toLowerCase() !== "borrar"
     )
       return;
     try {
@@ -2030,16 +2055,6 @@ export default function LoadDetail() {
               <span className="material-symbols-outlined">receipt_long</span>
             </button>
           )}
-          {!isReadOnlyActions && canDeleteLoad && (
-            <button
-              className="icon-button"
-              onClick={handleDelete}
-              title="Borrar carga"
-              disabled={deleting}
-            >
-              <span className="material-symbols-outlined">delete</span>
-            </button>
-          )}
           {isDriver &&
             String(load?.chofer?._id || load?.chofer || "").trim() ===
               currentUserId && (
@@ -2132,6 +2147,20 @@ export default function LoadDetail() {
             <strong>Cash:</strong> {load.cash ? "Sí" : "No"}
           </div>
         </div>
+
+        {canDeleteLoad && (
+          <div style={{ marginTop: 14 }}>
+            <button
+              className="primary-button"
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{ background: "#d93025" }}
+              title="Borrar carga"
+            >
+              {deleting ? "Borrando..." : "Borrar carga"}
+            </button>
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 12 }}>
           <div className="card-header">
@@ -2243,19 +2272,37 @@ export default function LoadDetail() {
                       base.trim().toLowerCase() === "americano";
                     const colors = getTipoColors(tipo);
                     const accent = isAmericano ? colors.strong : colors.color;
-                    const avatarText = (() => {
-                      if (nombre && !nombre.includes(" - ")) return nombre;
-                      if (numero) return numero;
-                      if (nombre) return nombre.split(" - ")[0];
-                      return "?";
-                    })();
-                    const title = (() => {
-                      const n = String(p?.nombre || "").trim();
-                      if (n) return n;
-                      if (numero) return numero;
-                      return "Palet";
-                    })();
-                    const subtitle = [tipo, base].filter(Boolean).join(" · ");
+                    const avatarText = numero || "?";
+                    const tipoKey = tipo.trim().toLowerCase();
+                    const baseKey = base.trim().toLowerCase();
+                    const tipoLetter =
+                      tipoKey === "seco"
+                        ? "S"
+                        : tipoKey === "refrigerado"
+                          ? "R"
+                          : tipoKey === "congelado"
+                            ? "C"
+                            : tipoKey === "técnico" || tipoKey === "tecnico"
+                              ? "T"
+                              : tipoKey
+                                ? tipoKey[0].toUpperCase()
+                                : "";
+                    const baseLetter =
+                      baseKey === "europeo"
+                        ? "E"
+                        : baseKey === "americano"
+                          ? "A"
+                          : baseKey
+                            ? baseKey[0].toUpperCase()
+                            : "";
+                    const title =
+                      tipoLetter && baseLetter
+                        ? `${tipoLetter} · ${baseLetter}`
+                        : tipoLetter
+                          ? tipoLetter
+                          : numero || "Palet";
+                    const subtitle = "";
+                    const creadoPor = String(p?.creado_por || "").trim();
                     return (
                       <div
                         key={pid || `${numero || nombre}`}
@@ -2281,6 +2328,7 @@ export default function LoadDetail() {
                           filter: isDisabled ? "grayscale(1)" : "none",
                           background: isOver ? "var(--hover)" : undefined,
                         }}
+                        title={[tipo, base].filter(Boolean).join(" · ")}
                         onDragStart={(e) => {
                           if (isTouchMode) return;
                           if (!canManagePallets) return;
@@ -2372,10 +2420,12 @@ export default function LoadDetail() {
                           <div
                             className="avatar"
                             style={{
-                              fontSize: String(avatarText).length > 3 ? 12 : 16,
-                              padding: 4,
+                              width: 48,
+                              height: 48,
+                              fontSize: String(avatarText).length > 3 ? 16 : 20,
+                              padding: 0,
                               textAlign: "center",
-                              lineHeight: "14px",
+                              lineHeight: 1,
                             }}
                           >
                             {avatarText}
@@ -2383,18 +2433,27 @@ export default function LoadDetail() {
                           <div style={{ minWidth: 0 }}>
                             <div
                               className="card-item-title"
-                              style={{ fontSize: 16, lineHeight: "20px" }}
+                              style={{ fontSize: 20, lineHeight: "22px" }}
                             >
                               {title}
                             </div>
                             <div className="card-item-sub">
                               {subtitle || " "}
                             </div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "var(--text-secondary)",
+                                marginTop: 2,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                              title={creadoPor || ""}
+                            >
+                              {creadoPor ? `Creado por: ${creadoPor}` : " "}
+                            </div>
                           </div>
-                        </div>
-                        <div className="card-item-meta">
-                          {tipo && <span className="chip">{tipo}</span>}
-                          {base && <span className="chip">{base}</span>}
                         </div>
                       </div>
                     );

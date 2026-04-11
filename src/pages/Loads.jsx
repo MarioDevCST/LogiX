@@ -489,7 +489,9 @@ export default function Loads() {
 
   const canExportAgenda =
     !isReadOnlyActions &&
-    (roleNormalized === "admin" || roleNormalized === "dispatcher");
+    (roleNormalized === "admin" ||
+      roleNormalized === "dispatcher" ||
+      roleNormalized === "logistic");
   const canManageLoads =
     !isReadOnlyActions &&
     (hasPermission(role, PERMISSIONS.MANAGE_LOADS) ||
@@ -954,6 +956,11 @@ export default function Loads() {
         .map((l) => [String(l._id || l.id || ""), l])
         .filter((p) => p[0]),
     );
+    const responsableById = new Map(
+      responsables
+        .map((r) => [String(r._id || r.id || ""), r])
+        .filter((p) => p[0]),
+    );
     const existingPalletIds = new Set(
       pallets.map((p) => String(p?._id || p?.id || "").trim()).filter(Boolean),
     );
@@ -1017,11 +1024,22 @@ export default function Loads() {
       const terminalId = String(
         l.terminal_entrega?._id || l.terminal_entrega || "",
       );
+      const responsableRaw = l.responsable;
+      const responsableObj =
+        responsableRaw && typeof responsableRaw === "object"
+          ? responsableRaw
+          : null;
+      const responsableId = String(
+        responsableObj?._id || responsableObj?.id || responsableRaw || "",
+      );
 
       const ship = shipById.get(barcoId) || null;
       const chofer = userById.get(choferId) || null;
       const consignatario = consigneeById.get(consignatarioId) || null;
       const terminal = locationById.get(terminalId) || null;
+      const responsable =
+        responsableById.get(responsableId) ||
+        (responsableObj ? responsableObj : null);
 
       const requiredPresent = [
         l.fecha_de_carga,
@@ -1066,6 +1084,9 @@ export default function Loads() {
           toIsoDateKey(l.fecha_de_descarga) || "Sin fecha",
         hora_de_descarga: l.hora_de_descarga || "",
         estado_carga: estadoCarga,
+        responsable: String(responsableId || ""),
+        responsable_nombre: String(responsable?.nombre || "").trim(),
+        responsable_telefono: String(responsable?.telefono || "").trim(),
       };
     });
   }, [
@@ -1075,6 +1096,7 @@ export default function Loads() {
     loadDocs,
     locations,
     pallets,
+    responsables,
     ships,
     users,
   ]);
@@ -1207,6 +1229,13 @@ export default function Loads() {
       .map((r, idx) => {
         const entrega = String(r.entrega || "").trim();
         const carga = String(r.carga || "").trim();
+        const responsableLabel = String(r.responsable_nombre || "").trim();
+        const responsablePhone = String(r.responsable_telefono || "").trim();
+        const responsableFull = responsableLabel
+          ? responsablePhone
+            ? `${responsableLabel} (${responsablePhone})`
+            : responsableLabel
+          : responsablePhone || "—";
         return `
           <section class="load">
             <div class="load-head">
@@ -1239,6 +1268,10 @@ export default function Loads() {
               <div>
                 <div class="label">Chofer</div>
                 <div class="value">${escapeHtml(r.chofer || "—")}</div>
+              </div>
+              <div>
+                <div class="label">Responsable</div>
+                <div class="value">${escapeHtml(responsableFull)}</div>
               </div>
               <div>
                 <div class="label">Tipo de carga</div>
@@ -2149,6 +2182,12 @@ export default function Loads() {
                       Tipo: {r.carga || "—"} · Palets:{" "}
                       {Number(r.total_palets) || 0} · Descarga:{" "}
                       {r.fecha_de_descarga || ""} {r.hora_de_descarga || ""}
+                    </div>
+                    <div style={{ fontSize: 13 }}>
+                      Responsable: {r.responsable_nombre || "—"}
+                      {r.responsable_telefono
+                        ? ` (${r.responsable_telefono})`
+                        : ""}
                     </div>
                   </div>
                 ))

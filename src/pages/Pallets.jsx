@@ -171,6 +171,7 @@ export default function Pallets({
           numero_palet: p.numero_palet,
           tipo: p.tipo,
           base: p.base || "",
+          creado_por: p.creado_por || "",
           carga_id: String(p?.carga?._id || p?.carga || ""),
         }));
         setRows(mapped);
@@ -856,18 +857,45 @@ export default function Pallets({
                 const isAmericano = base.trim().toLowerCase() === "americano";
                 const colors = getTipoColors(tipo);
                 const accent = isAmericano ? colors.strong : colors.color;
-                const avatarText = (() => {
-                  if (numero) return numero;
-                  if (nombre && !nombre.includes(" - ")) return nombre;
-                  if (nombre) return nombre.split(" - ")[0];
-                  return "?";
+                const cargaNombre = (() => {
+                  const direct = String(r?.carga_nombre || "").trim();
+                  if (direct) return direct;
+                  const raw = String(nombre || "").trim();
+                  if (!raw) return "";
+                  if (!raw.includes(" - ")) return "";
+                  return raw.split(" - ").slice(1).join(" - ").trim();
                 })();
-                const title = (() => {
-                  if (nombre) return nombre;
-                  if (numero) return numero;
-                  return "Palet";
-                })();
-                const subtitle = [tipo, base].filter(Boolean).join(" · ");
+                const creadoPor = String(r?.creado_por || "").trim();
+                const avatarText = numero || "?";
+                const tipoKey = tipo.trim().toLowerCase();
+                const baseKey = base.trim().toLowerCase();
+                const tipoLetter =
+                  tipoKey === "seco"
+                    ? "S"
+                    : tipoKey === "refrigerado"
+                      ? "R"
+                      : tipoKey === "congelado"
+                        ? "C"
+                        : tipoKey === "técnico" || tipoKey === "tecnico"
+                          ? "T"
+                          : tipoKey
+                            ? tipoKey[0].toUpperCase()
+                            : "";
+                const baseLetter =
+                  baseKey === "europeo"
+                    ? "E"
+                    : baseKey === "americano"
+                      ? "A"
+                      : baseKey
+                        ? baseKey[0].toUpperCase()
+                        : "";
+                const title =
+                  tipoLetter && baseLetter
+                    ? `${tipoLetter} · ${baseLetter}`
+                    : tipoLetter
+                      ? tipoLetter
+                      : numero || "Palet";
+                const subtitle = "";
                 return (
                   <div
                     key={pid || `${numero || nombre}`}
@@ -879,6 +907,7 @@ export default function Pallets({
                       minWidth: 210,
                       maxWidth: 320,
                     }}
+                    title={cargaNombre || ""}
                     onClick={() =>
                       pid ? navigate(`/app/palets/${pid}`) : null
                     }
@@ -887,10 +916,12 @@ export default function Pallets({
                       <div
                         className="avatar"
                         style={{
-                          fontSize: String(avatarText).length > 3 ? 12 : 16,
-                          padding: 4,
+                          width: 48,
+                          height: 48,
+                          fontSize: String(avatarText).length > 3 ? 16 : 20,
+                          padding: 0,
                           textAlign: "center",
-                          lineHeight: "14px",
+                          lineHeight: 1,
                         }}
                       >
                         {avatarText}
@@ -898,16 +929,25 @@ export default function Pallets({
                       <div style={{ minWidth: 0 }}>
                         <div
                           className="card-item-title"
-                          style={{ fontSize: 16, lineHeight: "20px" }}
+                          style={{ fontSize: 20, lineHeight: "22px" }}
                         >
                           {title}
                         </div>
                         <div className="card-item-sub">{subtitle || " "}</div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--text-secondary)",
+                            marginTop: 2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={creadoPor || ""}
+                        >
+                          {creadoPor ? `Creado por: ${creadoPor}` : " "}
+                        </div>
                       </div>
-                    </div>
-                    <div className="card-item-meta">
-                      {tipo && <span className="chip">{tipo}</span>}
-                      {base && <span className="chip">{base}</span>}
                     </div>
                   </div>
                 );
@@ -1114,23 +1154,46 @@ export default function Pallets({
                                 const accent = isAmericano
                                   ? colors.strong
                                   : colors.color;
-                                const avatarText = (() => {
-                                  if (nombre && !nombre.includes(" - "))
-                                    return nombre;
-                                  if (numero) return numero;
-                                  if (nombre) return nombre.split(" - ")[0];
-                                  return "?";
-                                })();
                                 const cargaTitle = String(
                                   l?.nombre ||
                                     l?.barco?.nombre_del_barco ||
                                     p?.carga_nombre ||
                                     "Sin carga",
                                 ).trim();
-                                const title = cargaTitle || "Sin carga";
-                                const subtitle = [tipo, base]
-                                  .filter(Boolean)
-                                  .join(" · ");
+                                const creadoPor = String(
+                                  p?.creado_por || "",
+                                ).trim();
+                                const subtitle = "";
+                                const avatarText = numero || "?";
+                                const tipoKey = tipo.trim().toLowerCase();
+                                const baseKey = base.trim().toLowerCase();
+                                const tipoLetter =
+                                  tipoKey === "seco"
+                                    ? "S"
+                                    : tipoKey === "refrigerado"
+                                      ? "R"
+                                      : tipoKey === "congelado"
+                                        ? "C"
+                                        : tipoKey === "técnico" ||
+                                            tipoKey === "tecnico"
+                                          ? "T"
+                                          : tipoKey
+                                            ? tipoKey[0].toUpperCase()
+                                            : "";
+                                const baseLetter =
+                                  baseKey === "europeo"
+                                    ? "E"
+                                    : baseKey === "americano"
+                                      ? "A"
+                                      : baseKey
+                                        ? baseKey[0].toUpperCase()
+                                        : "";
+                                const title =
+                                  tipoLetter && baseLetter
+                                    ? `${tipoLetter} · ${baseLetter}`
+                                    : tipoLetter
+                                      ? tipoLetter
+                                      : numero || "Palet";
                                 return (
                                   <div
                                     key={pid || `${loadId}-${numero || nombre}`}
@@ -1158,6 +1221,7 @@ export default function Pallets({
                                         ? "var(--hover)"
                                         : undefined,
                                     }}
+                                    title={cargaTitle || ""}
                                     onDragStart={(e) => {
                                       if (isTouchMode) return;
                                       if (!canManagePallets) return;
@@ -1257,11 +1321,13 @@ export default function Pallets({
                                         style={{
                                           fontSize:
                                             String(avatarText).length > 3
-                                              ? 12
-                                              : 16,
-                                          padding: 4,
+                                              ? 16
+                                              : 20,
+                                          width: 48,
+                                          height: 48,
+                                          padding: 0,
                                           textAlign: "center",
-                                          lineHeight: "14px",
+                                          lineHeight: 1,
                                         }}
                                       >
                                         {avatarText}
@@ -1270,8 +1336,8 @@ export default function Pallets({
                                         <div
                                           className="card-item-title"
                                           style={{
-                                            fontSize: 16,
-                                            lineHeight: "20px",
+                                            fontSize: 20,
+                                            lineHeight: "22px",
                                           }}
                                         >
                                           {title}
@@ -1279,15 +1345,22 @@ export default function Pallets({
                                         <div className="card-item-sub">
                                           {subtitle || " "}
                                         </div>
+                                        <div
+                                          style={{
+                                            fontSize: 12,
+                                            color: "var(--text-secondary)",
+                                            marginTop: 2,
+                                            whiteSpace: "nowrap",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                          }}
+                                          title={creadoPor || ""}
+                                        >
+                                          {creadoPor
+                                            ? `Creado por: ${creadoPor}`
+                                            : " "}
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className="card-item-meta">
-                                      {tipo && (
-                                        <span className="chip">{tipo}</span>
-                                      )}
-                                      {base && (
-                                        <span className="chip">{base}</span>
-                                      )}
                                     </div>
                                   </div>
                                 );

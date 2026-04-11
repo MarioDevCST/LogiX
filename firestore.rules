@@ -49,7 +49,8 @@ service cloud.firestore {
 
     match /loads/{id} {
       allow read: if isSignedIn() && (!isDriver() || resource.data.chofer == request.auth.uid);
-      allow create, delete: if isSignedIn() && !isDriver();
+      allow create: if isSignedIn() && !isDriver();
+      allow delete: if isLogistica() || isAdmin();
       allow update: if isSignedIn() && (
         !isDriver() ||
         (

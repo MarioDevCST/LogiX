@@ -325,10 +325,20 @@ export default function Loads() {
   // Filtros y agrupación
   const [estadoFilter, setEstadoFilter] = useState("");
   const [barcoFilter, setBarcoFilter] = useState("");
+  const [choferFilter, setChoferFilter] = useState("");
+  const [consignatarioFilter, setConsignatarioFilter] = useState("");
+  const [terminalFilter, setTerminalFilter] = useState("");
+  const [responsableFilter, setResponsableFilter] = useState("");
   const [groupBy, setGroupBy] = useState("none");
+  const [sortBy, setSortBy] = useState("");
+  const [sortDir, setSortDir] = useState("asc");
   const [showHistory, setShowHistory] = useState(false);
-  const columnsMenuRef = useRef(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
+  const toolbarMenuRef = useRef(null);
+  const [toolbarMenu, setToolbarMenu] = useState(null);
+  const [toolbarSearch, setToolbarSearch] = useState("");
+  const [filterMenuField, setFilterMenuField] = useState("estado_viaje");
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [viewMenuSearch, setViewMenuSearch] = useState("");
   const allColumnKeys = useMemo(
     () => allColumns.map((c) => c.key),
     [allColumns],
@@ -355,16 +365,17 @@ export default function Loads() {
   }, [visibleColumnKeys]);
 
   useEffect(() => {
-    if (!columnsOpen) return undefined;
+    if (!toolbarMenu && !viewMenuOpen) return undefined;
     const onDown = (e) => {
-      const el = columnsMenuRef.current;
+      const el = toolbarMenuRef.current;
       if (!el) return;
       if (el.contains(e.target)) return;
-      setColumnsOpen(false);
+      setToolbarMenu(null);
+      setViewMenuOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [columnsOpen]);
+  }, [toolbarMenu, viewMenuOpen]);
 
   // mes de calendario
   const [calMonth, setCalMonth] = useState(() => new Date());
@@ -1101,14 +1112,17 @@ export default function Loads() {
     users,
   ]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+  const scopedRows = useMemo(() => {
     const isHistoryStatus = (s) => s === "Entregado" || s === "Cancelado";
-    const scopedRows = rows.filter((r) =>
+    return rows.filter((r) =>
       showHistory
         ? isHistoryStatus(r.estado_viaje)
         : !isHistoryStatus(r.estado_viaje),
     );
+  }, [rows, showHistory]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
     return scopedRows.filter((r) => {
       const textOk =
         q === "" ||
@@ -1117,9 +1131,66 @@ export default function Loads() {
         r.estado_viaje.toLowerCase().includes(q);
       const estadoOk = !estadoFilter || r.estado_viaje === estadoFilter;
       const barcoOk = !barcoFilter || r.barco === barcoFilter;
-      return textOk && estadoOk && barcoOk;
+      const choferOk = !choferFilter || r.chofer === choferFilter;
+      const consignatarioOk =
+        !consignatarioFilter || r.consignatario === consignatarioFilter;
+      const terminalOk =
+        !terminalFilter || r.terminal_entrega === terminalFilter;
+      const responsableOk =
+        !responsableFilter || r.responsable_nombre === responsableFilter;
+      return (
+        textOk &&
+        estadoOk &&
+        barcoOk &&
+        choferOk &&
+        consignatarioOk &&
+        terminalOk &&
+        responsableOk
+      );
     });
-  }, [rows, showHistory, query, estadoFilter, barcoFilter]);
+  }, [
+    scopedRows,
+    query,
+    estadoFilter,
+    barcoFilter,
+    choferFilter,
+    consignatarioFilter,
+    terminalFilter,
+    responsableFilter,
+  ]);
+
+  const sortedFiltered = useMemo(() => {
+    if (!sortBy) return filtered;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const toLower = (v) => String(v ?? "").toLowerCase();
+    const toNum = (v) => {
+      if (typeof v === "number") return v;
+      const n = Number(String(v ?? "").trim());
+      return Number.isFinite(n) ? n : 0;
+    };
+    const toDateMs = (key) => {
+      const k = String(key || "");
+      if (!k || k === "Sin fecha") return 0;
+      const ms = new Date(`${k}T00:00:00`).getTime();
+      return Number.isNaN(ms) ? 0 : ms;
+    };
+    const copy = filtered.slice();
+    copy.sort((a, b) => {
+      if (sortBy === "total_palets")
+        return (toNum(a[sortBy]) - toNum(b[sortBy])) * dir;
+      if (
+        sortBy === "fecha_de_carga_group" ||
+        sortBy === "fecha_de_descarga_group"
+      )
+        return (toDateMs(a[sortBy]) - toDateMs(b[sortBy])) * dir;
+      return (
+        toLower(a[sortBy]).localeCompare(toLower(b[sortBy]), "es", {
+          sensitivity: "base",
+        }) * dir
+      );
+    });
+    return copy;
+  }, [filtered, sortBy, sortDir]);
 
   const exportCandidates = useMemo(() => {
     const base = exportUseCurrentFilters ? filtered : rows;
@@ -1376,8 +1447,8 @@ export default function Loads() {
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    return filtered.slice(start, end);
-  }, [filtered, page, pageSize]);
+    return sortedFiltered.slice(start, end);
+  }, [sortedFiltered, page, pageSize]);
 
   useEffect(() => {
     setVisibleColumnKeys((prev) => {
@@ -1431,7 +1502,19 @@ export default function Loads() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, estadoFilter, barcoFilter, showHistory]);
+  }, [
+    query,
+    estadoFilter,
+    barcoFilter,
+    choferFilter,
+    consignatarioFilter,
+    terminalFilter,
+    responsableFilter,
+    showHistory,
+    sortBy,
+    sortDir,
+    groupBy,
+  ]);
 
   useEffect(() => {
     const isHistoryStatus = (s) => s === "Entregado" || s === "Cancelado";
@@ -1446,95 +1529,391 @@ export default function Loads() {
     if (row.id) navigate(`/app/logistica/cargas/${row.id}`);
   };
 
+  useEffect(() => {
+    if (view !== "table") {
+      setToolbarMenu(null);
+      setViewMenuOpen(false);
+    }
+  }, [view]);
+
+  const filterDefs = useMemo(() => {
+    const uniq = (getValue) => {
+      const set = new Set();
+      scopedRows.forEach((r) => {
+        const v = String(getValue(r) || "").trim();
+        if (v) set.add(v);
+      });
+      return Array.from(set).sort((a, b) =>
+        String(a).localeCompare(String(b), "es", { sensitivity: "base" }),
+      );
+    };
+    return [
+      {
+        key: "estado_viaje",
+        label: "Estado viaje",
+        value: estadoFilter,
+        setValue: setEstadoFilter,
+        options: uniq((r) => r.estado_viaje),
+      },
+      {
+        key: "barco",
+        label: "Barco",
+        value: barcoFilter,
+        setValue: setBarcoFilter,
+        options: uniq((r) => r.barco),
+      },
+      {
+        key: "chofer",
+        label: "Chofer",
+        value: choferFilter,
+        setValue: setChoferFilter,
+        options: uniq((r) => r.chofer),
+      },
+      {
+        key: "consignatario",
+        label: "Consignatario",
+        value: consignatarioFilter,
+        setValue: setConsignatarioFilter,
+        options: uniq((r) => r.consignatario),
+      },
+      {
+        key: "terminal_entrega",
+        label: "Terminal entrega",
+        value: terminalFilter,
+        setValue: setTerminalFilter,
+        options: uniq((r) => r.terminal_entrega),
+      },
+      {
+        key: "responsable",
+        label: "Responsable",
+        value: responsableFilter,
+        setValue: setResponsableFilter,
+        options: uniq((r) => r.responsable_nombre),
+      },
+    ];
+  }, [
+    scopedRows,
+    estadoFilter,
+    barcoFilter,
+    choferFilter,
+    consignatarioFilter,
+    terminalFilter,
+    responsableFilter,
+  ]);
+
+  const groupDefs = useMemo(
+    () => [
+      { key: "none", label: "Sin agrupación" },
+      { key: "barco", label: "Barco" },
+      { key: "estado_viaje", label: "Estado viaje" },
+      { key: "fecha_de_carga_group", label: "Fecha de carga" },
+      { key: "fecha_de_descarga_group", label: "Fecha de descarga" },
+    ],
+    [],
+  );
+
+  const sortDefs = useMemo(
+    () => [
+      { key: "", label: "Sin ordenar" },
+      { key: "fecha_de_carga_group", label: "Fecha de carga" },
+      { key: "fecha_de_descarga_group", label: "Fecha de descarga" },
+      { key: "barco", label: "Barco" },
+      { key: "estado_viaje", label: "Estado viaje" },
+      { key: "total_palets", label: "Palets" },
+      { key: "nombre", label: "Nombre" },
+    ],
+    [],
+  );
+
+  const columnsInUse = useMemo(() => {
+    if (visibleColumnKeys.length !== allColumnKeys.length) return true;
+    const set = new Set(visibleColumnKeys);
+    return allColumnKeys.some((k) => !set.has(k));
+  }, [visibleColumnKeys, allColumnKeys]);
+  const filtersInUse =
+    !!estadoFilter ||
+    !!barcoFilter ||
+    !!choferFilter ||
+    !!consignatarioFilter ||
+    !!terminalFilter ||
+    !!responsableFilter;
+  const groupInUse = groupBy !== "none";
+  const sortInUse = !!sortBy;
+  const searchInUse = !!String(query || "").trim();
+  const historyInUse = !!showHistory;
+
   return (
     <>
       <div
+        ref={toolbarMenuRef}
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 8,
-          marginBottom: 8,
+          position: "relative",
+          marginBottom: 10,
         }}
       >
-        <input
-          className="input"
-          style={{ width: 280 }}
-          placeholder="Buscar por barco, terminal o estado"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select
-            className="select"
-            value={estadoFilter}
-            onChange={(e) => setEstadoFilter(e.target.value)}
-            aria-label="Filtrar por estado"
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
           >
-            <option value="">Todos los estados</option>
-            {(showHistory
-              ? ["Entregado", "Cancelado"]
-              : ESTADO_VIAJE_OPTIONS.filter(
-                  (s) => s !== "Entregado" && s !== "Cancelado",
-                )
-            )
-              .slice()
-              .sort(esCompare)
-              .map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-          </select>
-          <select
-            className="select"
-            value={barcoFilter}
-            onChange={(e) => setBarcoFilter(e.target.value)}
-            aria-label="Filtrar por barco"
+            {[
+              { key: "search", label: "", icon: "search", iconOnly: true },
+              {
+                key: "columns",
+                label: "Ocultar campos",
+                icon: "visibility_off",
+              },
+              { key: "filters", label: "Filtro", icon: "filter_list" },
+              { key: "group", label: "Grupo", icon: "view_list" },
+              { key: "sort", label: "Clasificar", icon: "sort" },
+            ].map((b) => {
+              const disabled = view !== "table";
+              const active = toolbarMenu === b.key;
+              const inUse =
+                b.key === "columns"
+                  ? columnsInUse
+                  : b.key === "filters"
+                    ? filtersInUse
+                    : b.key === "group"
+                      ? groupInUse
+                      : b.key === "sort"
+                        ? sortInUse
+                        : b.key === "search"
+                          ? searchInUse
+                          : false;
+              const background = active
+                ? "#e0e7ff"
+                : inUse
+                  ? "#eef2ff"
+                  : "#fff";
+              const borderColor = active || inUse ? "#c7d2fe" : "#e5e7eb";
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  onClick={() => {
+                    if (disabled) return;
+                    setToolbarSearch("");
+                    setToolbarMenu((cur) => (cur === b.key ? null : b.key));
+                  }}
+                  disabled={disabled}
+                  style={{
+                    height: 40,
+                    padding: b.iconOnly ? "0 10px" : "0 12px",
+                    border: `1px solid ${borderColor}`,
+                    borderRadius: 8,
+                    background,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 600,
+                    color: "#374151",
+                    opacity: disabled ? 0.6 : 1,
+                  }}
+                  aria-label={b.iconOnly ? "Buscar" : undefined}
+                  title={b.iconOnly ? "Buscar" : undefined}
+                >
+                  <span className="material-symbols-outlined">{b.icon}</span>
+                  {!b.iconOnly && b.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+              marginLeft: "auto",
+            }}
           >
-            <option value="">Todos los barcos</option>
-            {Array.from(
-              new Set(
-                rows
-                  .filter((r) =>
-                    showHistory
-                      ? r.estado_viaje === "Entregado" ||
-                        r.estado_viaje === "Cancelado"
-                      : r.estado_viaje !== "Entregado" &&
-                        r.estado_viaje !== "Cancelado",
-                  )
-                  .map((r) => r.barco),
-              ),
-            )
-              .filter(Boolean)
-              .sort(esCompare)
-              .map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-          </select>
-          <select
-            className="select"
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-            aria-label="Agrupar"
-          >
-            <option value="none">Sin agrupación</option>
-            <option value="barco">Agrupar por barco</option>
-            <option value="estado_viaje">Agrupar por estado</option>
-            <option value="fecha_de_carga_group">
-              Agrupar por fecha de carga
-            </option>
-            <option value="fecha_de_descarga_group">
-              Agrupar por fecha de descarga
-            </option>
-          </select>
-          {!isReadOnlyActions && view === "table" && (
-            <div ref={columnsMenuRef} style={{ position: "relative" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToolbarMenu(null);
+                    setToolbarSearch("");
+                    setViewMenuSearch("");
+                    setViewMenuOpen((v) => !v);
+                  }}
+                  style={{
+                    height: 40,
+                    padding: "0 12px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    background: "#fff",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 600,
+                    color: "#374151",
+                  }}
+                  title="Cambiar vista"
+                >
+                  <span className="material-symbols-outlined">view_cozy</span>
+                  Vista
+                  <span className="material-symbols-outlined">
+                    {viewMenuOpen ? "expand_less" : "expand_more"}
+                  </span>
+                </button>
+                {viewMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: 46,
+                      width: 260,
+                      maxWidth: "min(92vw, 260px)",
+                      background: "#fff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
+                      padding: 10,
+                      zIndex: 70,
+                    }}
+                  >
+                    <input
+                      className="input"
+                      style={{ width: "100%", height: 36, marginBottom: 8 }}
+                      placeholder="Buscar..."
+                      value={viewMenuSearch}
+                      onChange={(e) => setViewMenuSearch(e.target.value)}
+                    />
+                    {[
+                      { key: "table", label: "Tabla", icon: "table" },
+                      { key: "cards", label: "Tarjetas", icon: "view_agenda" },
+                      {
+                        key: "calendar",
+                        label: "Calendario",
+                        icon: "calendar_month",
+                      },
+                      {
+                        key: "day_list",
+                        label: "Por días",
+                        icon: "event_note",
+                      },
+                    ]
+                      .filter((opt) => {
+                        const q = String(viewMenuSearch || "")
+                          .trim()
+                          .toLowerCase();
+                        if (!q) return true;
+                        return String(opt.label || "")
+                          .toLowerCase()
+                          .includes(q);
+                      })
+                      .map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            setView(opt.key);
+                            setViewMenuOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            border: "none",
+                            background:
+                              view === opt.key ? "var(--hover)" : "transparent",
+                            cursor: "pointer",
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          <span className="material-symbols-outlined">
+                            {opt.icon}
+                          </span>
+                          <span style={{ flex: 1 }}>{opt.label}</span>
+                          {view === opt.key && (
+                            <span className="material-symbols-outlined">
+                              check
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+              {view === "calendar" && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title={
+                    calMode === "month"
+                      ? "Cambiar a vista semanal"
+                      : "Cambiar a vista mensual"
+                  }
+                  onClick={() =>
+                    setCalMode((m) => (m === "month" ? "week" : "month"))
+                  }
+                >
+                  <span className="material-symbols-outlined">
+                    calendar_view_week
+                  </span>
+                </button>
+              )}
+              {debugEnabled && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Debug permisos"
+                  onClick={() => setOpenDebug(true)}
+                >
+                  <span className="material-symbols-outlined">bug_report</span>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              style={{
+                height: 40,
+                padding: "0 12px",
+                border: `1px solid ${historyInUse ? "#c7d2fe" : "#e5e7eb"}`,
+                borderRadius: 8,
+                background: historyInUse ? "#eef2ff" : "#fff",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 600,
+                color: "#374151",
+              }}
+              title={showHistory ? "Ver cargas activas" : "Ver historial"}
+              aria-label={showHistory ? "Ver cargas activas" : "Ver historial"}
+            >
+              <span className="material-symbols-outlined">history</span>
+              {showHistory ? "Ver activas" : "Ver historial"}
+            </button>
+
+            {canExportAgenda && (
               <button
                 type="button"
-                title="Columnas"
-                onClick={() => setColumnsOpen((o) => !o)}
+                onClick={openExportAgendaModal}
                 style={{
                   height: 40,
                   padding: "0 12px",
@@ -1544,61 +1923,151 @@ export default function Loads() {
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 8,
+                  fontWeight: 600,
+                  color: "#374151",
                 }}
+                title="Exportar agenda (PDF)"
               >
-                <span className="material-symbols-outlined">view_column</span>
-                Columnas
+                <span className="material-symbols-outlined">
+                  picture_as_pdf
+                </span>
+                Exportar agenda
               </button>
-              {columnsOpen && (
+            )}
+          </div>
+        </div>
+
+        {toolbarMenu && (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 46,
+              width: 520,
+              maxWidth: "min(92vw, 520px)",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
+              padding: 10,
+              zIndex: 60,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 8,
+              }}
+            >
+              <div style={{ fontWeight: 700 }}>
+                {toolbarMenu === "search"
+                  ? "Buscar"
+                  : toolbarMenu === "columns"
+                    ? "Ocultar campos"
+                    : toolbarMenu === "filters"
+                      ? "Filtro"
+                      : toolbarMenu === "group"
+                        ? "Grupo"
+                        : "Clasificar"}
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setToolbarMenu(null)}
+                title="Cerrar"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {toolbarMenu !== "search" && (
+              <input
+                className="input"
+                style={{ width: "100%", height: 36, marginBottom: 10 }}
+                placeholder="Buscar..."
+                value={toolbarSearch}
+                onChange={(e) => setToolbarSearch(e.target.value)}
+              />
+            )}
+
+            {toolbarMenu === "search" && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  className="input"
+                  style={{ width: "100%", height: 36 }}
+                  placeholder="Buscar por barco, terminal o estado"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setQuery("")}
+                  title="Limpiar"
+                  aria-label="Limpiar"
+                  disabled={!String(query || "").trim()}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            )}
+
+            {toolbarMenu === "columns" && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleColumnKeys(allColumnKeys)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      color: "#2563eb",
+                      fontWeight: 700,
+                      padding: 0,
+                    }}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleColumnKeys([allColumnKeys[0]])}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      color: "#2563eb",
+                      fontWeight: 700,
+                      padding: 0,
+                    }}
+                  >
+                    Mínimo
+                  </button>
+                </div>
                 <div
                   style={{
-                    position: "absolute",
-                    right: 0,
-                    top: 44,
-                    width: 260,
-                    background: "#fff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 10,
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
-                    padding: 10,
-                    zIndex: 50,
+                    display: "grid",
+                    gap: 6,
+                    maxHeight: 360,
+                    overflowY: "auto",
+                    paddingRight: 4,
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div style={{ fontWeight: 600 }}>Columnas</div>
-                    <button
-                      type="button"
-                      onClick={() => setVisibleColumnKeys(allColumnKeys)}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        color: "#2563eb",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Todas
-                    </button>
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: 6,
-                      maxHeight: 320,
-                      overflowY: "auto",
-                      paddingRight: 4,
-                    }}
-                  >
-                    {allColumns.map((c) => {
+                  {allColumns
+                    .filter((c) => {
+                      const q = String(toolbarSearch || "")
+                        .trim()
+                        .toLowerCase();
+                      if (!q) return true;
+                      return String(c.header || "")
+                        .toLowerCase()
+                        .includes(q);
+                    })
+                    .map((c) => {
                       const checked = visibleColumnKeys.includes(c.key);
                       const disabled =
                         checked && visibleColumnKeys.length === 1;
@@ -1625,112 +2094,256 @@ export default function Loads() {
                         </label>
                       );
                     })}
-                  </div>
                 </div>
-              )}
-            </div>
-          )}
-          {!isReadOnlyActions && (
-            <>
-              <button
-                className="icon-button"
-                title="Vista tabla"
-                onClick={() => setView("table")}
-              >
-                <span className="material-symbols-outlined">table</span>
-              </button>
-              <button
-                className="icon-button"
-                title="Vista tarjetas"
-                onClick={() => setView("cards")}
-              >
-                <span className="material-symbols-outlined">view_agenda</span>
-              </button>
-              <button
-                className="icon-button"
-                title="Vista calendario"
-                onClick={() => setView("calendar")}
-              >
-                <span className="material-symbols-outlined">
-                  calendar_month
-                </span>
-              </button>
-              <button
-                className="icon-button"
-                title="Vista por días"
-                onClick={() => setView("day_list")}
-              >
-                <span className="material-symbols-outlined">event_note</span>
-              </button>
-              {canExportAgenda && (
-                <button
-                  className="icon-button"
-                  title="Exportar agenda (PDF)"
-                  onClick={openExportAgendaModal}
-                >
-                  <span className="material-symbols-outlined">
-                    picture_as_pdf
-                  </span>
-                </button>
-              )}
-              {canManageLoads && (
-                <button
-                  className="icon-button"
-                  title="Crear carga"
-                  onClick={onCreate}
-                >
-                  <span className="material-symbols-outlined">add_box</span>
-                </button>
-              )}
-              {debugEnabled && (
-                <button
-                  className="icon-button"
-                  title="Debug permisos"
-                  onClick={() => setOpenDebug(true)}
-                >
-                  <span className="material-symbols-outlined">bug_report</span>
-                </button>
-              )}
-              {view === "calendar" && (
-                <button
-                  className="icon-button"
-                  title={
-                    calMode === "month"
-                      ? "Cambiar a vista semanal"
-                      : "Cambiar a vista mensual"
-                  }
-                  onClick={() =>
-                    setCalMode((m) => (m === "month" ? "week" : "month"))
-                  }
-                >
-                  <span className="material-symbols-outlined">
-                    calendar_view_week
-                  </span>
-                </button>
-              )}
-              <button
-                className="icon-button"
-                title={showHistory ? "Ver cargas activas" : "Ver historial"}
-                aria-label={
-                  showHistory ? "Ver cargas activas" : "Ver historial"
-                }
-                onClick={() => setShowHistory((v) => !v)}
-              >
-                <span className="material-symbols-outlined">history</span>
-              </button>
-            </>
-          )}
-          {isDriver && (
-            <button
-              className="icon-button"
-              title={showHistory ? "Ver cargas activas" : "Ver historial"}
-              aria-label={showHistory ? "Ver cargas activas" : "Ver historial"}
-              onClick={() => setShowHistory((v) => !v)}
-            >
-              <span className="material-symbols-outlined">history</span>
-            </button>
-          )}
-        </div>
+              </div>
+            )}
+
+            {toolbarMenu === "filters" &&
+              (() => {
+                const selected =
+                  filterDefs.find((f) => f.key === filterMenuField) ||
+                  filterDefs[0];
+                const options = (selected?.options || []).filter((opt) => {
+                  const q = String(toolbarSearch || "")
+                    .trim()
+                    .toLowerCase();
+                  if (!q) return true;
+                  return String(opt || "")
+                    .toLowerCase()
+                    .includes(q);
+                });
+                return (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "200px 1fr",
+                      gap: 12,
+                      alignItems: "start",
+                    }}
+                  >
+                    <div
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 6,
+                        maxHeight: 360,
+                        overflowY: "auto",
+                      }}
+                    >
+                      {filterDefs.map((f) => {
+                        const active = f.key === selected.key;
+                        return (
+                          <button
+                            key={f.key}
+                            type="button"
+                            onClick={() => {
+                              setToolbarSearch("");
+                              setFilterMenuField(f.key);
+                            }}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              border: "none",
+                              background: active
+                                ? "var(--hover)"
+                                : "transparent",
+                              cursor: "pointer",
+                              padding: "8px 10px",
+                              borderRadius: 8,
+                              display: "grid",
+                              gap: 2,
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>
+                              {f.label}
+                            </div>
+                            <div
+                              style={{
+                                color: "var(--text-secondary)",
+                                fontSize: 12,
+                              }}
+                            >
+                              {f.value ? f.value : "Todos"}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 10,
+                        maxHeight: 360,
+                        overflowY: "auto",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                        {selected.label}
+                      </div>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "6px 8px",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="filterValue"
+                            checked={!selected.value}
+                            onChange={() => selected.setValue("")}
+                          />
+                          <span>Todos</span>
+                        </label>
+                        {options.map((opt) => (
+                          <label
+                            key={opt}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "6px 8px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="filterValue"
+                              checked={selected.value === opt}
+                              onChange={() => selected.setValue(opt)}
+                            />
+                            <span>{opt}</span>
+                          </label>
+                        ))}
+                        {options.length === 0 && (
+                          <div
+                            style={{
+                              color: "var(--text-secondary)",
+                              fontSize: 13,
+                            }}
+                          >
+                            Sin opciones
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            {toolbarMenu === "group" && (
+              <div style={{ display: "grid", gap: 6 }}>
+                {groupDefs
+                  .filter((g) => {
+                    const q = String(toolbarSearch || "")
+                      .trim()
+                      .toLowerCase();
+                    if (!q) return true;
+                    return String(g.label || "")
+                      .toLowerCase()
+                      .includes(q);
+                  })
+                  .map((g) => (
+                    <label
+                      key={g.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "6px 8px",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="groupBy"
+                        checked={groupBy === g.key}
+                        onChange={() => setGroupBy(g.key)}
+                      />
+                      <span>{g.label}</span>
+                    </label>
+                  ))}
+              </div>
+            )}
+
+            {toolbarMenu === "sort" && (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSortDir("asc")}
+                    style={{
+                      height: 32,
+                      padding: "0 10px",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 999,
+                      background: sortDir === "asc" ? "var(--hover)" : "#fff",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Asc
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortDir("desc")}
+                    style={{
+                      height: 32,
+                      padding: "0 10px",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 999,
+                      background: sortDir === "desc" ? "var(--hover)" : "#fff",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Desc
+                  </button>
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {sortDefs
+                    .filter((s) => {
+                      const q = String(toolbarSearch || "")
+                        .trim()
+                        .toLowerCase();
+                      if (!q) return true;
+                      return String(s.label || "")
+                        .toLowerCase()
+                        .includes(q);
+                    })
+                    .map((s) => (
+                      <label
+                        key={s.key || "(none)"}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "6px 8px",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="sortBy"
+                          checked={sortBy === s.key}
+                          onChange={() => setSortBy(s.key)}
+                        />
+                        <span>{s.label}</span>
+                      </label>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {view === "table" ? (

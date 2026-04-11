@@ -1467,7 +1467,7 @@ export default function LoadDetail() {
       ),
   );
 
-  const openFuseModal = () => {
+  const _openFuseModal = () => {
     if (palletsInLoad.length < 2) {
       setSnack({
         open: true,
@@ -2004,96 +2004,93 @@ export default function LoadDetail() {
   return (
     <section className="card">
       <div className="card-header">
-        <h2 className="card-title">Detalle carga</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          {!isReadOnlyActions && canManageLoads && (
-            <button
-              className="icon-button"
-              onClick={() => {
-                setResponsableQuery("");
-                setOpen(true);
-              }}
-              title="Modificar"
-            >
-              <span className="material-symbols-outlined">edit</span>
-            </button>
-          )}
-          {!isReadOnlyActions && canManagePallets && (
-            <button
-              className="icon-button"
-              onClick={openFuseModal}
-              title="Fusionar palets"
-            >
-              <span className="material-symbols-outlined">call_merge</span>
-            </button>
-          )}
-          {!isReadOnlyActions && (
-            <button
-              className="icon-button"
-              onClick={() => setOpenCreatePallet(true)}
-              title="Crear palet"
-            >
-              <span className="material-symbols-outlined">add_box</span>
-            </button>
-          )}
-          {!isReadOnlyActions && canManageLoads && (
-            <button
-              className="icon-button"
-              onClick={openFolioModal}
-              title="Número"
-            >
-              <span className="material-symbols-outlined">description</span>
-            </button>
-          )}
-          {!isReadOnlyActions && hasLoadReport && (
-            <button
-              className="icon-button"
-              onClick={openLoadReportPreview}
-              title="Ver informe de carga"
-              disabled={loadReportLoading}
-            >
-              <span className="material-symbols-outlined">receipt_long</span>
-            </button>
-          )}
-          {isDriver &&
-            String(load?.chofer?._id || load?.chofer || "").trim() ===
-              currentUserId && (
+        <h2 className="card-title" style={{ whiteSpace: "nowrap" }}>
+          Detalle carga
+        </h2>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flex: 1,
+          }}
+        >
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!isReadOnlyActions && hasLoadReport && (
               <button
-                className="secondary-button"
-                onClick={markAsViajando}
-                disabled={
-                  markViajandoSubmitting ||
-                  String(load?.estado_viaje || "")
-                    .trim()
-                    .toLowerCase() === "viajando"
-                }
-                title='Marcar como "Viajando"'
+                className="icon-button"
+                onClick={openLoadReportPreview}
+                title="Ver informe de carga"
+                disabled={loadReportLoading}
               >
-                Marcar como Viajando
+                <span className="material-symbols-outlined">receipt_long</span>
               </button>
             )}
-          {isDriver &&
-            String(load?.chofer?._id || load?.chofer || "").trim() ===
-              currentUserId &&
-            String(load?.estado_viaje || "")
-              .trim()
-              .toLowerCase() === "viajando" && (
-              <button
-                className="secondary-button"
-                onClick={() => setOpenDriverFinalize(true)}
-                disabled={finalizeSubmitting}
-                title="Finalizar"
-              >
-                Finalizar
-              </button>
-            )}
-          <button
-            className="icon-button"
-            onClick={() => navigate(-1)}
-            title="Atrás"
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+              marginLeft: "auto",
+            }}
           >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
+            {isDriver &&
+              String(load?.chofer?._id || load?.chofer || "").trim() ===
+                currentUserId && (
+                <button
+                  className="secondary-button"
+                  onClick={markAsViajando}
+                  disabled={
+                    markViajandoSubmitting ||
+                    String(load?.estado_viaje || "")
+                      .trim()
+                      .toLowerCase() === "viajando"
+                  }
+                  title='Marcar como "Viajando"'
+                >
+                  Marcar como Viajando
+                </button>
+              )}
+            {isDriver &&
+              String(load?.chofer?._id || load?.chofer || "").trim() ===
+                currentUserId &&
+              String(load?.estado_viaje || "")
+                .trim()
+                .toLowerCase() === "viajando" && (
+                <button
+                  className="secondary-button"
+                  onClick={() => setOpenDriverFinalize(true)}
+                  disabled={finalizeSubmitting}
+                  title="Finalizar"
+                >
+                  Finalizar
+                </button>
+              )}
+            {!isReadOnlyActions && canManageLoads && (
+              <button
+                className="icon-button"
+                onClick={() => {
+                  setResponsableQuery("");
+                  setOpen(true);
+                }}
+                title="Modificar"
+              >
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+            )}
+            <button
+              className="icon-button"
+              onClick={() => navigate(-1)}
+              title="Atrás"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+          </div>
         </div>
       </div>
       <div style={{ padding: 16 }}>
@@ -2149,7 +2146,13 @@ export default function LoadDetail() {
         </div>
 
         {canDeleteLoad && (
-          <div style={{ marginTop: 14 }}>
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
             <button
               className="primary-button"
               onClick={handleDelete}
@@ -2162,9 +2165,23 @@ export default function LoadDetail() {
           </div>
         )}
 
-        <div className="card" style={{ marginTop: 12 }}>
+        <div
+          className="card"
+          style={{ marginTop: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+        >
           <div className="card-header">
             <h3 className="card-title">Resumen palets</h3>
+            {!isReadOnlyActions && canManageLoads && (
+              <button
+                className="secondary-button"
+                onClick={openFolioModal}
+                title="Imprimir números"
+                style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              >
+                <span className="material-symbols-outlined">description</span>
+                Números
+              </button>
+            )}
           </div>
           <div style={{ padding: 12 }}>
             <p>

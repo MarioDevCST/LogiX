@@ -76,7 +76,7 @@ export default function Pallets({
   ];
 
   const navigate = useNavigate();
-  const [view, setView] = useState("dual");
+  const [view, _setView] = useState("dual");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -760,47 +760,6 @@ export default function Pallets({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {canCreatePallets && (
-            <button
-              className="icon-button"
-              onClick={onCreate}
-              title="Crear palet"
-            >
-              <span className="material-symbols-outlined">add_box</span>
-            </button>
-          )}
-          {canManageLoads && (
-            <button
-              className="icon-button"
-              onClick={() => navigate("/app/logistica/cargas")}
-              title="Crear carga"
-            >
-              <span className="material-symbols-outlined">add_business</span>
-            </button>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="icon-button"
-            title="Vista tabla"
-            onClick={() => setView("table")}
-          >
-            <span className="material-symbols-outlined">table</span>
-          </button>
-          <button
-            className="icon-button"
-            title="Vista tarjetas"
-            onClick={() => setView("cards")}
-          >
-            <span className="material-symbols-outlined">view_agenda</span>
-          </button>
-          <button
-            className="icon-button"
-            title="Vista dual"
-            onClick={() => setView("dual")}
-          >
-            <span className="material-symbols-outlined">view_column</span>
-          </button>
         </div>
       </div>
 

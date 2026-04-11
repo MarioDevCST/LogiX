@@ -19,7 +19,13 @@ body,
 }
 body {
   margin: 0;
-  font-family: "Roboto", system-ui, -apple-system, Segoe UI, Helvetica, Arial,
+  font-family:
+    "Roboto",
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Helvetica,
+    Arial,
     sans-serif;
   color: var(--text-primary);
   background: var(--bg);
@@ -118,7 +124,9 @@ body {
   opacity: 0;
   transform: translateY(12px);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   z-index: 9999;
 }
 .snackbar.show {
@@ -400,6 +408,9 @@ body {
 .table-group td {
   background: #f1f3f4;
   color: #202124;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 .nav-section {

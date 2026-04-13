@@ -277,6 +277,32 @@ function MiniBars({ title, rows, aLabel, bLabel } = {}) {
       >
         {(rows || []).map((r) => (
           <div key={r.key} style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              <div
+                style={{
+                  width: "50%",
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: Number(r.a) ? "#111827" : "var(--text-secondary)",
+                }}
+                title={`${aLabel}: ${Number(r.a) || 0}`}
+              >
+                {Number(r.a) || 0}
+              </div>
+              <div
+                style={{
+                  width: "50%",
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: Number(r.b) ? "#111827" : "var(--text-secondary)",
+                }}
+                title={`${bLabel}: ${Number(r.b) || 0}`}
+              >
+                {Number(r.b) || 0}
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 4, alignItems: "flex-end" }}>
               <div
                 style={{

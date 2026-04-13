@@ -458,6 +458,64 @@ export async function fetchAllLoads() {
   }));
 }
 
+export async function fetchLoadsByFechaCargaRange({
+  startKey,
+  endKey,
+  max = 500,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const start = String(startKey || "").trim();
+  const end = String(endKey || "").trim();
+  if (!start && !end) return fetchAllLoads();
+  const constraints = [];
+  if (start) constraints.push(where("fecha_de_carga", ">=", start));
+  if (end) constraints.push(where("fecha_de_carga", "<=", end));
+  constraints.push(orderBy("fecha_de_carga", "desc"));
+  if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+    constraints.push(limit(Math.floor(max)));
+  }
+  let snap;
+  try {
+    snap = await getDocs(
+      query(collection(firebaseDb, "loads"), ...constraints),
+    );
+  } catch {
+    const all = await fetchAllLoads();
+    return all.filter((l) => {
+      const k = String(l?.fecha_de_carga || "").trim();
+      if (!k) return false;
+      if (start && k < start) return false;
+      if (end && k > end) return false;
+      return true;
+    });
+  }
+  const list = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    list.push({
+      ...mapCommonAudit(data, d.id),
+      nombre: data.nombre || "",
+      fecha_de_carga: data.fecha_de_carga || "",
+      hora_de_carga: data.hora_de_carga || "",
+      fecha_de_descarga: data.fecha_de_descarga || "",
+      hora_de_descarga: data.hora_de_descarga || "",
+      barco: data.barco || "",
+      entrega: Array.isArray(data.entrega) ? data.entrega : [],
+      chofer: data.chofer || "",
+      responsable: data.responsable || "",
+      palets: Array.isArray(data.palets) ? data.palets : [],
+      carga: Array.isArray(data.carga) ? data.carga : [],
+      consignatario: data.consignatario || "",
+      terminal_entrega: data.terminal_entrega || "",
+      cash: !!data.cash,
+      lancha: !!data.lancha,
+      estado_viaje: data.estado_viaje || "Preparando",
+      last_informe_resumen: data.last_informe_resumen || null,
+    });
+  });
+  return list;
+}
+
 export async function fetchLoadsByChoferId(choferId) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const id = String(choferId || "").trim();
@@ -850,6 +908,69 @@ export async function fetchAllPallets() {
     );
   } catch {
     snap = await getDocs(collection(firebaseDb, "pallets"));
+  }
+  const list = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    const id = data.id || d.id;
+    list.push({
+      _id: id,
+      id,
+      numero_palet: data.numero_palet || "",
+      nombre: data.nombre || "",
+      tipo: data.tipo || "Seco",
+      base: data.base || "Europeo",
+      estado: typeof data.estado === "boolean" ? data.estado : false,
+      carga: data.carga || "",
+      carga_nombre: data.carga_nombre || "",
+      productos: data.productos || "",
+      productos_items: Array.isArray(data.productos_items)
+        ? normalizePalletProductosItems(data.productos_items)
+        : [],
+      creado_por: data.creado_por || "",
+      modificado_por: data.modificado_por || "",
+      fecha_creacion: data.fecha_creacion || null,
+      fecha_modificacion: data.fecha_modificacion || null,
+      createdAt: data.createdAt || data.fecha_creacion || null,
+      updatedAt: data.updatedAt || data.fecha_modificacion || null,
+      contenedor: data.contenedor || "",
+    });
+  });
+  return list;
+}
+
+export async function fetchPalletsByFechaCreacionSince({
+  sinceMs,
+  max = 2000,
+} = {}) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ms = typeof sinceMs === "number" ? sinceMs : null;
+  if (!ms || !Number.isFinite(ms)) return fetchAllPallets();
+  const sinceDate = new Date(ms);
+  if (Number.isNaN(sinceDate.getTime())) return fetchAllPallets();
+  let snap;
+  try {
+    snap = await getDocs(
+      query(
+        collection(firebaseDb, "pallets"),
+        where("fecha_creacion", ">=", sinceDate),
+        orderBy("fecha_creacion", "desc"),
+        limit(Math.floor(max)),
+      ),
+    );
+  } catch {
+    const all = await fetchAllPallets();
+    const toMs = (value) => {
+      if (!value) return 0;
+      if (value instanceof Date) return value.getTime();
+      if (typeof value.toDate === "function") {
+        const d = value.toDate();
+        return d instanceof Date ? d.getTime() : 0;
+      }
+      if (typeof value.seconds === "number") return value.seconds * 1000;
+      return 0;
+    };
+    return all.filter((p) => toMs(p?.createdAt) >= ms);
   }
   const list = [];
   snap.forEach((d) => {

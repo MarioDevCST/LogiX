@@ -323,6 +323,7 @@ export default function Dashboard() {
   const canViewAnalytics = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
   const [range, setRange] = useState("today");
   const [month, setMonth] = useState(new Date());
+  const [calendarDateMode, setCalendarDateMode] = useState("carga");
   const [loading, setLoading] = useState(true);
   const [loads, setLoads] = useState([]);
   const [ships, setShips] = useState([]);
@@ -584,6 +585,43 @@ export default function Dashboard() {
 
   return (
     <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 8,
+          alignItems: "center",
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <h2 style={{ margin: 0 }}>Dashboard</h2>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            className="select"
+            value={range}
+            onChange={(e) => setRange(e.target.value)}
+            style={{ width: 160 }}
+            aria-label="Rango"
+          >
+            {RANGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {!isWarehouse && !isOffice && (
+            <button
+              className="primary-button"
+              onClick={() => navigate("/app/logistica/cargas")}
+            >
+              Ir a Cargas
+            </button>
+          )}
+        </div>
+      </div>
+
       <section className="card" style={{ marginBottom: 12 }}>
         <div className="card-header">
           <h2 className="card-title">Analítica rápida (últimos 30 días)</h2>
@@ -667,140 +705,158 @@ export default function Dashboard() {
 
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 8,
-          marginBottom: 8,
-          alignItems: "center",
+          display: "grid",
+          gridTemplateColumns: "minmax(360px, 1fr) minmax(360px, 1fr)",
+          gap: 12,
+          alignItems: "start",
         }}
       >
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>Dashboard</h2>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select
-            className="select"
-            value={range}
-            onChange={(e) => setRange(e.target.value)}
-            style={{ width: 160 }}
-            aria-label="Rango"
-          >
-            {RANGE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          {!isWarehouse && !isOffice && (
-            <button
-              className="primary-button"
-              onClick={() => navigate("/app/logistica/cargas")}
+        <div style={{ display: "grid", gap: 12 }}>
+          <section className="card">
+            <div className="card-header">
+              <h2 className="card-title">
+                Resumen ·{" "}
+                {RANGE_OPTIONS.find((o) => o.value === range)?.label || "Hoy"}
+              </h2>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 10,
+                padding: 12,
+              }}
             >
-              Ir a Cargas
-            </button>
-          )}
-        </div>
-      </div>
-
-      <section className="card">
-        <div className="card-header">
-          <h2 className="card-title">
-            Resumen ·{" "}
-            {RANGE_OPTIONS.find((o) => o.value === range)?.label || "Hoy"}
-          </h2>
-        </div>
-        <div className="card-grid">
-          <div className="card-item">
-            <div className="card-item-header">
-              <div className="avatar">Σ</div>
-              <div>
-                <div className="card-item-title" style={{ fontSize: 18 }}>
-                  Total
-                </div>
-                <div
-                  className="card-item-sub"
-                  style={{ fontSize: 26, color: "var(--text-primary)" }}
-                >
-                  {stats.total}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="card-item">
-            <div className="card-item-header">
-              <div className="avatar">P</div>
-              <div>
-                <div className="card-item-title" style={{ fontSize: 18 }}>
-                  En preparación
-                </div>
-                <div
-                  className="card-item-sub"
-                  style={{ fontSize: 26, color: "var(--text-primary)" }}
-                >
-                  {stats.enPreparacion}
-                </div>
-              </div>
-            </div>
-          </div>
-          {ESTADO_CARGA_OPTIONS.map((k) => (
-            <div key={k} className="card-item">
-              <div className="card-item-header">
-                <div className="avatar">
-                  {String(k || "?")
-                    .slice(0, 1)
-                    .toUpperCase()}
-                </div>
-                <div>
-                  <div className="card-item-title" style={{ fontSize: 18 }}>
-                    {k}
-                  </div>
+              <div className="card-item" style={{ padding: 10 }}>
+                <div className="card-item-header" style={{ gap: 8 }}>
                   <div
-                    className="card-item-sub"
-                    style={{ fontSize: 26, color: "var(--text-primary)" }}
+                    className="avatar"
+                    style={{ width: 32, height: 32, fontSize: 13 }}
                   >
-                    {stats.porEstado[k] || 0}
+                    Σ
+                  </div>
+                  <div>
+                    <div className="card-item-title" style={{ fontSize: 14 }}>
+                      Total
+                    </div>
+                    <div
+                      className="card-item-sub"
+                      style={{ fontSize: 22, color: "var(--text-primary)" }}
+                    >
+                      {stats.total}
+                    </div>
                   </div>
                 </div>
               </div>
+              <div className="card-item" style={{ padding: 10 }}>
+                <div className="card-item-header" style={{ gap: 8 }}>
+                  <div
+                    className="avatar"
+                    style={{ width: 32, height: 32, fontSize: 13 }}
+                  >
+                    P
+                  </div>
+                  <div>
+                    <div className="card-item-title" style={{ fontSize: 14 }}>
+                      En preparación
+                    </div>
+                    <div
+                      className="card-item-sub"
+                      style={{ fontSize: 22, color: "var(--text-primary)" }}
+                    >
+                      {stats.enPreparacion}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {ESTADO_CARGA_OPTIONS.map((k) => (
+                <div key={k} className="card-item" style={{ padding: 10 }}>
+                  <div className="card-item-header" style={{ gap: 8 }}>
+                    <div
+                      className="avatar"
+                      style={{ width: 32, height: 32, fontSize: 13 }}
+                    >
+                      {String(k || "?")
+                        .slice(0, 1)
+                        .toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="card-item-title" style={{ fontSize: 14 }}>
+                        {k}
+                      </div>
+                      <div
+                        className="card-item-sub"
+                        style={{ fontSize: 22, color: "var(--text-primary)" }}
+                      >
+                        {stats.porEstado[k] || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </section>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select
+              className="input"
+              value={calendarDateMode}
+              onChange={(e) => setCalendarDateMode(e.target.value)}
+              style={{ height: 40, width: 170 }}
+              title="Qué fechas mostrar"
+              aria-label="Qué fechas mostrar"
+            >
+              <option value="carga">Cargas</option>
+              <option value="descarga">Descargas</option>
+              <option value="ambos">Ambos</option>
+            </select>
+          </div>
+
+          <Calendar
+            title="Cargas (semana)"
+            items={calendarItems}
+            month={month}
+            mode="week"
+            loading={loading}
+            dateKey={
+              calendarDateMode === "descarga"
+                ? "fecha_de_descarga"
+                : "fecha_de_carga"
+            }
+            secondaryDateKey={
+              calendarDateMode === "ambos" ? "fecha_de_descarga" : undefined
+            }
+            statusKey="estado_viaje"
+            onPrevMonth={() =>
+              setMonth((d) => {
+                const next = new Date(d);
+                next.setDate(next.getDate() - 7);
+                return next;
+              })
+            }
+            onNextMonth={() =>
+              setMonth((d) => {
+                const next = new Date(d);
+                next.setDate(next.getDate() + 7);
+                return next;
+              })
+            }
+            onItemClick={(it) => {
+              const id = String(it?.id || "");
+              if (!id) return;
+              navigate(`/app/logistica/cargas/${id}`);
+            }}
+          />
         </div>
-      </section>
 
-      <Calendar
-        title="Cargas"
-        items={calendarItems}
-        month={month}
-        mode="week"
-        loading={loading}
-        onPrevMonth={() =>
-          setMonth((d) => {
-            const next = new Date(d);
-            next.setDate(next.getDate() - 7);
-            return next;
-          })
-        }
-        onNextMonth={() =>
-          setMonth((d) => {
-            const next = new Date(d);
-            next.setDate(next.getDate() + 7);
-            return next;
-          })
-        }
-        onItemClick={(it) => {
-          const id = String(it?.id || "");
-          if (!id) return;
-          navigate(`/app/logistica/cargas/${id}`);
-        }}
-      />
-
-      <DataTable
-        title="Cargas (lista)"
-        columns={columns}
-        data={tableRows}
-        loading={loading}
-        onRowClick={(row) => navigate(`/app/logistica/cargas/${row.id}`)}
-      />
+        <DataTable
+          title="Cargas (lista)"
+          columns={columns}
+          data={tableRows}
+          loading={loading}
+          onRowClick={(row) => navigate(`/app/logistica/cargas/${row.id}`)}
+        />
+      </div>
 
       <Snackbar
         open={snack.open}

@@ -423,6 +423,19 @@ body {
 .nav-icon {
   color: var(--text-secondary);
 }
+.nav-icon-with-dot {
+  position: relative;
+  display: inline-flex;
+}
+.nav-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ef4444;
+  top: -1px;
+  right: -1px;
+}
 .nav-item.active .nav-icon {
   color: var(--brand-blue);
 }

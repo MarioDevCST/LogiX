@@ -17,6 +17,7 @@ export default function Sidebar({ collapsed }) {
   const isMozo = role === ROLES.MOZO;
   const isOffice = role === ROLES.OFICINA;
   const isDriver = role === ROLES.CONDUCTOR;
+  const showDocumentacion = true;
   const shouldShowMermaDot = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
   const [pendingMerma, setPendingMerma] = useState(false);
   const canViewAdmin = role
@@ -78,6 +79,20 @@ export default function Sidebar({ collapsed }) {
             </span>
             <span className="nav-label">Cargas</span>
           </NavLink>
+          {showDocumentacion && (
+            <NavLink
+              to="/app/logistica/documentacion"
+              title="Documentación"
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="nav-icon material-symbols-outlined">
+                menu_book
+              </span>
+              <span className="nav-label">Documentación</span>
+            </NavLink>
+          )}
         </nav>
       </aside>
     );
@@ -126,6 +141,20 @@ export default function Sidebar({ collapsed }) {
             </span>
             <span className="nav-label">Palets</span>
           </NavLink>
+          {showDocumentacion && (
+            <NavLink
+              to="/app/logistica/documentacion"
+              title="Documentación"
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="nav-icon material-symbols-outlined">
+                menu_book
+              </span>
+              <span className="nav-label">Documentación</span>
+            </NavLink>
+          )}
         </nav>
       </aside>
     );
@@ -184,6 +213,20 @@ export default function Sidebar({ collapsed }) {
             </span>
             <span className="nav-label">Carga de Palets</span>
           </NavLink>
+          {showDocumentacion && (
+            <NavLink
+              to="/app/logistica/documentacion"
+              title="Documentación"
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="nav-icon material-symbols-outlined">
+                menu_book
+              </span>
+              <span className="nav-label">Documentación</span>
+            </NavLink>
+          )}
 
           <div className="nav-section">Palets</div>
           <NavLink
@@ -213,24 +256,13 @@ export default function Sidebar({ collapsed }) {
             title="Mermas"
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
-            <span className="nav-icon material-symbols-outlined">delete</span>
-            <span
-              className="nav-label"
-              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-            >
-              Mermas
+            <span className="nav-icon material-symbols-outlined nav-icon-with-dot">
+              delete
               {shouldShowMermaDot && pendingMerma && (
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    background: "#ef4444",
-                    display: "inline-block",
-                  }}
-                />
+                <span className="nav-dot" />
               )}
             </span>
+            <span className="nav-label">Mermas</span>
           </NavLink>
         </nav>
       </aside>
@@ -290,18 +322,6 @@ export default function Sidebar({ collapsed }) {
               <span className="nav-label">Colecciones</span>
             </NavLink>
             <NavLink
-              to="/app/admin/barcos"
-              title="Barcos"
-              className={({ isActive }) =>
-                `nav-item ${isActive ? "active" : ""}`
-              }
-            >
-              <span className="nav-icon material-symbols-outlined">
-                sailing
-              </span>
-              <span className="nav-label">Barcos</span>
-            </NavLink>
-            <NavLink
               to="/app/admin/mensajes"
               title="Mensajes"
               className={({ isActive }) =>
@@ -355,6 +375,18 @@ export default function Sidebar({ collapsed }) {
             <span className="nav-label">Carga de Palets</span>
           </NavLink>
         )}
+        {showDocumentacion && (
+          <NavLink
+            to="/app/logistica/documentacion"
+            title="Documentación"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined">
+              menu_book
+            </span>
+            <span className="nav-label">Documentación</span>
+          </NavLink>
+        )}
 
         {!isOffice && (
           <>
@@ -391,24 +423,13 @@ export default function Sidebar({ collapsed }) {
             title="Mermas"
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
-            <span className="nav-icon material-symbols-outlined">delete</span>
-            <span
-              className="nav-label"
-              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-            >
-              Mermas
+            <span className="nav-icon material-symbols-outlined nav-icon-with-dot">
+              delete
               {shouldShowMermaDot && pendingMerma && (
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    background: "#ef4444",
-                    display: "inline-block",
-                  }}
-                />
+                <span className="nav-dot" />
               )}
             </span>
+            <span className="nav-label">Mermas</span>
           </NavLink>
         )}
       </nav>

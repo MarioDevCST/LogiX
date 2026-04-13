@@ -24,7 +24,12 @@ export default function CompanyDetail() {
   const navigate = useNavigate();
   const [company, setCompany] = useState(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ nombre: "", telefono: "", email: "" });
+  const [form, setForm] = useState({
+    nombre: "",
+    direccion: "",
+    telefono: "",
+    email: "",
+  });
   const [snack, setSnack] = useState({
     open: false,
     message: "",
@@ -40,6 +45,7 @@ export default function CompanyDetail() {
         setCompany(c);
         setForm({
           nombre: c?.nombre || "",
+          direccion: String(c?.direccion || ""),
           telefono: String(c?.telefono || ""),
           email: String(c?.email || ""),
         });
@@ -108,6 +114,9 @@ export default function CompanyDetail() {
           <strong>Nombre:</strong> {company.nombre}
         </p>
         <p>
+          <strong>Dirección:</strong> {company.direccion || "-"}
+        </p>
+        <p>
           <strong>Teléfono:</strong> {company.telefono || "-"}
         </p>
         <p>
@@ -132,6 +141,16 @@ export default function CompanyDetail() {
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+          />
+        </div>
+        <div>
+          <div className="label">Dirección (opcional)</div>
+          <textarea
+            className="input"
+            value={form.direccion}
+            onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+            rows={2}
+            style={{ resize: "vertical" }}
           />
         </div>
         <div>

@@ -57,6 +57,19 @@ function getTipoColors(tipo) {
   return { color: "#9ca3af", strong: "#374151" };
 }
 
+function getTipoLabel(tipo) {
+  const t = String(tipo || "")
+    .trim()
+    .toLowerCase();
+  if (t === "seco") return "Seco";
+  if (t === "refrigerado") return "Refr.";
+  if (t === "congelado") return "Cong.";
+  if (t === "técnico" || t === "tecnico") return "Tec";
+  if (t === "fruta y verdura") return "Fr";
+  if (t === "repuestos" || t === "repuesto") return "Rep";
+  return t ? t[0].toUpperCase() : "";
+}
+
 function toDateInput(value) {
   if (!value) return "";
   const d = new Date(value);
@@ -2290,20 +2303,8 @@ export default function LoadDetail() {
                     const colors = getTipoColors(tipo);
                     const accent = isAmericano ? colors.strong : colors.color;
                     const avatarText = numero || "?";
-                    const tipoKey = tipo.trim().toLowerCase();
                     const baseKey = base.trim().toLowerCase();
-                    const tipoLetter =
-                      tipoKey === "seco"
-                        ? "S"
-                        : tipoKey === "refrigerado"
-                          ? "R"
-                          : tipoKey === "congelado"
-                            ? "C"
-                            : tipoKey === "técnico" || tipoKey === "tecnico"
-                              ? "T"
-                              : tipoKey
-                                ? tipoKey[0].toUpperCase()
-                                : "";
+                    const tipoLetter = getTipoLabel(tipo);
                     const baseLetter =
                       baseKey === "europeo"
                         ? "E"

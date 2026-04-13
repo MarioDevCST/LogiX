@@ -8,12 +8,12 @@ import AppLayout from "./layout/AppLayout.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Users from "./pages/Users.jsx";
 import UserDetail from "./pages/UserDetail.jsx";
-import Ships from "./pages/Ships.jsx";
 import ShipDetail from "./pages/ShipDetail.jsx";
 import CompanyDetail from "./pages/CompanyDetail.jsx";
 import LocationDetail from "./pages/LocationDetail.jsx";
 import Loads from "./pages/Loads.jsx";
 import LoadDetail from "./pages/LoadDetail.jsx";
+import Documentation from "./pages/Documentation.jsx";
 import Pallets from "./pages/Pallets.jsx";
 import PalletDetail from "./pages/PalletDetail.jsx";
 import PalletLoading from "./pages/PalletLoading.jsx";
@@ -108,7 +108,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               getCurrentRole() === ROLES.ALMACEN ? (
                 <Navigate to="/app" replace />
               ) : (
-                <Ships />
+                <Collections initialTab="ships" />
               )
             }
           />
@@ -216,6 +216,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               )
             }
           />
+          <Route path="logistica/documentacion" element={<Documentation />} />
           {/* Palets */}
           <Route
             path="palets"

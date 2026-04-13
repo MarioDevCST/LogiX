@@ -1982,6 +1982,7 @@ export async function fetchAllCompanies() {
   return docs.map(({ docId, data }) => ({
     ...mapCommonAudit(data, docId),
     nombre: data.nombre || "",
+    direccion: data.direccion || "",
     telefono: data.telefono || "",
     email: data.email || "",
   }));
@@ -1996,6 +1997,7 @@ export async function fetchCompanyById(id) {
   return {
     ...mapCommonAudit(data, snap.id),
     nombre: data.nombre || "",
+    direccion: data.direccion || "",
     telefono: data.telefono || "",
     email: data.email || "",
   };
@@ -2006,6 +2008,7 @@ export async function createCompany(payload) {
   const nombre = String(payload?.nombre || "").trim();
   if (!nombre) throw new Error("nombre es obligatorio");
 
+  const direccion = String(payload?.direccion || "").trim();
   const telefono = String(payload?.telefono || "").trim();
   const email = String(payload?.email || "").trim();
 
@@ -2014,6 +2017,7 @@ export async function createCompany(payload) {
   await setDoc(ref, {
     id,
     nombre,
+    direccion,
     telefono,
     email,
     creado_por: String(payload?.creado_por || "Testing"),
@@ -2049,6 +2053,9 @@ export async function updateCompanyById(id, updates) {
   const patch = { ...updates };
   if (typeof updates?.nombre !== "undefined") {
     patch.nombre = String(updates?.nombre || "").trim();
+  }
+  if (typeof updates?.direccion !== "undefined") {
+    patch.direccion = String(updates?.direccion || "").trim();
   }
   if (typeof updates?.telefono !== "undefined") {
     patch.telefono = String(updates?.telefono || "").trim();

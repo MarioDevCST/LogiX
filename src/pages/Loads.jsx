@@ -229,6 +229,7 @@ function SearchableSelect({
 export default function Loads() {
   const allColumns = useMemo(
     () => [
+      { key: "status_indicator", header: "" },
       { key: "nombre", header: "Nombre" },
       { key: "barco", header: "Barco" },
       { key: "entrega", header: "Entrega" },
@@ -238,13 +239,11 @@ export default function Loads() {
       { key: "carga", header: "Tipo de carga" },
       { key: "total_palets", header: "Palets" },
       { key: "estado_viaje", header: "Estado viaje" },
-      { key: "cash", header: "Cash" },
-      { key: "lancha", header: "Lancha" },
+      { key: "cash_lancha", header: "Cash/Lancha" },
       { key: "fecha_de_carga", header: "Fecha de carga" },
       { key: "hora_de_carga", header: "Hora de carga" },
       { key: "fecha_de_descarga", header: "Fecha de descarga" },
       { key: "hora_de_descarga", header: "Hora de descarga" },
-      { key: "estado_carga", header: "Carga completa" },
     ],
     [],
   );
@@ -334,6 +333,7 @@ export default function Loads() {
   const [sortDir, setSortDir] = useState("asc");
   const [showHistory, setShowHistory] = useState(false);
   const toolbarMenuRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [toolbarMenu, setToolbarMenu] = useState(null);
   const [toolbarSearch, setToolbarSearch] = useState("");
   const [filterMenuField, setFilterMenuField] = useState("estado_viaje");
@@ -347,7 +347,18 @@ export default function Loads() {
     try {
       const raw = localStorage.getItem("loads_table_columns");
       const parsed = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const filtered = parsed
+          .filter((k) => k !== "estado_carga")
+          .map((k) => (k === "cash" || k === "lancha" ? "cash_lancha" : k));
+        if (!filtered.includes("status_indicator"))
+          filtered.unshift("status_indicator");
+        const unique = [];
+        for (const k of filtered) {
+          if (!unique.includes(k)) unique.push(k);
+        }
+        return unique;
+      }
     } catch (e) {
       void e;
     }
@@ -377,9 +388,18 @@ export default function Loads() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [toolbarMenu, viewMenuOpen]);
 
+  useEffect(() => {
+    if (toolbarMenu !== "search") return;
+    const id = window.setTimeout(() => {
+      searchInputRef.current?.focus?.();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [toolbarMenu]);
+
   // mes de calendario
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [calMode, setCalMode] = useState("month");
+  const [calendarDateMode, setCalendarDateMode] = useState("carga");
   const prevPeriod = () =>
     setCalMonth((d) =>
       calMode === "week"
@@ -1060,9 +1080,47 @@ export default function Loads() {
         consignatarioId,
         l.estado_viaje,
       ].every(Boolean);
-      const estadoCarga = requiredPresent && totalPalets > 0 ? "Sí" : "No";
+
+      const hasPallets = totalPalets > 0;
+      const indicatorColor = requiredPresent ? "#22c55e" : "#ef4444";
+      const indicatorFill = hasPallets ? indicatorColor : "transparent";
+      const indicatorTitle = requiredPresent
+        ? hasPallets
+          ? "Carga completa"
+          : "Faltan palets"
+        : hasPallets
+          ? "Faltan datos"
+          : "Faltan datos y palets";
+
+      const statusIndicator = (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title={indicatorTitle}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="7"
+              cy="7"
+              r="6"
+              stroke={indicatorColor}
+              strokeWidth="2"
+              fill={indicatorFill}
+            />
+          </svg>
+        </div>
+      );
 
       return {
+        status_indicator: statusIndicator,
         id: l._id,
         nombre: l.nombre || "",
         barco: ship?.nombre_del_barco || l.barco?.nombre_del_barco || "",
@@ -1083,8 +1141,7 @@ export default function Loads() {
         total_palets: totalPalets,
         palets_por_tipo: paletsPorTipo,
         estado_viaje: l.estado_viaje || "Preparando",
-        cash: l.cash ? "Sí" : "No",
-        lancha: l.lancha ? "Sí" : "No",
+        cash_lancha: `${l.cash ? "Sí" : "No"}/${l.lancha ? "Sí" : "No"}`,
         fecha_de_carga: formatDate(l.fecha_de_carga),
         fecha_de_carga_raw: l.fecha_de_carga,
         fecha_de_carga_group: toIsoDateKey(l.fecha_de_carga) || "Sin fecha",
@@ -1094,7 +1151,6 @@ export default function Loads() {
         fecha_de_descarga_group:
           toIsoDateKey(l.fecha_de_descarga) || "Sin fecha",
         hora_de_descarga: l.hora_de_descarga || "",
-        estado_carga: estadoCarga,
         responsable: String(responsableId || ""),
         responsable_nombre: String(responsable?.nombre || "").trim(),
         responsable_telefono: String(responsable?.telefono || "").trim(),
@@ -1858,22 +1914,36 @@ export default function Loads() {
                 )}
               </div>
               {view === "calendar" && (
-                <button
-                  type="button"
-                  className="icon-button"
-                  title={
-                    calMode === "month"
-                      ? "Cambiar a vista semanal"
-                      : "Cambiar a vista mensual"
-                  }
-                  onClick={() =>
-                    setCalMode((m) => (m === "month" ? "week" : "month"))
-                  }
-                >
-                  <span className="material-symbols-outlined">
-                    calendar_view_week
-                  </span>
-                </button>
+                <>
+                  <select
+                    className="input"
+                    value={calendarDateMode}
+                    onChange={(e) => setCalendarDateMode(e.target.value)}
+                    style={{ height: 40, width: 170 }}
+                    title="Qué fechas mostrar"
+                    aria-label="Qué fechas mostrar"
+                  >
+                    <option value="carga">Cargas</option>
+                    <option value="descarga">Descargas</option>
+                    <option value="ambos">Ambos</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title={
+                      calMode === "month"
+                        ? "Cambiar a vista semanal"
+                        : "Cambiar a vista mensual"
+                    }
+                    onClick={() =>
+                      setCalMode((m) => (m === "month" ? "week" : "month"))
+                    }
+                  >
+                    <span className="material-symbols-outlined">
+                      calendar_view_week
+                    </span>
+                  </button>
+                </>
               )}
               {debugEnabled && (
                 <button
@@ -1997,6 +2067,7 @@ export default function Loads() {
             {toolbarMenu === "search" && (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
+                  ref={searchInputRef}
                   className="input"
                   style={{ width: "100%", height: 36 }}
                   placeholder="Buscar por barco, terminal o estado"
@@ -2496,8 +2567,14 @@ export default function Loads() {
           onPrevMonth={prevPeriod}
           onNextMonth={nextPeriod}
           onItemClick={goDetail}
-          dateKey="fecha_de_carga_raw"
-          secondaryDateKey="fecha_de_descarga_raw"
+          dateKey={
+            calendarDateMode === "descarga"
+              ? "fecha_de_descarga_raw"
+              : "fecha_de_carga_raw"
+          }
+          secondaryDateKey={
+            calendarDateMode === "ambos" ? "fecha_de_descarga_raw" : undefined
+          }
           statusKey="estado_viaje"
         />
       )}

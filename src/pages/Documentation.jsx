@@ -591,6 +591,12 @@ export default function Documentation() {
       .map((l) => {
         const id = String(l?._id || l?.id || "").trim();
         if (!id) return null;
+
+        const estado = String(l?.estado_viaje || l?.estado || "")
+          .trim()
+          .toLowerCase();
+        if (estado === "entregado" || estado === "cancelado") return null;
+
         const nombre = String(l?.nombre || "").trim();
         const barcoId = getMixedId(l?.barco);
         const barcoNombre = barcoId
@@ -1074,19 +1080,6 @@ export default function Documentation() {
             >
               Crear Carta de Porte
             </button>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ fontWeight: 700 }}>Secciones</div>
-            <div style={{ color: "var(--text-secondary)" }}>
-              Esta página está preparada para añadir guías internas, flujos de
-              trabajo y preguntas frecuentes.
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <span>• Cargas</span>
-              <span>• Palets</span>
-              <span>• Agenda diaria</span>
-              <span>• Roles y permisos</span>
-            </div>
           </div>
         </div>
       </section>

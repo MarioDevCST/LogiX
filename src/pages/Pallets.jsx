@@ -77,6 +77,80 @@ function combineDateTime(dateValue, timeValue) {
   return d;
 }
 
+function normalizePalletNumber(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return String(Number(raw));
+  return raw.toLowerCase();
+}
+
+function NumericPad({ onDigit, onDelete, onAccept, disabled } = {}) {
+  const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        background: "#fff",
+        padding: 10,
+        boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+        width: 180,
+      }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 8,
+        }}
+      >
+        {digits.slice(0, 9).map((d) => (
+          <button
+            key={d}
+            type="button"
+            className="secondary-button"
+            disabled={disabled}
+            onClick={() => onDigit?.(d)}
+            style={{ padding: "10px 0", fontWeight: 800 }}
+          >
+            {d}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={disabled}
+          onClick={() => onDelete?.()}
+          style={{ padding: "10px 0", fontWeight: 800 }}
+          title="Borrar"
+        >
+          ⌫
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={disabled}
+          onClick={() => onDigit?.("0")}
+          style={{ padding: "10px 0", fontWeight: 800 }}
+        >
+          0
+        </button>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={disabled}
+          onClick={() => onAccept?.()}
+          style={{ padding: "10px 0", fontWeight: 800 }}
+          title="Aceptar"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Pallets({
   title = "Palets",
   restrictLoadEstado = "Preparando",
@@ -93,6 +167,10 @@ export default function Pallets({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [numeroPadOpen, setNumeroPadOpen] = useState(false);
+  const numeroPadRootRef = useRef(null);
+  const [duplicatePalletOpen, setDuplicatePalletOpen] = useState(false);
+  const [duplicatePalletNumero, setDuplicatePalletNumero] = useState("");
   const [expandedLoadId, setExpandedLoadId] = useState(null);
   const [dragPalletId, setDragPalletId] = useState("");
   const [dragPalletTipo, setDragPalletTipo] = useState("");
@@ -269,6 +347,22 @@ export default function Pallets({
     setProductoCantidad("");
     setOpen(true);
   };
+
+  useEffect(() => {
+    if (!numeroPadOpen) return;
+    const onPointerDown = (e) => {
+      const root = numeroPadRootRef.current;
+      if (!root) return;
+      if (root.contains(e.target)) return;
+      setNumeroPadOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+    };
+  }, [numeroPadOpen]);
 
   const canDnDFuseTo = (targetPallet) => {
     if (!canManagePallets) return false;
@@ -563,6 +657,20 @@ export default function Pallets({
         });
         return;
       }
+      const nextNumero = String(form.numero_palet || "").trim();
+      const normalizedNext = normalizePalletNumber(nextNumero);
+      const cargaId = String(form.carga || "").trim();
+      const hasDuplicate = palletDocs.some((p) => {
+        const pCarga = String(p?.carga?._id || p?.carga || "").trim();
+        if (!pCarga || pCarga !== cargaId) return false;
+        const pNumero = String(p?.numero_palet || "").trim();
+        return normalizePalletNumber(pNumero) === normalizedNext;
+      });
+      if (hasDuplicate) {
+        setDuplicatePalletNumero(nextNumero);
+        setDuplicatePalletOpen(true);
+        return;
+      }
       const load = loads.find((l) => String(l._id) === String(form.carga));
       const cargaNombre =
         load?.nombre || load?.barco?.nombre_del_barco || "Sin carga";
@@ -587,6 +695,7 @@ export default function Pallets({
       ]);
       setPalletDocs((prev) => [...prev, created]);
       setOpen(false);
+      setNumeroPadOpen(false);
 
       setForm({
         numero_palet: "",
@@ -1427,18 +1536,59 @@ export default function Pallets({
       <Modal
         open={open}
         title="Crear palet"
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setNumeroPadOpen(false);
+        }}
         onSubmit={submit}
         submitLabel="Crear"
       >
         <div>
           <div className="label">Número de palet</div>
-          <input
-            className="input"
-            value={form.numero_palet}
-            onChange={(e) => setForm({ ...form, numero_palet: e.target.value })}
-            placeholder="Nº de palet"
-          />
+          <div
+            ref={numeroPadRootRef}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <input
+              className="input"
+              value={form.numero_palet}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              onFocus={() => {
+                if (isTouchMode) setNumeroPadOpen(true);
+              }}
+              onClick={() => {
+                if (isTouchMode) setNumeroPadOpen(true);
+              }}
+              onChange={(e) =>
+                setForm({ ...form, numero_palet: e.target.value })
+              }
+              placeholder="Nº de palet"
+              style={{ flex: "1 1 180px", minWidth: 180 }}
+            />
+            {isTouchMode && numeroPadOpen && (
+              <NumericPad
+                onDigit={(d) =>
+                  setForm((p) => ({
+                    ...p,
+                    numero_palet: `${String(p.numero_palet || "")}${d}`,
+                  }))
+                }
+                onDelete={() =>
+                  setForm((p) => ({
+                    ...p,
+                    numero_palet: String(p.numero_palet || "").slice(0, -1),
+                  }))
+                }
+                onAccept={() => setNumeroPadOpen(false)}
+              />
+            )}
+          </div>
         </div>
         <div>
           <div className="label">Tipo</div>
@@ -1736,6 +1886,34 @@ export default function Pallets({
                 No hay productos añadidos.
               </div>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={duplicatePalletOpen}
+        title="Número de palet duplicado"
+        hideClose
+        disableEscape
+        onSubmit={() => {
+          setDuplicatePalletOpen(false);
+          setDuplicatePalletNumero("");
+        }}
+        submitLabel="Aceptar"
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 800 }}>
+            No se puede utilizar el mismo número de palet dentro de la misma
+            carga.
+          </div>
+          <div style={{ color: "var(--text-secondary)" }}>
+            Número introducido:{" "}
+            <span style={{ fontWeight: 800 }}>
+              {String(duplicatePalletNumero || "").trim() || "—"}
+            </span>
+          </div>
+          <div style={{ color: "var(--text-secondary)" }}>
+            Introduce un número diferente para poder crear el palet.
           </div>
         </div>
       </Modal>

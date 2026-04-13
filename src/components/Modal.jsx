@@ -11,6 +11,8 @@ export default function Modal({
   submitLabel = "Aceptar",
   width,
   bodyStyle,
+  hideClose = false,
+  disableEscape = false,
 }) {
   React.useEffect(() => {
     if (!open) return undefined;
@@ -27,11 +29,11 @@ export default function Modal({
   React.useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape" && !disableEscape) onClose?.();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, disableEscape]);
 
   if (!open) return null;
   return (
@@ -39,9 +41,15 @@ export default function Modal({
       <div className="modal-card" style={width ? { width } : undefined}>
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
-          <button className="icon-button" onClick={onClose} aria-label="Cerrar">
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          {!hideClose ? (
+            <button
+              className="icon-button"
+              onClick={onClose}
+              aria-label="Cerrar"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          ) : null}
         </div>
         <div className="modal-body" style={bodyStyle}>
           {children}

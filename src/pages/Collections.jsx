@@ -211,7 +211,7 @@ function LocationsTab() {
         q === "" ||
         r.nombre.toLowerCase().includes(q) ||
         r.ciudad.toLowerCase().includes(q) ||
-        r.puerto.toLowerCase().includes(q)
+        r.puerto.toLowerCase().includes(q),
     );
   }, [rows, query]);
 
@@ -258,7 +258,7 @@ function LocationsTab() {
     }
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-        address
+        address,
       )}&key=${apiKey}&language=es`;
       const res = await fetch(url);
       const json = await res.json();
@@ -688,8 +688,8 @@ function ConsigneesTab() {
       }
       setRows((prev) =>
         prev.map((r) =>
-          r.id === editingId ? { ...r, nombre: updated.nombre } : r
-        )
+          r.id === editingId ? { ...r, nombre: updated.nombre } : r,
+        ),
       );
       setOpenEdit(false);
       setEditingId(null);
@@ -725,7 +725,7 @@ function ConsigneesTab() {
           <input
             className="input"
             style={{ width: 280 }}
-            placeholder="Buscar por nombre"
+            placeholder="Buscar por nombre, dirección, teléfono o email"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -837,8 +837,27 @@ function ConsigneesTab() {
 
 function CompaniesTab() {
   const navigate = useNavigate();
+  const renderDireccionCell = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return "—";
+    return (
+      <div
+        title={text}
+        style={{
+          display: "block",
+          maxWidth: 320,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {text}
+      </div>
+    );
+  };
   const columns = [
     { key: "nombre", header: "Nombre" },
+    { key: "direccion", header: "Dirección" },
     { key: "telefono", header: "Teléfono" },
     { key: "email", header: "Contacto" },
     { key: "fecha", header: "Creación" },
@@ -920,9 +939,12 @@ function CompaniesTab() {
         if (!mounted) return;
         const mapped = list.map((c) => {
           const id = c._id || c.id;
+          const direccionText = String(c.direccion || "");
           return {
             id,
             nombre: c.nombre || "",
+            direccion: renderDireccionCell(direccionText),
+            direccion_text: direccionText,
             telefono: String(c.telefono || ""),
             email: String(c.email || ""),
             fecha: formatDateOnly(c.createdAt || c.fecha_creacion),
@@ -971,12 +993,15 @@ function CompaniesTab() {
       (r) =>
         q === "" ||
         r.nombre.toLowerCase().includes(q) ||
+        String(r.direccion_text || "")
+          .toLowerCase()
+          .includes(q) ||
         String(r.telefono || "")
           .toLowerCase()
           .includes(q) ||
         String(r.email || "")
           .toLowerCase()
-          .includes(q)
+          .includes(q),
     );
   }, [rows, query]);
 
@@ -1015,6 +1040,8 @@ function CompaniesTab() {
         {
           id,
           nombre: created.nombre || "",
+          direccion: renderDireccionCell(created.direccion),
+          direccion_text: String(created.direccion || ""),
           telefono: String(created.telefono || ""),
           email: String(created.email || ""),
           fecha: formatDateOnly(created.createdAt || created.fecha_creacion),
@@ -1088,11 +1115,13 @@ function CompaniesTab() {
             ? {
                 ...r,
                 nombre: updated.nombre,
+                direccion: renderDireccionCell(updated.direccion),
+                direccion_text: String(updated.direccion || ""),
                 telefono: String(updated.telefono || ""),
                 email: String(updated.email || ""),
               }
-            : r
-        )
+            : r,
+        ),
       );
       setOpenEdit(false);
       setEditingId(null);
@@ -1284,7 +1313,9 @@ function CompaniesTab() {
           <input
             className="input"
             value={editForm.email}
-            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            onChange={(e) =>
+              setEditForm({ ...editForm, email: e.target.value })
+            }
             placeholder="correo@ejemplo.com"
           />
         </div>
@@ -1369,10 +1400,7 @@ function ShipsTab() {
         );
         const companyNameByName = new Map(
           companiesList
-            .map((c) => [
-              String(c.nombre || "").toLowerCase(),
-              c.nombre || "",
-            ])
+            .map((c) => [String(c.nombre || "").toLowerCase(), c.nombre || ""])
             .filter((p) => p[0] && p[1]),
         );
         const companyByName = new Map(
@@ -1393,10 +1421,7 @@ function ShipsTab() {
         );
         const cargoTypeNameByName = new Map(
           cargoTypesList
-            .map((t) => [
-              String(t.nombre || "").toLowerCase(),
-              t.nombre || "",
-            ])
+            .map((t) => [String(t.nombre || "").toLowerCase(), t.nombre || ""])
             .filter((p) => p[0] && p[1]),
         );
 
@@ -2087,8 +2112,8 @@ function CargoTypesTab() {
                 ...r,
                 nombre: updated.nombre || "",
               }
-            : r
-        )
+            : r,
+        ),
       );
       setOpenEdit(false);
       setEditingId(null);
@@ -2551,8 +2576,8 @@ function ResponsablesTab() {
                 email: updated.email || "",
                 telefono: updated.telefono || "",
               }
-            : r
-        )
+            : r,
+        ),
       );
       setOpenEdit(false);
       setEditingId(null);

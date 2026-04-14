@@ -226,7 +226,7 @@ export default function Documentation() {
     "CARRER DE L'ATLANTIC Nº 132-136\nPOLÍGONO ZAL BARCELONA\n08040 - BARCELONA (SPAIN)";
   const FIXED_CMR_PLACE_OF_TAKING_OVER =
     "EIS MARITIMO, S.A. (DELEGACIÓN DE BARCELONA)";
-  const FIXED_CMR_ESTABLECIDO_EN = "EIS MARÏTIMO, S.A.";
+  const FIXED_CMR_ESTABLECIDO_EN = "EIS MARÍTIMO, S.A.";
   const FIXED_CARTA_EMPRESA_NOMBRE = "EIS MARÍTIMO S.A. (BARCELONA)";
   const FIXED_CARTA_EMPRESA_DIRECCION =
     "CARRER DE L'ATLANTIC Nº 132-136\nPOLÍGONO ZAL BARCELONA\n08040 - BARCELONA (SPAIN)";
@@ -835,7 +835,7 @@ export default function Documentation() {
               </div>
               <div class="box">
                 <div class="title">CMR</div>
-                <div class="small" style="margin-top:6px">Carta de porte internacional · Lettre de voiture internationale</div>
+                <div class="small" style="margin-top:6px">Carta de porte internacional · Lettre de voiture internationale · International consignment note</div>
               </div>
             </div>
 
@@ -851,7 +851,7 @@ export default function Documentation() {
                   )}</div>
                 </div>
                 <div class="cell">
-                  <div class="small">Portador / Carrier</div>
+                  <div class="small">Portador / Transporteur / Carrier</div>
                   <div class="strong" style="margin-top:4px">${escapeHtml(
                     toUpper(cmr.portador_nombre) || "—",
                   )}</div>
@@ -860,13 +860,13 @@ export default function Documentation() {
                   )}</div>
                   <div style="margin-top:6px" class="row2">
                     <div>
-                      <div class="small">Tractora</div>
+                      <div class="small">Tractora / Tracteur / Tractor</div>
                       <div class="strong">${escapeHtml(
                         toUpper(cmr.matricula_tractora) || "—",
                       )}</div>
                     </div>
                     <div>
-                      <div class="small">Remolque</div>
+                      <div class="small">Remolque / Remorque / Trailer</div>
                       <div class="strong">${escapeHtml(
                         toUpper(cmr.matricula_remolque) || "—",
                       )}</div>
@@ -901,38 +901,38 @@ export default function Documentation() {
             <div class="section">
               <div class="row3">
                 <div class="cell">
-                  <div class="small">Nº bultos</div>
+                  <div class="small">Nº bultos / Nombre de colis / Number of packages</div>
                   <div class="bigNum">${escapeHtml(
                     paletsLabel ? `${paletsLabel} PALLETS` : "—",
                   )}</div>
                 </div>
                 <div class="cell">
-                  <div class="small">Naturaleza de la mercancía</div>
+                  <div class="small">Naturaleza de la mercancía / Nature de la marchandise / Nature of the goods</div>
                   <div class="mono strong" style="margin-top:6px">${escapeHtml(
                     toUpper(cmr.mercancia) || "—",
                   )}</div>
                   <div style="margin-top:6px">
-                    <span class="small">Temperatura: </span>
+                    <span class="small">Temperatura / Température / Temperature: </span>
                     <span class="strong">${escapeHtml(
                       toUpper(cmr.temperatura) || "—",
                     )}</span>
                   </div>
                   <div style="margin-top:6px">
-                    <span class="small">Sello de seguridad / Security seal: </span>
+                    <span class="small">Sello de seguridad / Scellé de sécurité / Security seal: </span>
                     <span class="strong">${escapeHtml(
                       toUpper(cmr.sello_seguridad) || "—",
                     )}</span>
                   </div>
                 </div>
                 <div class="cell">
-                  <div class="small">Peso bruto (kg)</div>
+                  <div class="small">Peso bruto (kg) / Poids brut (kg) / Gross weight (kg)</div>
                   <div class="bigKg">${escapeHtml(
                     String(cmr.peso_bruto_kg || "").trim()
                       ? `${String(cmr.peso_bruto_kg).trim()} KG`
                       : "—",
                   )}</div>
                   <div style="margin-top:10px" class="small">
-                    Volumen m3: <span class="strong">${escapeHtml(
+                    Volumen (m³) / Volume (m³) / Volume (m³): <span class="strong">${escapeHtml(
                       String(cmr.volumen_m3 || "").trim() || "—",
                     )}</span>
                   </div>
@@ -940,14 +940,14 @@ export default function Documentation() {
               </div>
               <div class="sep"></div>
               <div class="cell">
-                <div class="small">Instrucciones / Instructions</div>
+                <div class="small">Instrucciones / Instructions / Instructions</div>
                 <div class="strong" style="margin-top:4px">${escapeHtml(
                   toUpper(cmr.instrucciones) || "—",
                 )}</div>
               </div>
               <div class="sep"></div>
               <div class="cell">
-                <div class="small">Cantidad total / Total quantity</div>
+                <div class="small">Cantidad total / Quantité totale / Total quantity</div>
                 <div class="strong" style="margin-top:4px">${escapeHtml(
                   toUpper(totalCantidad) || "—",
                 )}</div>
@@ -1444,11 +1444,8 @@ export default function Documentation() {
                 <div className="label">Establecido en</div>
                 <input
                   className="input"
-                  value={cmr.establecido_en}
-                  onChange={(e) =>
-                    setCmr((p) => ({ ...p, establecido_en: e.target.value }))
-                  }
-                  placeholder="Ej: BARCELONA"
+                  value={FIXED_CMR_ESTABLECIDO_EN}
+                  readOnly
                 />
               </div>
               <div style={{ display: "grid", gap: 6 }}>
@@ -1543,7 +1540,7 @@ export default function Documentation() {
                 </div>
                 <div style={{ marginTop: 6, fontSize: 10, color: "#374151" }}>
                   Carta de porte internacional · Lettre de voiture
-                  internationale
+                  internationale · International consignment note
                 </div>
                 <div style={{ marginTop: 6, fontSize: 10, color: "#6b7280" }}>
                   Preview (plantilla)
@@ -1591,7 +1588,7 @@ export default function Documentation() {
                 }}
               >
                 <div style={{ fontSize: 10, color: "#374151" }}>
-                  Portador / Carrier
+                  Portador / Transporteur / Carrier
                 </div>
                 <div style={{ fontWeight: 800, marginTop: 4 }}>
                   {String(cmr.portador_nombre || "").toUpperCase() || "—"}
@@ -1615,7 +1612,7 @@ export default function Documentation() {
                 >
                   <div>
                     <div style={{ fontSize: 10, color: "#374151" }}>
-                      Tractora
+                      Tractora / Tracteur / Tractor
                     </div>
                     <div style={{ fontWeight: 900 }}>
                       {String(cmr.matricula_tractora || "").toUpperCase() ||
@@ -1624,7 +1621,7 @@ export default function Documentation() {
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: "#374151" }}>
-                      Remolque
+                      Remolque / Remorque / Trailer
                     </div>
                     <div style={{ fontWeight: 900 }}>
                       {String(cmr.matricula_remolque || "").toUpperCase() ||
@@ -1685,7 +1682,7 @@ export default function Documentation() {
               >
                 <div style={{ padding: 10, borderRight: "1px solid #9ca3af" }}>
                   <div style={{ fontSize: 10, color: "#374151" }}>
-                    Nº bultos
+                    Nº bultos / Nombre de colis / Number of packages
                   </div>
                   <div
                     style={{
@@ -1705,7 +1702,8 @@ export default function Documentation() {
                 </div>
                 <div style={{ padding: 10, borderRight: "1px solid #9ca3af" }}>
                   <div style={{ fontSize: 10, color: "#374151" }}>
-                    Naturaleza mercancía
+                    Naturaleza de la mercancía / Nature de la marchandise /
+                    Nature of the goods
                   </div>
                   <div
                     style={{
@@ -1718,7 +1716,7 @@ export default function Documentation() {
                   </div>
                   <div style={{ marginTop: 6 }}>
                     <span style={{ fontSize: 10, color: "#374151" }}>
-                      Temperatura:{" "}
+                      Temperatura / Température / Temperature:{" "}
                     </span>
                     <span style={{ fontWeight: 900 }}>
                       {String(cmr.temperatura || "").toUpperCase() || "—"}
@@ -1726,7 +1724,8 @@ export default function Documentation() {
                   </div>
                   <div style={{ marginTop: 6 }}>
                     <span style={{ fontSize: 10, color: "#374151" }}>
-                      Sello de seguridad / Security seal:{" "}
+                      Sello de seguridad / Scellé de sécurité / Security
+                      seal:{" "}
                     </span>
                     <span style={{ fontWeight: 900 }}>
                       {String(cmr.sello_seguridad || "").toUpperCase() || "—"}
@@ -1735,7 +1734,7 @@ export default function Documentation() {
                 </div>
                 <div style={{ padding: 10 }}>
                   <div style={{ fontSize: 10, color: "#374151" }}>
-                    Peso bruto (kg)
+                    Peso bruto (kg) / Poids brut (kg) / Gross weight (kg)
                   </div>
                   <div
                     style={{
@@ -1751,7 +1750,7 @@ export default function Documentation() {
                   <div
                     style={{ marginTop: 10, fontSize: 10, color: "#374151" }}
                   >
-                    Volumen m3:{" "}
+                    Volumen (m³) / Volume (m³) / Volume (m³):{" "}
                     <span style={{ fontWeight: 800 }}>
                       {String(cmr.volumen_m3 || "").trim() || "—"}
                     </span>
@@ -1760,7 +1759,7 @@ export default function Documentation() {
               </div>
               <div style={{ borderTop: "1px solid #9ca3af", padding: 10 }}>
                 <div style={{ fontSize: 10, color: "#374151" }}>
-                  Instrucciones / Instructions
+                  Instrucciones / Instructions / Instructions
                 </div>
                 <div style={{ fontWeight: 800, marginTop: 4 }}>
                   {String(cmr.instrucciones || "").toUpperCase() || "—"}

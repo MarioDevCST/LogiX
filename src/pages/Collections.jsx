@@ -729,13 +729,6 @@ function ConsigneesTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button
-            className="icon-button"
-            onClick={onCreate}
-            title="Crear consignatario"
-          >
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -1157,13 +1150,6 @@ function CompaniesTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button
-            className="icon-button"
-            onClick={onCreate}
-            title="Crear empresa"
-          >
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -2149,13 +2135,6 @@ function CargoTypesTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button
-            className="icon-button"
-            onClick={onCreate}
-            title="Crear tipo de carga"
-          >
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -2614,13 +2593,6 @@ function ResponsablesTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button
-            className="icon-button"
-            onClick={onCreate}
-            title="Crear responsable"
-          >
-            <span className="material-symbols-outlined">add_box</span>
-          </button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button

@@ -10,6 +10,60 @@ import {
   fetchAllShips,
 } from "../firebase/auth.js";
 
+function CollapsibleSection({ title, isOpen, onToggle, children }) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        background: "#fff",
+        overflow: "visible",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          fontWeight: 800,
+          width: "100%",
+          border: "none",
+          background: "transparent",
+          padding: "10px 12px",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <span>{title}</span>
+        <span
+          className="material-symbols-outlined"
+          style={{
+            fontSize: 20,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {isOpen ? "expand_less" : "expand_more"}
+        </span>
+      </button>
+      {isOpen && (
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+            padding: "10px 12px 12px 12px",
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SearchableSelect({
   value,
   onChange,
@@ -224,63 +278,8 @@ export default function Documentation() {
   const [cmrFormSections, setCmrFormSections] = useState(
     getDefaultCmrFormSections,
   );
-
-  const CmrSection = ({ id, title, children }) => {
-    const isOpen = !!cmrFormSections[id];
-    const toggle = () => {
-      setCmrFormSections((p) => ({ ...p, [id]: !p[id] }));
-    };
-    return (
-      <div
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          background: "#fff",
-          overflow: "visible",
-        }}
-      >
-        <button
-          type="button"
-          onClick={toggle}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            fontWeight: 800,
-            width: "100%",
-            border: "none",
-            background: "transparent",
-            padding: "10px 12px",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span>{title}</span>
-          <span
-            className="material-symbols-outlined"
-            style={{
-              fontSize: 20,
-              color: "var(--text-secondary)",
-            }}
-          >
-            {isOpen ? "expand_less" : "expand_more"}
-          </span>
-        </button>
-        {isOpen && (
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: "10px 12px 12px 12px",
-              borderTop: "1px solid var(--border)",
-            }}
-          >
-            {children}
-          </div>
-        )}
-      </div>
-    );
+  const toggleCmrSection = (id) => {
+    setCmrFormSections((p) => ({ ...p, [id]: !p[id] }));
   };
 
   const getDefaultCartaFormSections = () => ({
@@ -295,63 +294,8 @@ export default function Documentation() {
   const [cartaFormSections, setCartaFormSections] = useState(
     getDefaultCartaFormSections,
   );
-
-  const CartaSection = ({ id, title, children }) => {
-    const isOpen = !!cartaFormSections[id];
-    const toggle = () => {
-      setCartaFormSections((p) => ({ ...p, [id]: !p[id] }));
-    };
-    return (
-      <div
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          background: "#fff",
-          overflow: "visible",
-        }}
-      >
-        <button
-          type="button"
-          onClick={toggle}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            fontWeight: 800,
-            width: "100%",
-            border: "none",
-            background: "transparent",
-            padding: "10px 12px",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span>{title}</span>
-          <span
-            className="material-symbols-outlined"
-            style={{
-              fontSize: 20,
-              color: "var(--text-secondary)",
-            }}
-          >
-            {isOpen ? "expand_less" : "expand_more"}
-          </span>
-        </button>
-        {isOpen && (
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: "10px 12px 12px 12px",
-              borderTop: "1px solid var(--border)",
-            }}
-          >
-            {children}
-          </div>
-        )}
-      </div>
-    );
+  const toggleCartaSection = (id) => {
+    setCartaFormSections((p) => ({ ...p, [id]: !p[id] }));
   };
 
   const getEmptyCartaPorte = () => ({
@@ -1111,7 +1055,11 @@ export default function Documentation() {
             height: "100%",
           }}
         >
-          <CmrSection id="asignar" title="Asignar carga">
+          <CollapsibleSection
+            title="Asignar carga"
+            isOpen={!!cmrFormSections.asignar}
+            onToggle={() => toggleCmrSection("asignar")}
+          >
             <div className="label">Asignar carga (opcional)</div>
             <SearchableSelect
               value={cmr.load_id}
@@ -1206,9 +1154,13 @@ export default function Documentation() {
               searchPlaceholder="Buscar carga..."
               disabled={catalogLoading}
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="destinatario" title="Destinatario">
+          <CollapsibleSection
+            title="Destinatario"
+            isOpen={!!cmrFormSections.destinatario}
+            onToggle={() => toggleCmrSection("destinatario")}
+          >
             <SearchableSelect
               value={cmr.destinatario_terminal_id}
               onChange={(id) => {
@@ -1249,9 +1201,13 @@ export default function Documentation() {
               rows={2}
               style={{ resize: "vertical" }}
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="carga" title="Carga">
+          <CollapsibleSection
+            title="Carga"
+            isOpen={!!cmrFormSections.carga}
+            onToggle={() => toggleCmrSection("carga")}
+          >
             <input
               className="input"
               value={cmr.lugar_carga}
@@ -1266,9 +1222,13 @@ export default function Documentation() {
                 setCmr((p) => ({ ...p, fecha_carga: e.target.value }))
               }
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="documentos" title="Documentos anexos">
+          <CollapsibleSection
+            title="Documentos anexos"
+            isOpen={!!cmrFormSections.documentos}
+            onToggle={() => toggleCmrSection("documentos")}
+          >
             <input
               className="input"
               value={cmr.documentos_anexos}
@@ -1277,9 +1237,13 @@ export default function Documentation() {
               }
               placeholder="Ej: DOCUMENTS & INVOICES"
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="portador" title="Portador">
+          <CollapsibleSection
+            title="Portador"
+            isOpen={!!cmrFormSections.portador}
+            onToggle={() => toggleCmrSection("portador")}
+          >
             <SearchableSelect
               value={cmr.portador_empresa_id}
               onChange={(id) => {
@@ -1358,9 +1322,13 @@ export default function Documentation() {
                 />
               </div>
             </div>
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="mercancia" title="Mercancía">
+          <CollapsibleSection
+            title="Mercancía"
+            isOpen={!!cmrFormSections.mercancia}
+            onToggle={() => toggleCmrSection("mercancia")}
+          >
             <div className="label">Naturaleza de la mercancía</div>
             <textarea
               className="input"
@@ -1372,9 +1340,13 @@ export default function Documentation() {
               rows={2}
               style={{ resize: "vertical" }}
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="medidas" title="Palets y medidas">
+          <CollapsibleSection
+            title="Palets y medidas"
+            isOpen={!!cmrFormSections.medidas}
+            onToggle={() => toggleCmrSection("medidas")}
+          >
             <div
               style={{
                 display: "grid",
@@ -1438,9 +1410,13 @@ export default function Documentation() {
                 />
               </div>
             </div>
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="instrucciones" title="Instrucciones">
+          <CollapsibleSection
+            title="Instrucciones"
+            isOpen={!!cmrFormSections.instrucciones}
+            onToggle={() => toggleCmrSection("instrucciones")}
+          >
             <div className="label">Instrucciones del remitente</div>
             <input
               className="input"
@@ -1450,9 +1426,13 @@ export default function Documentation() {
               }
               placeholder="Ej: ENTREGAR AL BUQUE..."
             />
-          </CmrSection>
+          </CollapsibleSection>
 
-          <CmrSection id="establecido" title="Establecido en">
+          <CollapsibleSection
+            title="Establecido en"
+            isOpen={!!cmrFormSections.establecido}
+            onToggle={() => toggleCmrSection("establecido")}
+          >
             <div
               style={{
                 display: "grid",
@@ -1483,7 +1463,7 @@ export default function Documentation() {
                 />
               </div>
             </div>
-          </CmrSection>
+          </CollapsibleSection>
         </div>
 
         <div
@@ -1879,7 +1859,11 @@ export default function Documentation() {
             alignContent: "start",
           }}
         >
-          <CartaSection id="asignar" title="Asignar carga (opcional)">
+          <CollapsibleSection
+            title="Asignar carga (opcional)"
+            isOpen={!!cartaFormSections.asignar}
+            onToggle={() => toggleCartaSection("asignar")}
+          >
             <SearchableSelect
               value={cartaPorte.load_id}
               onChange={(id) => {
@@ -1952,9 +1936,13 @@ export default function Documentation() {
               searchPlaceholder="Buscar carga..."
               disabled={catalogLoading}
             />
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="datos" title="Datos del transporte">
+          <CollapsibleSection
+            title="Datos del transporte"
+            isOpen={!!cartaFormSections.datos}
+            onToggle={() => toggleCartaSection("datos")}
+          >
             <div style={{ display: "grid", gap: 6 }}>
               <div className="label">Fecha de transporte</div>
               <input
@@ -2052,9 +2040,13 @@ export default function Documentation() {
                 />
               </div>
             </div>
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="empresas" title="Empresas">
+          <CollapsibleSection
+            title="Empresas"
+            isOpen={!!cartaFormSections.empresas}
+            onToggle={() => toggleCartaSection("empresas")}
+          >
             <div style={{ display: "grid", gap: 6 }}>
               <div className="label">Empresa cargadora (fija)</div>
               <input
@@ -2136,9 +2128,13 @@ export default function Documentation() {
                 style={{ resize: "vertical" }}
               />
             </div>
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="transportista" title="Transportista">
+          <CollapsibleSection
+            title="Transportista"
+            isOpen={!!cartaFormSections.transportista}
+            onToggle={() => toggleCartaSection("transportista")}
+          >
             <div style={{ display: "grid", gap: 6 }}>
               <div className="label">Conductor</div>
               <input
@@ -2176,9 +2172,13 @@ export default function Documentation() {
                 }
               />
             </div>
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="destinatario" title="Destinatario">
+          <CollapsibleSection
+            title="Destinatario"
+            isOpen={!!cartaFormSections.destinatario}
+            onToggle={() => toggleCartaSection("destinatario")}
+          >
             <input
               className="input"
               value={cartaPorte.destinatario_nombre}
@@ -2203,9 +2203,13 @@ export default function Documentation() {
               rows={2}
               style={{ resize: "vertical" }}
             />
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="mercancia" title="Mercancía transportada">
+          <CollapsibleSection
+            title="Mercancía transportada"
+            isOpen={!!cartaFormSections.mercancia}
+            onToggle={() => toggleCartaSection("mercancia")}
+          >
             <textarea
               className="input"
               value={cartaPorte.mercancia}
@@ -2216,9 +2220,13 @@ export default function Documentation() {
               rows={2}
               style={{ resize: "vertical" }}
             />
-          </CartaSection>
+          </CollapsibleSection>
 
-          <CartaSection id="medidas" title="Medidas (Palets, Temp, Peso)">
+          <CollapsibleSection
+            title="Medidas (Palets, Temp, Peso)"
+            isOpen={!!cartaFormSections.medidas}
+            onToggle={() => toggleCartaSection("medidas")}
+          >
             <div
               style={{
                 display: "grid",
@@ -2263,7 +2271,7 @@ export default function Documentation() {
                 />
               </div>
             </div>
-          </CartaSection>
+          </CollapsibleSection>
         </div>
 
         <div

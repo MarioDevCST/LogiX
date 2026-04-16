@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import * as ReactRouterDom from "react-router-dom";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import {
@@ -32,15 +32,21 @@ function formatDateLabel(value) {
 }
 
 export default function PalletLoading() {
-  const navigate = useNavigate();
+  const navigate = ReactRouterDom.useNavigate();
   const [loading, setLoading] = useState(true);
   const [loads, setLoads] = useState([]);
   const [pallets, setPallets] = useState([]);
   const [expandedLoadId, setExpandedLoadId] = useState("");
-  const [selectedByLoadId, setSelectedByLoadId] = useState({});
+  const [hasPalletStateChanges, setHasPalletStateChanges] = useState(false);
+  const [expandedProductsByPalletId, setExpandedProductsByPalletId] = useState(
+    {},
+  );
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  const [pendingPath, setPendingPath] = useState("");
   const [finalizeSubmitting, setFinalizeSubmitting] = useState(false);
   const [finalizeLoadIdSubmitting, setFinalizeLoadIdSubmitting] = useState("");
   const [groupByTipoByLoadId, setGroupByTipoByLoadId] = useState({});
+  const [hideUnloadedByLoadId, setHideUnloadedByLoadId] = useState({});
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoadId, setReportLoadId] = useState("");
   const [reportOperators, setReportOperators] = useState([]);
@@ -58,6 +64,69 @@ export default function PalletLoading() {
     message: "",
     type: "success",
   });
+
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!hasPalletStateChanges) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasPalletStateChanges]);
+
+  useEffect(() => {
+    if (!hasPalletStateChanges) return;
+    const onClickCapture = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const a = target.closest("a");
+      if (!a) return;
+      if (a.target && a.target !== "_self") return;
+      if (a.hasAttribute("download")) return;
+      if (!a.href) return;
+      let url;
+      try {
+        url = new URL(a.href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      const cur = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (!next || next === cur) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingPath(next);
+      setLeavePromptOpen(true);
+    };
+    document.addEventListener("click", onClickCapture, true);
+    return () => document.removeEventListener("click", onClickCapture, true);
+  }, [hasPalletStateChanges]);
+
+  const guardedNavigate = (to) => {
+    const next = String(to || "").trim();
+    if (!next) return;
+    if (!hasPalletStateChanges) {
+      navigate(next);
+      return;
+    }
+    setPendingPath(next);
+    setLeavePromptOpen(true);
+  };
+
+  const confirmLeave = () => {
+    const next = String(pendingPath || "").trim();
+    setLeavePromptOpen(false);
+    setPendingPath("");
+    setHasPalletStateChanges(false);
+    if (next) navigate(next);
+  };
+
+  const cancelLeave = () => {
+    setLeavePromptOpen(false);
+    setPendingPath("");
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -166,6 +235,16 @@ export default function PalletLoading() {
     if (t === "repuestos") return "#fee2e2";
     return "var(--hover)";
   };
+  const tipoColor = (tipo) => {
+    const t = normalizeTipo(tipo);
+    if (t === "congelado") return "#2563eb";
+    if (t === "refrigerado") return "#16a34a";
+    if (t === "seco") return "#d97706";
+    if (t === "técnico" || t === "tecnico") return "#7c3aed";
+    if (t === "fruta y verdura") return "#0f766e";
+    if (t === "repuestos") return "#dc2626";
+    return "#64748b";
+  };
 
   const role = getCurrentRole() || getCurrentUser()?.role || null;
   const canManagePallets = hasPermission(role, PERMISSIONS.MANAGE_PALLETS);
@@ -263,18 +342,41 @@ export default function PalletLoading() {
     return filtered.slice(start, end);
   }, [filtered, page, pageSize]);
 
-  const togglePallet = (loadId, palletId) => {
-    const lid = String(loadId || "");
-    const pid = String(palletId || "");
+  const togglePallet = async (loadId, palletId) => {
+    const lid = String(loadId || "").trim();
+    const pid = String(palletId || "").trim();
     if (!lid || !pid) return;
-    setSelectedByLoadId((prev) => {
-      const next = { ...prev };
-      const set = new Set((next[lid] || []).map((v) => String(v)));
-      if (set.has(pid)) set.delete(pid);
-      else set.add(pid);
-      next[lid] = Array.from(set);
-      return next;
-    });
+
+    const current = pallets.find((p) => String(p?._id || p?.id || "") === pid);
+    const nextEstado = !(current?.estado === true);
+    setHasPalletStateChanges(true);
+
+    setPallets((prev) =>
+      prev.map((p) => {
+        const id = String(p?._id || p?.id || "");
+        if (!id || id !== pid) return p;
+        return { ...p, estado: nextEstado };
+      }),
+    );
+
+    try {
+      await updatePalletById(pid, { estado: nextEstado });
+    } catch (e) {
+      setPallets((prev) =>
+        prev.map((p) => {
+          const id = String(p?._id || p?.id || "");
+          if (!id || id !== pid) return p;
+          return { ...p, estado: current?.estado === true };
+        }),
+      );
+      setSnack({
+        open: true,
+        message: String(
+          e?.message || "No se pudo actualizar el estado del palet",
+        ),
+        type: "error",
+      });
+    }
   };
 
   const toggleGroupByTipo = (loadId) => {
@@ -283,6 +385,24 @@ export default function PalletLoading() {
     setGroupByTipoByLoadId((prev) => ({
       ...prev,
       [id]: !prev?.[id],
+    }));
+  };
+
+  const toggleHideUnloaded = (loadId) => {
+    const id = String(loadId || "");
+    if (!id) return;
+    setHideUnloadedByLoadId((prev) => ({
+      ...prev,
+      [id]: !prev?.[id],
+    }));
+  };
+
+  const togglePalletProducts = (palletId) => {
+    const pid = String(palletId || "").trim();
+    if (!pid) return;
+    setExpandedProductsByPalletId((prev) => ({
+      ...prev,
+      [pid]: !prev?.[pid],
     }));
   };
 
@@ -416,8 +536,10 @@ export default function PalletLoading() {
       });
       return;
     }
-    const selectedIds = (selectedByLoadId[id] || [])
-      .map((v) => String(v))
+    const palletsInLoad = palletsByLoadId.get(id) || [];
+    const selectedIds = palletsInLoad
+      .filter((p) => p?.estado === true)
+      .map((p) => String(p?._id || p?.id || ""))
       .filter(Boolean);
     if (selectedIds.length === 0) {
       setSnack({
@@ -519,11 +641,6 @@ export default function PalletLoading() {
           ),
         );
       }
-      setSelectedByLoadId((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
       if (expandedLoadId === id) setExpandedLoadId("");
       setSnack({
         open: true,
@@ -587,8 +704,38 @@ export default function PalletLoading() {
               const expanded = expandedLoadId === loadId;
               const palletsInLoad = palletsByLoadId.get(loadId) || [];
               const selectedSet = new Set(
-                (selectedByLoadId[loadId] || []).map((v) => String(v)),
+                palletsInLoad
+                  .filter((p) => p?.estado === true)
+                  .map((p) => String(p?._id || p?.id || ""))
+                  .filter(Boolean),
               );
+              const loadedCount = selectedSet.size;
+              const totalCount = palletsInLoad.length;
+              const loadedPct = totalCount
+                ? Math.round((loadedCount / totalCount) * 100)
+                : 0;
+              const tipoMap = new Map();
+              palletsInLoad.forEach((p) => {
+                const tipo = normalizeTipo(p?.tipo) || "sin_tipo";
+                tipoMap.set(tipo, (tipoMap.get(tipo) || 0) + 1);
+              });
+              const tipoEntries = Array.from(tipoMap.entries()).sort((a, b) => {
+                const ao = tipoOrder(a[0]);
+                const bo = tipoOrder(b[0]);
+                if (ao !== bo) return ao - bo;
+                return String(a[0]).localeCompare(String(b[0]), "es", {
+                  sensitivity: "base",
+                });
+              });
+              let acumuladoPct = 0;
+              const donutSegments = tipoEntries
+                .map(([tipo, count]) => {
+                  const start = acumuladoPct;
+                  const end = start + (count / Math.max(totalCount, 1)) * 100;
+                  acumuladoPct = end;
+                  return `${tipoColor(tipo)} ${start}% ${end}%`;
+                })
+                .join(", ");
               return (
                 <div key={loadId} style={{ marginBottom: 8 }}>
                   <div
@@ -640,7 +787,7 @@ export default function PalletLoading() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/app/logistica/cargas/${loadId}`);
+                          guardedNavigate(`/app/logistica/cargas/${loadId}`);
                         }}
                       >
                         <span className="material-symbols-outlined">
@@ -677,34 +824,190 @@ export default function PalletLoading() {
                       <div
                         style={{
                           display: "flex",
-                          justifyContent: "flex-start",
-                          alignItems: "center",
-                          gap: 10,
+                          justifyContent: "space-between",
+                          alignItems: "stretch",
+                          gap: 12,
+                          flexWrap: "wrap",
                         }}
                       >
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          onClick={() => toggleGroupByTipo(loadId)}
-                          title="Separar por tipo"
+                        <div style={{ display: "grid", gap: 8 }}>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={() => toggleGroupByTipo(loadId)}
+                            title="Separar por tipo"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "8px 10px",
+                              height: 36,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span className="material-symbols-outlined">
+                              filter_alt
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: 13 }}>
+                              {groupByTipoByLoadId[loadId]
+                                ? "Ver por número"
+                                : "Separar por tipo"}
+                            </span>
+                          </button>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={() => toggleHideUnloaded(loadId)}
+                            title={
+                              hideUnloadedByLoadId[loadId]
+                                ? "Mostrar todos los palets"
+                                : "Ocultar cargados"
+                            }
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "8px 10px",
+                              height: 36,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span className="material-symbols-outlined">
+                              {hideUnloadedByLoadId[loadId]
+                                ? "visibility_off"
+                                : "visibility"}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: 13 }}>
+                              {hideUnloadedByLoadId[loadId]
+                                ? "Mostrar todos"
+                                : "Ocultar cargados"}
+                            </span>
+                          </button>
+                        </div>
+
+                        <div
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "8px 10px",
-                            height: 36,
-                            whiteSpace: "nowrap",
+                            flex: 1,
+                            minWidth: 280,
+                            border: "1px solid var(--border)",
+                            borderRadius: 10,
+                            padding: 10,
+                            display: "grid",
+                            gap: 10,
                           }}
                         >
-                          <span className="material-symbols-outlined">
-                            filter_alt
-                          </span>
-                          <span style={{ fontWeight: 700, fontSize: 13 }}>
-                            {groupByTipoByLoadId[loadId]
-                              ? "Ver por número"
-                              : "Separar por tipo"}
-                          </span>
-                        </button>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 12,
+                              alignItems: "center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 74,
+                                height: 74,
+                                borderRadius: "50%",
+                                background:
+                                  totalCount > 0 && donutSegments
+                                    ? `conic-gradient(${donutSegments})`
+                                    : "#e5e7eb",
+                                display: "grid",
+                                placeItems: "center",
+                                flex: "0 0 auto",
+                              }}
+                              title="Distribución de palets por tipo"
+                            >
+                              <div
+                                style={{
+                                  width: 46,
+                                  height: 46,
+                                  borderRadius: "50%",
+                                  background: "#fff",
+                                  display: "grid",
+                                  placeItems: "center",
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {totalCount}
+                              </div>
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  marginBottom: 4,
+                                }}
+                              >
+                                Carga completada
+                              </div>
+                              <div
+                                style={{
+                                  height: 10,
+                                  borderRadius: 999,
+                                  background: "var(--hover)",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: `${loadedPct}%`,
+                                    height: "100%",
+                                    background:
+                                      loadedPct >= 100 ? "#16a34a" : "#2563eb",
+                                  }}
+                                />
+                              </div>
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  fontSize: 12,
+                                  color: "var(--text-secondary)",
+                                }}
+                              >
+                                {loadedCount}/{totalCount} cargados ({loadedPct}
+                                %)
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 8,
+                            }}
+                          >
+                            {tipoEntries.map(([tipo, count]) => (
+                              <div
+                                key={`${loadId}-tipo-${tipo}`}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                  color: "var(--text-secondary)",
+                                  border: "1px solid var(--border)",
+                                  borderRadius: 999,
+                                  padding: "3px 8px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: "50%",
+                                    background: tipoColor(tipo),
+                                  }}
+                                />
+                                {tipoLabel(tipo)}: {count}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       {palletsInLoad.length === 0 ? (
@@ -714,85 +1017,190 @@ export default function PalletLoading() {
                       ) : (
                         (() => {
                           const byTipo = !!groupByTipoByLoadId[loadId];
+                          const hideLoaded = !!hideUnloadedByLoadId[loadId];
                           const baseSort = (a, b) =>
                             String(a?.numero_palet || "").localeCompare(
                               String(b?.numero_palet || ""),
                               "es",
                               { numeric: true, sensitivity: "base" },
                             );
-                          const list = palletsInLoad.slice();
-                          if (!byTipo) {
-                            return list.sort(baseSort).map((p) => {
-                              const pid = String(p?._id || p?.id || "");
-                              const checked = selectedSet.has(pid);
-                              const numero = String(
-                                p?.numero_palet || "",
-                              ).trim();
-                              const tipo = String(p?.tipo || "").trim();
-                              const base = String(p?.base || "").trim();
-                              const productos = String(
-                                p?.productos || "",
-                              ).trim();
-                              return (
-                                <label
-                                  key={pid || numero}
-                                  style={{
-                                    display: "flex",
-                                    gap: 10,
-                                    alignItems: "flex-start",
-                                    padding: "10px 10px",
-                                    border: "1px solid var(--border)",
-                                    borderRadius: 10,
-                                    cursor: "pointer",
-                                    background: checked
-                                      ? tipoTint(tipo)
-                                      : "#fff",
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => togglePallet(loadId, pid)}
-                                    style={{ marginTop: 3 }}
-                                  />
-                                  <div style={{ minWidth: 0, flex: 1 }}>
+                          const list = (
+                            hideLoaded
+                              ? palletsInLoad.filter((p) => p?.estado !== true)
+                              : palletsInLoad
+                          ).slice();
+                          if (list.length === 0) {
+                            return (
+                              <div style={{ color: "var(--text-secondary)" }}>
+                                {hideLoaded
+                                  ? "No hay palets pendientes para mostrar"
+                                  : "Sin palets en esta carga"}
+                              </div>
+                            );
+                          }
+                          const renderPalletCard = (p, key) => {
+                            const pid = String(p?._id || p?.id || "");
+                            const checked = selectedSet.has(pid);
+                            const numero = String(p?.numero_palet || "").trim();
+                            const tipo = String(p?.tipo || "").trim();
+                            const base = String(p?.base || "").trim();
+                            const productos = String(p?.productos || "").trim();
+                            const hasProducts = !!productos;
+                            const productsExpanded =
+                              !!expandedProductsByPalletId[pid];
+                            return (
+                              <label
+                                key={key}
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  alignItems: "stretch",
+                                  padding: "10px 10px",
+                                  border: "1px solid var(--border)",
+                                  borderRadius: 10,
+                                  cursor: "pointer",
+                                  background: checked ? tipoTint(tipo) : "#fff",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => togglePallet(loadId, pid)}
+                                  style={{ marginTop: 3 }}
+                                />
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 800,
+                                      fontSize: 16,
+                                      lineHeight: "20px",
+                                    }}
+                                  >
+                                    {numero || "—"}
+                                  </div>
+                                  <div
+                                    style={{
+                                      color: "var(--text-secondary)",
+                                      fontSize: 13,
+                                      lineHeight: "16px",
+                                    }}
+                                  >
+                                    {[tipo, base].filter(Boolean).join(" · ") ||
+                                      "—"}
+                                  </div>
+                                  {hasProducts && productsExpanded ? (
                                     <div
                                       style={{
-                                        fontWeight: 800,
-                                        fontSize: 16,
-                                        lineHeight: "20px",
-                                      }}
-                                    >
-                                      {numero || "—"}
-                                    </div>
-                                    <div
-                                      style={{
-                                        color: "var(--text-secondary)",
+                                        marginTop: 6,
                                         fontSize: 13,
                                         lineHeight: "16px",
+                                        color: "var(--text-secondary)",
+                                        whiteSpace: "pre-wrap",
                                       }}
                                     >
-                                      {[tipo, base]
-                                        .filter(Boolean)
-                                        .join(" · ") || "—"}
+                                      {productos}
                                     </div>
-                                    {productos ? (
-                                      <div
-                                        style={{
-                                          marginTop: 6,
-                                          fontSize: 13,
-                                          lineHeight: "16px",
-                                          color: "var(--text-secondary)",
-                                          whiteSpace: "pre-wrap",
-                                        }}
-                                      >
-                                        {productos}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </label>
-                              );
-                            });
+                                  ) : null}
+                                </div>
+                                <div
+                                  style={{
+                                    marginLeft: "auto",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    title={
+                                      hasProducts
+                                        ? productsExpanded
+                                          ? "Ocultar productos"
+                                          : "Ver productos"
+                                        : "Sin productos"
+                                    }
+                                    aria-label={
+                                      hasProducts
+                                        ? productsExpanded
+                                          ? "Ocultar productos"
+                                          : "Ver productos"
+                                        : "Sin productos"
+                                    }
+                                    disabled={!hasProducts}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (!hasProducts) return;
+                                      togglePalletProducts(pid);
+                                    }}
+                                    style={{
+                                      height: 28,
+                                      minWidth: 94,
+                                      border: "1px solid var(--border)",
+                                      borderRadius: 999,
+                                      background: hasProducts
+                                        ? "#fff"
+                                        : "#f3f4f6",
+                                      cursor: hasProducts
+                                        ? "pointer"
+                                        : "not-allowed",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: 4,
+                                      padding: "0 10px",
+                                      color: hasProducts
+                                        ? "#374151"
+                                        : "#9ca3af",
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: 16 }}
+                                    >
+                                      {hasProducts
+                                        ? productsExpanded
+                                          ? "expand_less"
+                                          : "expand_more"
+                                        : "block"}
+                                    </span>
+                                    {hasProducts
+                                      ? productsExpanded
+                                        ? "Ocultar"
+                                        : "Productos"
+                                      : "Sin prod."}
+                                  </button>
+                                </div>
+                              </label>
+                            );
+                          };
+                          if (!byTipo) {
+                            return (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "repeat(2, minmax(0, 1fr))",
+                                  gap: 8,
+                                }}
+                              >
+                                {list
+                                  .sort(baseSort)
+                                  .map((p) =>
+                                    renderPalletCard(
+                                      p,
+                                      String(
+                                        p?._id ||
+                                          p?.id ||
+                                          p?.numero_palet ||
+                                          "",
+                                      ),
+                                    ),
+                                  )}
+                              </div>
+                            );
                           }
 
                           const grouped = new Map();
@@ -816,108 +1224,61 @@ export default function PalletLoading() {
                             },
                           );
 
-                          return keys.flatMap((k) => {
+                          return keys.map((k) => {
                             const items = grouped.get(k) || [];
                             items.sort(baseSort);
                             const label = tipoLabel(k);
-                            const header = (
+                            return (
                               <div
-                                key={`header-${k || "sin-tipo"}`}
+                                key={`group-${k || "sin-tipo"}`}
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
+                                  display: "grid",
                                   gap: 8,
-                                  padding: "6px 8px",
-                                  borderRadius: 10,
-                                  background: tipoTint(k),
-                                  border: "1px solid var(--border)",
-                                  fontWeight: 800,
                                 }}
                               >
-                                {label}
-                                <span
-                                  style={{
-                                    color: "var(--text-secondary)",
-                                    fontWeight: 700,
-                                    fontSize: 12,
-                                  }}
-                                >
-                                  {items.length}
-                                </span>
-                              </div>
-                            );
-                            const rows = items.map((p) => {
-                              const pid = String(p?._id || p?.id || "");
-                              const checked = selectedSet.has(pid);
-                              const numero = String(
-                                p?.numero_palet || "",
-                              ).trim();
-                              const tipo = String(p?.tipo || "").trim();
-                              const base = String(p?.base || "").trim();
-                              const productos = String(
-                                p?.productos || "",
-                              ).trim();
-                              return (
-                                <label
-                                  key={pid || `${k}-${numero}`}
+                                <div
                                   style={{
                                     display: "flex",
-                                    gap: 10,
-                                    alignItems: "flex-start",
-                                    padding: "10px 10px",
-                                    border: "1px solid var(--border)",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "6px 8px",
                                     borderRadius: 10,
-                                    cursor: "pointer",
-                                    background: checked
-                                      ? tipoTint(tipo)
-                                      : "#fff",
+                                    background: tipoTint(k),
+                                    border: "1px solid var(--border)",
+                                    fontWeight: 800,
                                   }}
                                 >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => togglePallet(loadId, pid)}
-                                    style={{ marginTop: 3 }}
-                                  />
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div
-                                      style={{
-                                        fontWeight: 800,
-                                        fontSize: 16,
-                                        lineHeight: "20px",
-                                      }}
-                                    >
-                                      {numero || "—"}
-                                    </div>
-                                    <div
-                                      style={{
-                                        color: "var(--text-secondary)",
-                                        fontSize: 13,
-                                        lineHeight: "16px",
-                                      }}
-                                    >
-                                      {[tipo, base]
-                                        .filter(Boolean)
-                                        .join(" · ") || "—"}
-                                    </div>
-                                    {productos ? (
-                                      <div
-                                        style={{
-                                          marginTop: 6,
-                                          fontSize: 13,
-                                          lineHeight: "16px",
-                                          color: "var(--text-secondary)",
-                                          whiteSpace: "pre-wrap",
-                                        }}
-                                      >
-                                        {productos}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </label>
-                              );
-                            });
-                            return [header, ...rows];
+                                  {label}
+                                  <span
+                                    style={{
+                                      color: "var(--text-secondary)",
+                                      fontWeight: 700,
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    {items.length}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                      "repeat(2, minmax(0, 1fr))",
+                                    gap: 8,
+                                  }}
+                                >
+                                  {items.map((p) => {
+                                    const pid = String(
+                                      p?._id || p?.id || p?.numero_palet || "",
+                                    );
+                                    return renderPalletCard(
+                                      p,
+                                      `${k || "sin-tipo"}-${pid}`,
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
                           });
                         })()
                       )}
@@ -934,7 +1295,7 @@ export default function PalletLoading() {
                           type="button"
                           disabled={
                             !canFinalize ||
-                            (selectedByLoadId[loadId] || []).length === 0 ||
+                            selectedSet.size === 0 ||
                             (finalizeSubmitting &&
                               String(finalizeLoadIdSubmitting) === loadId)
                           }
@@ -953,6 +1314,29 @@ export default function PalletLoading() {
       </section>
 
       <Modal
+        open={leavePromptOpen}
+        title="Vas a salir de Carga de Palets"
+        onClose={cancelLeave}
+        onSubmit={confirmLeave}
+        submitLabel="Salir"
+        cancelLabel="Quedarme"
+        width={560}
+        footerStyle={{ gap: 16 }}
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ color: "var(--text-secondary)" }}>
+            Si sales ahora, los palets que hayas marcado se quedarán guardados
+            como <strong>Cargados</strong>.
+          </div>
+          <div style={{ color: "var(--text-secondary)" }}>
+            Si vuelves a entrar más tarde, verás los checks tal y como los has
+            dejado. Si desmarcas un palet, se volverá a guardar como{" "}
+            <strong>No cargado</strong>.
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={reportOpen}
         title="Informe de carga"
         onClose={() => setReportOpen(false)}
@@ -962,9 +1346,10 @@ export default function PalletLoading() {
         width={680}
       >
         {(() => {
-          const ids = (selectedByLoadId[reportLoadId] || []).map((v) =>
-            String(v),
-          );
+          const ids = (palletsByLoadId.get(String(reportLoadId || "")) || [])
+            .filter((p) => p?.estado === true)
+            .map((p) => String(p?._id || p?.id || ""))
+            .filter(Boolean);
           return (
             <div
               style={{

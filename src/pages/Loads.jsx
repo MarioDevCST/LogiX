@@ -398,20 +398,24 @@ export default function Loads() {
 
   // mes de calendario
   const [calMonth, setCalMonth] = useState(() => new Date());
-  const [calMode, setCalMode] = useState("month");
+  const [calMode, setCalMode] = useState("week");
   const [calendarDateMode, setCalendarDateMode] = useState("carga");
   const prevPeriod = () =>
-    setCalMonth((d) =>
-      calMode === "week"
-        ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7)
-        : new Date(d.getFullYear(), d.getMonth() - 1, 1),
-    );
+    setCalMonth((d) => {
+      if (calMode === "week")
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7);
+      if (calMode === "fortnight")
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 14);
+      return new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    });
   const nextPeriod = () =>
-    setCalMonth((d) =>
-      calMode === "week"
-        ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7)
-        : new Date(d.getFullYear(), d.getMonth() + 1, 1),
-    );
+    setCalMonth((d) => {
+      if (calMode === "week")
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+      if (calMode === "fortnight")
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 14);
+      return new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    });
 
   // nuevos estados base para recomputar filas con palets
   const [loadDocs, setLoadDocs] = useState([]);
@@ -1927,22 +1931,18 @@ export default function Loads() {
                     <option value="descarga">Descargas</option>
                     <option value="ambos">Ambos</option>
                   </select>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    title={
-                      calMode === "month"
-                        ? "Cambiar a vista semanal"
-                        : "Cambiar a vista mensual"
-                    }
-                    onClick={() =>
-                      setCalMode((m) => (m === "month" ? "week" : "month"))
-                    }
+                  <select
+                    className="input"
+                    value={calMode}
+                    onChange={(e) => setCalMode(e.target.value)}
+                    style={{ height: 40, width: 140 }}
+                    title="Modo de vista"
+                    aria-label="Modo de vista"
                   >
-                    <span className="material-symbols-outlined">
-                      calendar_view_week
-                    </span>
-                  </button>
+                    <option value="week">Semanal</option>
+                    <option value="fortnight">Quincenal</option>
+                    <option value="month">Mensual</option>
+                  </select>
                 </>
               )}
               {debugEnabled && (
@@ -1961,6 +1961,7 @@ export default function Loads() {
               type="button"
               onClick={() => setShowHistory((v) => !v)}
               style={{
+                marginLeft: "auto",
                 height: 40,
                 padding: "0 12px",
                 border: `1px solid ${historyInUse ? "#c7d2fe" : "#e5e7eb"}`,

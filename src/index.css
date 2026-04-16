@@ -638,12 +638,17 @@ body {
   padding: 8px;
   min-height: 110px;
 }
+.calendar-weekday {
+  min-height: auto;
+  padding: 6px 8px;
+}
 .calendar-cell-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.1;
 }
 .calendar-item {
   margin-top: 6px;

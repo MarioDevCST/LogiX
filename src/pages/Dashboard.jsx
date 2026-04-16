@@ -348,7 +348,8 @@ export default function Dashboard() {
   const isOffice = role === ROLES.OFICINA;
   const canViewAnalytics = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
   const [range, setRange] = useState("today");
-  const [month, setMonth] = useState(new Date());
+  const [month, setMonth] = useState(() => new Date());
+  const [calMode, setCalMode] = useState("week");
   const [calendarDateMode, setCalendarDateMode] = useState("carga");
   const [loading, setLoading] = useState(true);
   const [loads, setLoads] = useState([]);
@@ -836,13 +837,32 @@ export default function Dashboard() {
               <option value="descarga">Descargas</option>
               <option value="ambos">Ambos</option>
             </select>
+
+            <select
+              className="input"
+              value={calMode}
+              onChange={(e) => setCalMode(e.target.value)}
+              style={{ height: 40, width: 140 }}
+              title="Modo de vista"
+              aria-label="Modo de vista"
+            >
+              <option value="week">Semanal</option>
+              <option value="fortnight">Quincenal</option>
+              <option value="month">Mensual</option>
+            </select>
           </div>
 
           <Calendar
-            title="Cargas (semana)"
+            title={
+              calMode === "week"
+                ? "Cargas (semana)"
+                : calMode === "fortnight"
+                  ? "Cargas (quincena)"
+                  : "Cargas (mes)"
+            }
             items={calendarItems}
             month={month}
-            mode="week"
+            mode={calMode}
             loading={loading}
             dateKey={
               calendarDateMode === "descarga"
@@ -856,14 +876,20 @@ export default function Dashboard() {
             onPrevMonth={() =>
               setMonth((d) => {
                 const next = new Date(d);
-                next.setDate(next.getDate() - 7);
+                if (calMode === "week") next.setDate(next.getDate() - 7);
+                else if (calMode === "fortnight")
+                  next.setDate(next.getDate() - 14);
+                else next.setMonth(next.getMonth() - 1);
                 return next;
               })
             }
             onNextMonth={() =>
               setMonth((d) => {
                 const next = new Date(d);
-                next.setDate(next.getDate() + 7);
+                if (calMode === "week") next.setDate(next.getDate() + 7);
+                else if (calMode === "fortnight")
+                  next.setDate(next.getDate() + 14);
+                else next.setMonth(next.getMonth() + 1);
                 return next;
               })
             }

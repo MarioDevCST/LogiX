@@ -11,6 +11,7 @@ export default function Modal({
   submitLabel = "Aceptar",
   width,
   bodyStyle,
+  footerStyle,
   hideClose = false,
   disableEscape = false,
 }) {
@@ -54,7 +55,7 @@ export default function Modal({
         <div className="modal-body" style={bodyStyle}>
           {children}
         </div>
-        <div className="modal-footer">
+        <div className="modal-footer" style={footerStyle}>
           {cancelLabel ? (
             <button
               className="secondary-button"

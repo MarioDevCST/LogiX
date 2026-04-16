@@ -7,7 +7,11 @@ import {
   PERMISSIONS,
   ROLES,
 } from "../utils/roles.js";
-import { subscribeHasPendingMerma } from "../firebase/auth.js";
+import {
+  subscribeHasPendingMerma,
+  subscribeHasPendingPeticiones,
+  subscribeFeatureOptions,
+} from "../firebase/auth.js";
 
 export default function Sidebar({ collapsed }) {
   const role = getCurrentRole();
@@ -18,8 +22,19 @@ export default function Sidebar({ collapsed }) {
   const isOffice = role === ROLES.OFICINA;
   const isDriver = role === ROLES.CONDUCTOR;
   const showDocumentacion = true;
+  const [featureOptions, setFeatureOptions] = useState({
+    disable_peticiones: false,
+  });
+  const peticionesDisabled = !!featureOptions.disable_peticiones;
+  const showPeticiones =
+    role === ROLES.ADMIN ||
+    (!peticionesDisabled &&
+      (role === ROLES.LOGISTICA || role === ROLES.OFICINA));
+  const shouldShowPeticionesDot =
+    role === ROLES.ADMIN || (!peticionesDisabled && role === ROLES.LOGISTICA);
   const shouldShowMermaDot = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
   const [pendingMerma, setPendingMerma] = useState(false);
+  const [pendingPeticiones, setPendingPeticiones] = useState(false);
   const canViewAdmin = role
     ? hasPermission(role, PERMISSIONS.MANAGE_USERS)
     : false;
@@ -35,6 +50,25 @@ export default function Sidebar({ collapsed }) {
       if (typeof unsubscribe === "function") unsubscribe();
     };
   }, [shouldShowMermaDot]);
+
+  useEffect(() => {
+    if (!shouldShowPeticionesDot) return;
+    const unsubscribe = subscribeHasPendingPeticiones((hasPending) => {
+      setPendingPeticiones(!!hasPending);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [shouldShowPeticionesDot]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeFeatureOptions((opts) => {
+      setFeatureOptions(opts || { disable_peticiones: false });
+    });
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
 
   if (isDriver) {
     return (
@@ -337,15 +371,15 @@ export default function Sidebar({ collapsed }) {
                 <div className="nav-section">Admin</div>
                 <NavLink
                   to="/app/admin/interacciones"
-                  title="Interacciones"
+                  title="Administrador"
                   className={({ isActive }) =>
                     `nav-item ${isActive ? "active" : ""}`
                   }
                 >
                   <span className="nav-icon material-symbols-outlined">
-                    history
+                    admin_panel_settings
                   </span>
-                  <span className="nav-label">Interacciones</span>
+                  <span className="nav-label">Administrador</span>
                 </NavLink>
               </>
             )}
@@ -363,6 +397,21 @@ export default function Sidebar({ collapsed }) {
           </span>
           <span className="nav-label">Cargas</span>
         </NavLink>
+        {showPeticiones && (
+          <NavLink
+            to="/app/logistica/peticiones"
+            title="Peticiones"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <span className="nav-icon material-symbols-outlined nav-icon-with-dot">
+              assignment
+              {shouldShowPeticionesDot && pendingPeticiones && (
+                <span className="nav-dot" />
+              )}
+            </span>
+            <span className="nav-label">Peticiones</span>
+          </NavLink>
+        )}
         {!isOffice && (
           <NavLink
             to="/app/logistica/carga-palets"

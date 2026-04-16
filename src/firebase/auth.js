@@ -124,11 +124,13 @@ function getActorFromLocalStorage() {
 export async function logInteraction({ type, actor, target, details }) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const resolvedActor = actor || getActorFromLocalStorage();
+  const clientCreatedAtMs = Date.now();
   const payload = {
     type: String(type || "").trim(),
     actor: resolvedActor || null,
     target: target || null,
     details: details || null,
+    clientCreatedAtMs,
     createdAt: serverTimestamp(),
   };
   if (!payload.type) return;
@@ -340,6 +342,7 @@ export async function fetchInteractions({ limitCount = 200 } = {}) {
       actor: data.actor || null,
       target: data.target || null,
       details: data.details || null,
+      clientCreatedAtMs: Number(data.clientCreatedAtMs) || 0,
       createdAt: data.createdAt || null,
     });
   });
@@ -364,6 +367,7 @@ export async function fetchInteractionsByActorId({
         actor: data.actor || null,
         target: data.target || null,
         details: data.details || null,
+        clientCreatedAtMs: Number(data.clientCreatedAtMs) || 0,
         createdAt: data.createdAt || null,
       });
     });
@@ -2588,6 +2592,213 @@ export async function deleteShipById(id) {
   return { ok: true };
 }
 
+export async function fetchAllPeticiones() {
+  const docs = await getAllDocsOrdered({
+    collectionName: "peticiones",
+    orderField: "fecha_creacion",
+  });
+  return docs.map(({ docId, data }) => ({
+    ...mapCommonAudit(data, docId),
+    barco: String(data.barco || "").trim(),
+    barco_nombre: String(data.barco_nombre || "").trim(),
+    entrega: Array.isArray(data.entrega) ? data.entrega : [],
+    chofer: String(data.chofer || "").trim(),
+    responsable: String(data.responsable || "").trim(),
+    consignatario: String(data.consignatario || "").trim(),
+    terminal_entrega: String(data.terminal_entrega || "").trim(),
+    fecha_de_carga: String(data.fecha_de_carga || "").trim(),
+    hora_de_carga: String(data.hora_de_carga || "").trim(),
+    fecha_de_descarga: String(data.fecha_de_descarga || "").trim(),
+    hora_de_descarga: String(data.hora_de_descarga || "").trim(),
+    cash: !!data.cash,
+    lancha: !!data.lancha,
+    estado_viaje: String(data.estado_viaje || "").trim(),
+    notas: String(data.notas || "").trim(),
+    estado: String(data.estado || "Pendiente").trim() || "Pendiente",
+    load_id: String(data.load_id || "").trim(),
+    creado_por_uid: String(data.creado_por_uid || "").trim(),
+    creado_por_name: String(data.creado_por_name || "").trim(),
+    creado_por_role: String(data.creado_por_role || "").trim(),
+    modificado_por_uid: String(data.modificado_por_uid || "").trim(),
+    modificado_por_name: String(data.modificado_por_name || "").trim(),
+    modificado_por_role: String(data.modificado_por_role || "").trim(),
+  }));
+}
+
+export async function fetchPeticionById(id) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "peticiones", String(id));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data() || {};
+  return {
+    ...mapCommonAudit(data, snap.id),
+    barco: String(data.barco || "").trim(),
+    barco_nombre: String(data.barco_nombre || "").trim(),
+    entrega: Array.isArray(data.entrega) ? data.entrega : [],
+    chofer: String(data.chofer || "").trim(),
+    responsable: String(data.responsable || "").trim(),
+    consignatario: String(data.consignatario || "").trim(),
+    terminal_entrega: String(data.terminal_entrega || "").trim(),
+    fecha_de_carga: String(data.fecha_de_carga || "").trim(),
+    hora_de_carga: String(data.hora_de_carga || "").trim(),
+    fecha_de_descarga: String(data.fecha_de_descarga || "").trim(),
+    hora_de_descarga: String(data.hora_de_descarga || "").trim(),
+    cash: !!data.cash,
+    lancha: !!data.lancha,
+    estado_viaje: String(data.estado_viaje || "").trim(),
+    notas: String(data.notas || "").trim(),
+    estado: String(data.estado || "Pendiente").trim() || "Pendiente",
+    load_id: String(data.load_id || "").trim(),
+    creado_por_uid: String(data.creado_por_uid || "").trim(),
+    creado_por_name: String(data.creado_por_name || "").trim(),
+    creado_por_role: String(data.creado_por_role || "").trim(),
+    modificado_por_uid: String(data.modificado_por_uid || "").trim(),
+    modificado_por_name: String(data.modificado_por_name || "").trim(),
+    modificado_por_role: String(data.modificado_por_role || "").trim(),
+  };
+}
+
+export async function createPeticion(payload) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const barco = String(payload?.barco || "").trim();
+  const fecha_de_descarga = String(payload?.fecha_de_descarga || "").trim();
+  if (!fecha_de_descarga) throw new Error("fecha_de_descarga es obligatoria");
+
+  const ship = barco ? await fetchShipById(barco).catch(() => null) : null;
+  const barco_nombre = String(
+    ship?.nombre_del_barco || payload?.barco_nombre || "",
+  ).trim();
+  if (!barco_nombre) throw new Error("barco_nombre es obligatorio");
+
+  const actor = getActorFromLocalStorage();
+  const creado_por_uid = String(
+    payload?.creado_por_uid || actor?.id || "",
+  ).trim();
+  const creado_por_name = String(
+    payload?.creado_por_name || actor?.name || payload?.creado_por || "Testing",
+  ).trim();
+  const creado_por_role = String(
+    payload?.creado_por_role || actor?.role || "",
+  ).trim();
+
+  const ref = doc(collection(firebaseDb, "peticiones"));
+  const id = ref.id;
+  await setDoc(ref, {
+    id,
+    barco,
+    barco_nombre,
+    entrega: Array.isArray(payload?.entrega) ? payload.entrega : [],
+    chofer: String(payload?.chofer || "").trim(),
+    responsable: String(payload?.responsable || "").trim(),
+    consignatario: String(payload?.consignatario || "").trim(),
+    terminal_entrega: String(payload?.terminal_entrega || "").trim(),
+    fecha_de_carga: String(payload?.fecha_de_carga || "").trim(),
+    hora_de_carga: String(payload?.hora_de_carga || "").trim(),
+    fecha_de_descarga,
+    hora_de_descarga: String(payload?.hora_de_descarga || "").trim(),
+    cash: !!payload?.cash,
+    lancha: !!payload?.lancha,
+    estado_viaje: String(payload?.estado_viaje || "").trim(),
+    notas: String(payload?.notas || "").trim(),
+    estado: "Pendiente",
+    load_id: "",
+    creado_por_uid,
+    creado_por_name,
+    creado_por_role,
+    modificado_por_uid: "",
+    modificado_por_name: "",
+    modificado_por_role: "",
+    fecha_creacion: serverTimestamp(),
+    fecha_modificacion: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const created = await fetchPeticionById(id);
+  if (created) {
+    withTimeout(
+      logInteraction({
+        type: "petition_created",
+        target: { id: created.id, name: created.barco_nombre || "" },
+        details: {
+          entity: "peticion",
+          snapshot: {
+            barco: created.barco || "",
+            barco_nombre: created.barco_nombre || "",
+            entrega: Array.isArray(payload?.entrega) ? payload.entrega : [],
+            chofer: String(payload?.chofer || "").trim(),
+            responsable: String(payload?.responsable || "").trim(),
+            consignatario: String(payload?.consignatario || "").trim(),
+            terminal_entrega: String(payload?.terminal_entrega || "").trim(),
+            fecha_de_carga: String(payload?.fecha_de_carga || "").trim(),
+            hora_de_carga: String(payload?.hora_de_carga || "").trim(),
+            fecha_de_descarga: created.fecha_de_descarga || "",
+            hora_de_descarga: String(payload?.hora_de_descarga || "").trim(),
+            cash: !!payload?.cash,
+            lancha: !!payload?.lancha,
+            estado_viaje: String(payload?.estado_viaje || "").trim(),
+            notas: String(payload?.notas || "").trim(),
+          },
+        },
+      }),
+      5000,
+    ).catch(() => {});
+  }
+  return created;
+}
+
+export async function updatePeticionById(id, updates) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "peticiones", String(id));
+  const current = await fetchPeticionById(id);
+  if (!current) return null;
+
+  const actor = getActorFromLocalStorage();
+  const patch = { ...updates };
+  if (typeof updates?.modificado_por_uid === "undefined") {
+    patch.modificado_por_uid = String(actor?.id || "").trim();
+  }
+  if (typeof updates?.modificado_por_name === "undefined") {
+    patch.modificado_por_name = String(actor?.name || "").trim();
+  }
+  if (typeof updates?.modificado_por_role === "undefined") {
+    patch.modificado_por_role = String(actor?.role || "").trim();
+  }
+
+  if (typeof updates?.estado !== "undefined") {
+    patch.estado = String(updates?.estado || "").trim() || current.estado;
+  }
+  if (typeof updates?.load_id !== "undefined") {
+    patch.load_id = String(updates?.load_id || "").trim();
+  }
+  if (typeof updates?.fecha_de_descarga !== "undefined") {
+    patch.fecha_de_descarga = String(updates?.fecha_de_descarga || "").trim();
+  }
+  if (typeof updates?.barco !== "undefined") {
+    patch.barco = String(updates?.barco || "").trim();
+  }
+  if (typeof updates?.barco_nombre !== "undefined") {
+    patch.barco_nombre = String(updates?.barco_nombre || "").trim();
+  }
+
+  await updateDoc(ref, {
+    ...patch,
+    fecha_modificacion: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const updated = await fetchPeticionById(id);
+  if (updated) {
+    queueInteraction({
+      type: "petition_updated",
+      target: { id: updated.id, name: updated.barco_nombre || "" },
+      details: { entity: "peticion", updates: patch || {} },
+    });
+  }
+  return updated;
+}
+
 export async function fetchAllMessages() {
   const docs = await getAllDocsOrdered({
     collectionName: "messages",
@@ -3082,6 +3293,83 @@ export function subscribeHasPendingMerma(onChange) {
       onChange(false);
     },
   );
+}
+
+export async function hasPendingPeticiones() {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const estadoCandidates = ["Pendiente", "pendiente"];
+  for (const estado of estadoCandidates) {
+    const snap = await getDocs(
+      query(
+        collection(firebaseDb, "peticiones"),
+        where("estado", "==", estado),
+        limit(1),
+      ),
+    );
+    if (!snap.empty) return true;
+  }
+  return false;
+}
+
+export function subscribeHasPendingPeticiones(onChange) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  const q = query(
+    collection(firebaseDb, "peticiones"),
+    where("estado", "==", "Pendiente"),
+    limit(1),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      onChange(!snap.empty);
+    },
+    () => {
+      onChange(false);
+    },
+  );
+}
+
+export async function fetchFeatureOptions() {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "app_options", "features");
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() || {} : {};
+  return {
+    disable_peticiones: !!data.disable_peticiones,
+  };
+}
+
+export function subscribeFeatureOptions(onChange) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  if (typeof onChange !== "function")
+    throw new Error("onChange debe ser una función");
+  const ref = doc(firebaseDb, "app_options", "features");
+  return onSnapshot(
+    ref,
+    (snap) => {
+      const data = snap.exists() ? snap.data() || {} : {};
+      onChange({ disable_peticiones: !!data.disable_peticiones });
+    },
+    () => {
+      onChange({ disable_peticiones: false });
+    },
+  );
+}
+
+export async function setDisablePeticiones(disable) {
+  if (!firebaseDb) throw new Error("Firestore no está configurado");
+  const ref = doc(firebaseDb, "app_options", "features");
+  await setDoc(
+    ref,
+    {
+      disable_peticiones: !!disable,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { ok: true };
 }
 
 export async function fetchMermaById(id) {

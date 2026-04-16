@@ -26,7 +26,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && userDoc().data.role == 'admin';
+      return isSignedIn() && userDoc().data.role in ['admin', 'ADMIN', 'Administrador', 'administrador'];
     }
 
     function canManageResponsables() {
@@ -118,8 +118,24 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    match /app_options/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /informes_carga/{id} {
       allow read, write: if isSignedIn();
+    }
+
+    match /peticiones/{id} {
+      function peticionesDisabled() {
+        return exists(/databases/$(database)/documents/app_options/features) &&
+          get(/databases/$(database)/documents/app_options/features).data.disable_peticiones == true;
+      }
+      allow read: if isAdmin() || (!peticionesDisabled() && isSignedIn());
+      allow create: if isAdmin() || (!peticionesDisabled() && isSignedIn() && userRole() in ['dispatcher', 'oficina', 'office']);
+      allow update: if isAdmin() || (!peticionesDisabled() && isSignedIn() && userRole() in ['admin', 'logistic']);
+      allow delete: if isAdmin();
     }
 
     match /productos/{id} {

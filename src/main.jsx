@@ -17,6 +17,8 @@ import Documentation from "./pages/Documentation.jsx";
 import Pallets from "./pages/Pallets.jsx";
 import PalletDetail from "./pages/PalletDetail.jsx";
 import PalletLoading from "./pages/PalletLoading.jsx";
+import Peticiones from "./pages/Peticiones.jsx";
+import PeticionDetail from "./pages/PeticionDetail.jsx";
 import "./index.css";
 import ConsigneeDetail from "./pages/ConsigneeDetail.jsx";
 import Messages from "./pages/Messages.jsx";
@@ -216,6 +218,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               )
             }
           />
+          <Route path="logistica/peticiones" element={<Peticiones />} />
+          <Route path="logistica/peticiones/:id" element={<PeticionDetail />} />
           <Route path="logistica/documentacion" element={<Documentation />} />
           {/* Palets */}
           <Route

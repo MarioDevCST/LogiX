@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import DataTable from "../components/DataTable.jsx";
 import CardGrid from "../components/CardGrid.jsx";
 import Modal from "../components/Modal.jsx";
@@ -28,6 +29,7 @@ import {
   fetchAllUsers,
   fetchLoadsByChoferId,
   logInteraction,
+  updatePeticionById,
 } from "../firebase/auth.js";
 
 const ESTADO_VIAJE_OPTIONS = [
@@ -65,6 +67,8 @@ function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
 
   const selected = useMemo(() => {
     const val = String(value ?? "");
@@ -88,8 +92,9 @@ function SearchableSelect({
     if (!open) return;
     const onDown = (e) => {
       const el = rootRef.current;
-      if (!el) return;
-      if (el.contains(e.target)) return;
+      const menuEl = menuRef.current;
+      if (el && el.contains(e.target)) return;
+      if (menuEl && menuEl.contains(e.target)) return;
       setOpen(false);
       setQuery("");
     };
@@ -98,6 +103,27 @@ function SearchableSelect({
     return () => {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("touchstart", onDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
     };
   }, [open]);
 
@@ -135,93 +161,99 @@ function SearchableSelect({
         </span>
       </button>
 
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            right: 0,
-            zIndex: 50,
-            background: "#fff",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-            <input
-              className="input"
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setOpen(false);
-                  setQuery("");
-                }
-              }}
-            />
-          </div>
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
+            ref={menuRef}
             style={{
-              maxHeight,
-              overflowY: "auto",
-              overscrollBehavior: "contain",
+              position: "fixed",
+              top: menuPos?.top ?? 0,
+              left: menuPos?.left ?? 0,
+              width: menuPos?.width ?? undefined,
+              zIndex: 2000,
+              background: "#fff",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+              overflow: "hidden",
             }}
           >
-            {filtered.length === 0 ? (
-              <div style={{ padding: 12, color: "var(--text-secondary)" }}>
-                Sin resultados
-              </div>
-            ) : (
-              filtered.map((o) => {
-                const val = String(o?.value ?? "");
-                const isSelected = val === String(value ?? "");
-                return (
-                  <button
-                    key={val || o?.label}
-                    type="button"
-                    onClick={() => {
-                      onChange?.(val);
-                      setOpen(false);
-                      setQuery("");
-                    }}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "10px 12px",
-                      border: "none",
-                      background: isSelected ? "var(--hover)" : "#fff",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                    }}
-                  >
-                    <span
+            <div
+              style={{ padding: 10, borderBottom: "1px solid var(--border)" }}
+            >
+              <input
+                className="input"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setOpen(false);
+                    setQuery("");
+                  }
+                }}
+              />
+            </div>
+            <div
+              style={{
+                maxHeight,
+                overflowY: "auto",
+                overscrollBehavior: "contain",
+              }}
+            >
+              {filtered.length === 0 ? (
+                <div style={{ padding: 12, color: "var(--text-secondary)" }}>
+                  Sin resultados
+                </div>
+              ) : (
+                filtered.map((o) => {
+                  const val = String(o?.value ?? "");
+                  const isSelected = val === String(value ?? "");
+                  return (
+                    <button
+                      key={val || o?.label}
+                      type="button"
+                      onClick={() => {
+                        onChange?.(val);
+                        setOpen(false);
+                        setQuery("");
+                      }}
                       style={{
-                        minWidth: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 12px",
+                        border: "none",
+                        background: isSelected ? "var(--hover)" : "#fff",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
                       }}
                     >
-                      {o?.label}
-                    </span>
-                    {isSelected && (
-                      <span className="material-symbols-outlined">check</span>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+                      <span
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {o?.label}
+                      </span>
+                      {isSelected && (
+                        <span className="material-symbols-outlined">check</span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -249,6 +281,7 @@ export default function Loads() {
   );
 
   const navigate = useNavigate();
+  const location = useLocation();
   const todayIso = useMemo(() => {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, "0");
@@ -259,6 +292,7 @@ export default function Loads() {
   const [view, setView] = useState("table");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [peticionFromId, setPeticionFromId] = useState("");
   const [openExportAgenda, setOpenExportAgenda] = useState(false);
   const [exportStep, setExportStep] = useState("config");
   const [exportStart, setExportStart] = useState(todayIso);
@@ -565,6 +599,31 @@ export default function Loads() {
     };
   }, [openDebug, role, canManageLoads]);
 
+  useEffect(() => {
+    const prefill = location?.state?.prefillFromPeticion || null;
+    const id = String(prefill?.id || "").trim();
+    const barco = String(prefill?.barco || "").trim();
+    const fechaDescarga = String(prefill?.fecha_de_descarga || "").trim();
+    if (!id) return;
+    if (!canManageLoads) {
+      setSnack({
+        open: true,
+        message: "No tienes permiso para crear cargas desde peticiones",
+        type: "error",
+      });
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+    setPeticionFromId(id);
+    setForm((prev) => ({
+      ...prev,
+      barco: barco || prev.barco,
+      fecha_de_descarga: fechaDescarga || prev.fecha_de_descarga,
+    }));
+    setOpen(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, canManageLoads, navigate]);
+
   const openExportAgendaModal = () => {
     if (!canExportAgenda) {
       setSnack({
@@ -759,6 +818,20 @@ export default function Loads() {
           id: created.id || created._id,
         },
       ]);
+      if (peticionFromId) {
+        const newLoadId = String(created?.id || created?._id || "").trim();
+        const petitionId = String(peticionFromId || "").trim();
+        setPeticionFromId("");
+        if (petitionId && newLoadId) {
+          updatePeticionById(petitionId, {
+            estado: "Convertida",
+            load_id: newLoadId,
+            modificado_por_uid: currentUserId,
+            modificado_por_name: getCurrentUser()?.name || "Testing",
+            modificado_por_role: roleNormalized,
+          }).catch(() => {});
+        }
+      }
       setOpen(false);
       setForm({
         barco: "",
@@ -3021,6 +3094,7 @@ export default function Loads() {
               onChange={(val) => setForm({ ...form, barco: val })}
               placeholder="Selecciona barco"
               searchPlaceholder="Buscar barco..."
+              maxHeight={420}
               options={[
                 { value: "", label: "Selecciona barco" },
                 ...ships

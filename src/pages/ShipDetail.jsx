@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import {
   deleteShipById,
@@ -285,8 +286,7 @@ export default function ShipDetail() {
         onSubmit={submit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre del barco</div>
+        <FormField label="Nombre del barco">
           <input
             className="input"
             value={form.nombre_del_barco}
@@ -294,9 +294,8 @@ export default function ShipDetail() {
               setForm({ ...form, nombre_del_barco: e.target.value })
             }
           />
-        </div>
-        <div>
-          <div className="label">Empresa</div>
+        </FormField>
+        <FormField label="Empresa">
           <select
             className="input"
             value={form.empresa}
@@ -309,9 +308,8 @@ export default function ShipDetail() {
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Responsable</div>
+        </FormField>
+        <FormField label="Responsable">
           <select
             className="input"
             value={form.responsable}
@@ -325,9 +323,8 @@ export default function ShipDetail() {
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Tipo</div>
+        </FormField>
+        <FormField label="Tipo">
           <select
             className="select"
             value={form.tipo}
@@ -339,9 +336,8 @@ export default function ShipDetail() {
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Tipo de carga</div>
+        </FormField>
+        <FormField label="Tipo de carga">
           <select
             className="input"
             value={form.cargo_type}
@@ -362,16 +358,15 @@ export default function ShipDetail() {
                 </option>
               ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Enlace (opcional)</div>
+        </FormField>
+        <FormField label="Enlace (opcional)">
           <input
             className="input"
             value={form.enlace}
             onChange={(e) => setForm({ ...form, enlace: e.target.value })}
             placeholder="https://..."
           />
-        </div>
+        </FormField>
         {canDeleteShip && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button

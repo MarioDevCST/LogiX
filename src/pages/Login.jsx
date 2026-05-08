@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Snackbar from "../components/Snackbar.jsx";
 import EnvBadge from "../components/EnvBadge.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   firebaseLogin,
   firebaseRegister,
@@ -146,8 +147,7 @@ export default function Login() {
         </div>
         <form onSubmit={submit} className="auth-form">
           {isRegistering && (
-            <div>
-              <div className="label">Nombre</div>
+            <FormField label="Nombre">
               <input
                 className="input"
                 type="text"
@@ -155,10 +155,9 @@ export default function Login() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Tu nombre"
               />
-            </div>
+            </FormField>
           )}
-          <div>
-            <div className="label">Email</div>
+          <FormField label="Email">
             <input
               className="input"
               type="email"
@@ -166,9 +165,8 @@ export default function Login() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="email@dominio.com"
             />
-          </div>
-          <div>
-            <div className="label">Contraseña</div>
+          </FormField>
+          <FormField label="Contraseña">
             <div style={{ position: "relative" }}>
               <input
                 className="input"
@@ -205,7 +203,7 @@ export default function Login() {
                 </span>
               </button>
             </div>
-          </div>
+          </FormField>
           <button className="primary-button" type="submit" disabled={loading}>
             {loading
               ? "Procesando..."

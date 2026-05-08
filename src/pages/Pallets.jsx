@@ -4,6 +4,20 @@ import DataTable from "../components/DataTable.jsx";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
+import NumericPad from "../components/NumericPad.jsx";
+import PalletFuseModal from "../components/PalletFuseModal.jsx";
+import PalletDuplicateModal from "../components/PalletDuplicateModal.jsx";
+import LoadStartConfirmModal from "../components/LoadStartConfirmModal.jsx";
+import ProductsPicker from "../components/ProductsPicker.jsx";
+import FormField from "../components/FormField.jsx";
+import {
+  combineDateTime,
+  formatDateLabel,
+  getTipoColors,
+  getTipoLabel,
+  normalizePalletBase,
+  normalizePalletNumber,
+} from "../utils/pallets.js";
 import {
   getCurrentRole,
   hasPermission,
@@ -27,129 +41,6 @@ const TIPO_OPTIONS = [
   { label: "Fruta y verdura", value: "Fruta y verdura" },
   { label: "Repuestos", value: "Repuestos" },
 ];
-
-function getTipoColors(tipo) {
-  const t = String(tipo || "")
-    .trim()
-    .toLowerCase();
-  if (t === "seco") return { color: "#f59e0b", strong: "#b45309" };
-  if (t === "refrigerado") return { color: "#22c55e", strong: "#15803d" };
-  if (t === "congelado") return { color: "#3b82f6", strong: "#1d4ed8" };
-  if (t === "técnico" || t === "tecnico")
-    return { color: "#a78bfa", strong: "#6d28d9" };
-  if (t === "fruta y verdura") return { color: "#14b8a6", strong: "#0f766e" };
-  if (t === "repuestos") return { color: "#ef4444", strong: "#991b1b" };
-  return { color: "#9ca3af", strong: "#374151" };
-}
-
-function getTipoLabel(tipo) {
-  const t = String(tipo || "")
-    .trim()
-    .toLowerCase();
-  if (t === "seco") return "Seco";
-  if (t === "refrigerado") return "Refr.";
-  if (t === "congelado") return "Cong.";
-  if (t === "técnico" || t === "tecnico") return "Tec";
-  if (t === "fruta y verdura") return "Fr";
-  if (t === "repuestos" || t === "repuesto") return "Rep";
-  return t ? t[0].toUpperCase() : "";
-}
-
-function formatDateLabel(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(d);
-}
-
-function combineDateTime(dateValue, timeValue) {
-  if (!dateValue) return null;
-  const d = new Date(dateValue);
-  if (Number.isNaN(d.getTime())) return null;
-  if (timeValue) {
-    const [hh, mm] = String(timeValue).split(":");
-    d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
-  }
-  return d;
-}
-
-function normalizePalletNumber(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (/^\d+$/.test(raw)) return String(Number(raw));
-  return raw.toLowerCase();
-}
-
-function NumericPad({ onDigit, onDelete, onAccept, disabled } = {}) {
-  const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        background: "#fff",
-        padding: 10,
-        boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-        width: 180,
-      }}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 8,
-        }}
-      >
-        {digits.slice(0, 9).map((d) => (
-          <button
-            key={d}
-            type="button"
-            className="secondary-button"
-            disabled={disabled}
-            onClick={() => onDigit?.(d)}
-            style={{ padding: "10px 0", fontWeight: 800 }}
-          >
-            {d}
-          </button>
-        ))}
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={disabled}
-          onClick={() => onDelete?.()}
-          style={{ padding: "10px 0", fontWeight: 800 }}
-          title="Borrar"
-        >
-          ⌫
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={disabled}
-          onClick={() => onDigit?.("0")}
-          style={{ padding: "10px 0", fontWeight: 800 }}
-        >
-          0
-        </button>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={disabled}
-          onClick={() => onAccept?.()}
-          style={{ padding: "10px 0", fontWeight: 800 }}
-          title="Aceptar"
-        >
-          OK
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function Pallets({
   title = "Palets",
@@ -217,10 +108,7 @@ export default function Pallets({
   });
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [productosItems, setProductosItems] = useState([]);
-  const [productoSearch, setProductoSearch] = useState("");
-  const [productoSuggestOpen, setProductoSuggestOpen] = useState(false);
-  const [selectedProductoId, setSelectedProductoId] = useState("");
-  const [productoCantidad, setProductoCantidad] = useState("");
+  const [productosPickerKey, setProductosPickerKey] = useState(0);
 
   const role = getCurrentRole() || getCurrentUser()?.role || null;
   const canManagePallets =
@@ -341,10 +229,7 @@ export default function Pallets({
       productos: "",
     });
     setProductosItems([]);
-    setProductoSearch("");
-    setProductoSuggestOpen(false);
-    setSelectedProductoId("");
-    setProductoCantidad("");
+    setProductosPickerKey((v) => v + 1);
     setOpen(true);
   };
 
@@ -400,15 +285,6 @@ export default function Pallets({
     );
   };
 
-  const normalizeBase = (value) => {
-    const raw = String(value || "").trim();
-    if (!raw) return "";
-    const lower = raw.toLowerCase();
-    if (lower === "europeo") return "Europeo";
-    if (lower === "americano") return "Americano";
-    return raw;
-  };
-
   const fuseDnDSource = useMemo(() => {
     const sid = String(fuseDnDSourceId || "");
     if (!sid) return null;
@@ -437,13 +313,16 @@ export default function Pallets({
 
     const baseCandidates = Array.from(
       new Set(
-        [normalizeBase(fuseDnDSource?.base), normalizeBase(fuseDnDTarget?.base)]
+        [
+          normalizePalletBase(fuseDnDSource?.base),
+          normalizePalletBase(fuseDnDTarget?.base),
+        ]
           .map((v) => String(v || "").trim())
           .filter(Boolean),
       ),
     );
     const needsBaseChoice = baseCandidates.length > 1;
-    const effectiveBaseChoice = normalizeBase(fuseDnDBaseChoice);
+    const effectiveBaseChoice = normalizePalletBase(fuseDnDBaseChoice);
     if (needsBaseChoice && !effectiveBaseChoice) {
       setSnack({
         open: true,
@@ -588,44 +467,9 @@ export default function Pallets({
       productos: "",
     });
     setProductosItems([]);
-    setProductoSearch("");
-    setProductoSuggestOpen(false);
-    setSelectedProductoId("");
-    setProductoCantidad("");
+    setProductosPickerKey((v) => v + 1);
     setOpen(true);
   };
-
-  const productoSuggestions = useMemo(() => {
-    const q = String(productoSearch || "")
-      .trim()
-      .toLowerCase();
-    if (!q) return [];
-    const list = Array.isArray(productosCatalogo) ? productosCatalogo : [];
-    const matches = list.filter((p) => {
-      const code = String(p?.codigo || "")
-        .trim()
-        .toLowerCase();
-      const name = String(p?.nombre_producto || "")
-        .trim()
-        .toLowerCase();
-      return code.includes(q) || name.includes(q);
-    });
-    matches.sort((a, b) => {
-      const aCode = String(a?.codigo || "").trim();
-      const bCode = String(b?.codigo || "").trim();
-      const aName = String(a?.nombre_producto || "").trim();
-      const bName = String(b?.nombre_producto || "").trim();
-      const aStarts =
-        aCode.toLowerCase().startsWith(q) || aName.toLowerCase().startsWith(q);
-      const bStarts =
-        bCode.toLowerCase().startsWith(q) || bName.toLowerCase().startsWith(q);
-      if (aStarts !== bStarts) return aStarts ? -1 : 1;
-      const aLabel = `${aCode} ${aName}`.trim();
-      const bLabel = `${bCode} ${bName}`.trim();
-      return aLabel.localeCompare(bLabel, "es", { sensitivity: "base" });
-    });
-    return matches.slice(0, 10);
-  }, [productoSearch, productosCatalogo]);
 
   const buildProductosText = (items) => {
     const list = Array.isArray(items) ? items : [];
@@ -705,10 +549,7 @@ export default function Pallets({
         productos: "",
       });
       setProductosItems([]);
-      setProductoSearch("");
-      setProductoSuggestOpen(false);
-      setSelectedProductoId("");
-      setProductoCantidad("");
+      setProductosPickerKey((v) => v + 1);
       setSnack({ open: true, message: "Palet creado", type: "success" });
     } catch (e) {
       const message =
@@ -1484,54 +1325,35 @@ export default function Pallets({
         />
       )}
 
-      <Modal
-        open={openFuseDnD}
-        title="Fusionar palets"
-        onClose={closeFuseDnD}
-        onSubmit={submitFuseDnD}
-        submitLabel="Fusionar"
-        width={520}
-        bodyStyle={{ gridTemplateColumns: "1fr" }}
-      >
-        <div style={{ fontSize: 16 }}>
-          ¿Desea fusionar los palets {fuseDnDSource?.numero_palet || "-"} y{" "}
-          {fuseDnDTarget?.numero_palet || "-"}?
-        </div>
-        {(() => {
-          const baseCandidates = Array.from(
-            new Set(
-              [
-                normalizeBase(fuseDnDSource?.base),
-                normalizeBase(fuseDnDTarget?.base),
-              ]
-                .map((v) => String(v || "").trim())
-                .filter(Boolean),
-            ),
-          );
-          if (baseCandidates.length <= 1) return null;
-          const value =
-            normalizeBase(fuseDnDBaseChoice) ||
-            normalizeBase(fuseDnDTarget?.base) ||
-            baseCandidates[0] ||
-            "";
-          return (
-            <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
-              <div className="label">Base final</div>
-              <select
-                className="select"
-                value={value}
-                onChange={(e) => setFuseDnDBaseChoice(e.target.value)}
-              >
-                {baseCandidates.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-          );
-        })()}
-      </Modal>
+      {(() => {
+        const baseCandidates = Array.from(
+          new Set(
+            [
+              normalizePalletBase(fuseDnDSource?.base),
+              normalizePalletBase(fuseDnDTarget?.base),
+            ]
+              .map((v) => String(v || "").trim())
+              .filter(Boolean),
+          ),
+        );
+        const value =
+          normalizePalletBase(fuseDnDBaseChoice) ||
+          normalizePalletBase(fuseDnDTarget?.base) ||
+          baseCandidates[0] ||
+          "";
+        return (
+          <PalletFuseModal
+            open={openFuseDnD}
+            sourceNumero={fuseDnDSource?.numero_palet || "-"}
+            targetNumero={fuseDnDTarget?.numero_palet || "-"}
+            baseCandidates={baseCandidates}
+            baseValue={value}
+            onBaseChange={(v) => setFuseDnDBaseChoice(v)}
+            onClose={closeFuseDnD}
+            onSubmit={submitFuseDnD}
+          />
+        );
+      })()}
 
       <Modal
         open={open}
@@ -1543,8 +1365,7 @@ export default function Pallets({
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Número de palet</div>
+        <FormField label="Número de palet">
           <div
             ref={numeroPadRootRef}
             style={{
@@ -1589,9 +1410,8 @@ export default function Pallets({
               />
             )}
           </div>
-        </div>
-        <div>
-          <div className="label">Tipo</div>
+        </FormField>
+        <FormField label="Tipo">
           <select
             className="select"
             value={form.tipo}
@@ -1603,9 +1423,8 @@ export default function Pallets({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Base</div>
+        </FormField>
+        <FormField label="Base">
           <select
             className="select"
             value={form.base || "Europeo"}
@@ -1614,9 +1433,8 @@ export default function Pallets({
             <option value="Europeo">Europeo</option>
             <option value="Americano">Americano</option>
           </select>
-        </div>
-        <div>
-          <div className="label">Carga asociada</div>
+        </FormField>
+        <FormField label="Carga asociada">
           <select
             className="select"
             value={form.carga || ""}
@@ -1630,308 +1448,36 @@ export default function Pallets({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Productos</div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div style={{ flex: 1, position: "relative" }}>
-                <input
-                  className="input"
-                  value={productoSearch}
-                  onChange={(e) => {
-                    setProductoSearch(String(e.target.value || ""));
-                    setProductoSuggestOpen(true);
-                    setSelectedProductoId("");
-                  }}
-                  placeholder="Buscar por código o nombre"
-                  onFocus={() => setProductoSuggestOpen(true)}
-                  onBlur={() =>
-                    setTimeout(() => setProductoSuggestOpen(false), 120)
-                  }
-                />
-                {productoSuggestOpen && productoSuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 50,
-                      background: "#fff",
-                      border: "1px solid var(--border)",
-                      borderRadius: 10,
-                      boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                      overflow: "hidden",
-                      maxHeight: 240,
-                      overflowY: "auto",
-                    }}
-                  >
-                    {productoSuggestions.map((p) => {
-                      const pid = String(p?.id || p?._id || "").trim();
-                      const code = String(p?.codigo || "").trim();
-                      const name = String(p?.nombre_producto || "").trim();
-                      const estado = String(p?.estado || "").trim();
-                      return (
-                        <button
-                          key={pid || `${code}-${name}`}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSelectedProductoId(pid);
-                            setProductoSearch(
-                              `${code || "—"} — ${name || "—"}`.trim(),
-                            );
-                            setProductoSuggestOpen(false);
-                          }}
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            padding: "10px 12px",
-                            border: "none",
-                            background: "#fff",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 10,
-                          }}
-                        >
-                          <span style={{ fontWeight: 800 }}>
-                            {code || name || "—"}
-                          </span>
-                          <span
-                            style={{
-                              color: "var(--text-secondary)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {code && name ? name : estado ? `(${estado})` : "—"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <input
-                className="input"
-                style={{ width: 140 }}
-                type="number"
-                step="0.01"
-                min="0"
-                value={productoCantidad}
-                onChange={(e) =>
-                  setProductoCantidad(String(e.target.value || ""))
-                }
-                placeholder="Cantidad"
-              />
-
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  const pid = String(selectedProductoId || "").trim();
-                  const qtyNum = Number(String(productoCantidad || "").trim());
-                  const cantidad = Number.isFinite(qtyNum) ? qtyNum : 0;
-                  if (!pid) {
-                    setSnack({
-                      open: true,
-                      message: "Selecciona un producto",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  if (!cantidad) {
-                    setSnack({
-                      open: true,
-                      message: "La cantidad debe ser mayor que 0",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  const selected = (
-                    Array.isArray(productosCatalogo) ? productosCatalogo : []
-                  ).find((p) => String(p?.id || p?._id || "").trim() === pid);
-                  if (!selected) {
-                    setSnack({
-                      open: true,
-                      message: "Producto no encontrado",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  const code = String(selected?.codigo || "").trim();
-                  const name = String(selected?.nombre_producto || "").trim();
-                  setProductosItems((prev) => {
-                    const list = Array.isArray(prev) ? prev.slice() : [];
-                    const idx = list.findIndex(
-                      (it) =>
-                        String(it?.producto_id || "").trim() === pid ||
-                        String(it?.id || "").trim() === pid,
-                    );
-                    if (idx >= 0) {
-                      const prevQty =
-                        typeof list[idx]?.cantidad === "number"
-                          ? list[idx].cantidad
-                          : Number(String(list[idx]?.cantidad || "").trim());
-                      const nextQty =
-                        (Number.isFinite(prevQty) ? prevQty : 0) + cantidad;
-                      list[idx] = { ...list[idx], cantidad: nextQty };
-                      return list;
-                    }
-                    list.push({
-                      producto_id: pid,
-                      codigo: code,
-                      nombre_producto: name,
-                      cantidad,
-                    });
-                    return list;
-                  });
-                  setProductoSearch("");
-                  setSelectedProductoId("");
-                  setProductoCantidad("");
-                  setProductoSuggestOpen(false);
-                }}
-              >
-                Añadir
-              </button>
-            </div>
-
-            {productosItems.length > 0 ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                {productosItems.map((it, idx) => {
-                  const pid = String(it?.producto_id || it?.id || idx);
-                  const code = String(it?.codigo || "").trim();
-                  const name = String(it?.nombre_producto || "").trim();
-                  const qty =
-                    typeof it?.cantidad === "number"
-                      ? it.cantidad
-                      : Number(String(it?.cantidad || "").trim());
-                  const cantidad = Number.isFinite(qty) ? qty : 0;
-                  return (
-                    <div
-                      key={pid}
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "center",
-                        border: "1px solid var(--border)",
-                        borderRadius: 10,
-                        padding: 10,
-                        background: "#fff",
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 800 }}>
-                          {code || name || "—"}
-                        </div>
-                        <div
-                          style={{
-                            color: "var(--text-secondary)",
-                            fontSize: 13,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {code && name ? name : pid}
-                        </div>
-                      </div>
-                      <input
-                        className="input"
-                        style={{ width: 140 }}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={String(cantidad)}
-                        onChange={(e) => {
-                          const next = Number(
-                            String(e.target.value || "").trim(),
-                          );
-                          setProductosItems((prev) => {
-                            const list = Array.isArray(prev)
-                              ? prev.slice()
-                              : [];
-                            const nextQty = Number.isFinite(next) ? next : 0;
-                            list[idx] = { ...list[idx], cantidad: nextQty };
-                            return list;
-                          });
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="Borrar"
-                        onClick={() => {
-                          setProductosItems((prev) =>
-                            (Array.isArray(prev) ? prev : []).filter(
-                              (_, i) => i !== idx,
-                            ),
-                          );
-                        }}
-                      >
-                        <span className="material-symbols-outlined">
-                          delete
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-                No hay productos añadidos.
-              </div>
-            )}
-          </div>
-        </div>
+        </FormField>
+        <ProductsPicker
+          key={productosPickerKey}
+          catalog={productosCatalogo}
+          items={productosItems}
+          onChangeItems={setProductosItems}
+          onError={(message) => {
+            setSnack({
+              open: true,
+              message: String(message || ""),
+              type: "error",
+            });
+          }}
+        />
       </Modal>
 
-      <Modal
+      <PalletDuplicateModal
         open={duplicatePalletOpen}
-        title="Número de palet duplicado"
-        hideClose
-        disableEscape
-        onSubmit={() => {
+        numero={duplicatePalletNumero}
+        onAccept={() => {
           setDuplicatePalletOpen(false);
           setDuplicatePalletNumero("");
         }}
-        submitLabel="Aceptar"
-      >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 800 }}>
-            No se puede utilizar el mismo número de palet dentro de la misma
-            carga.
-          </div>
-          <div style={{ color: "var(--text-secondary)" }}>
-            Número introducido:{" "}
-            <span style={{ fontWeight: 800 }}>
-              {String(duplicatePalletNumero || "").trim() || "—"}
-            </span>
-          </div>
-          <div style={{ color: "var(--text-secondary)" }}>
-            Introduce un número diferente para poder crear el palet.
-          </div>
-        </div>
-      </Modal>
+      />
 
-      <Modal
+      <LoadStartConfirmModal
         open={openLoadStartConfirm}
-        title="Advertencia"
         onClose={closeStartLoadConfirm}
-        onSubmit={confirmStartLoad}
-        submitLabel="Sí"
-        cancelLabel="Cancelar"
-        width={520}
-        bodyStyle={{ gridTemplateColumns: "1fr" }}
-      >
-        <div style={{ fontSize: 16 }}>
-          Desea cambiar el estado de la carga e iniciar la carga?
-        </div>
-      </Modal>
+        onConfirm={confirmStartLoad}
+      />
 
       <Snackbar
         open={snack.open}

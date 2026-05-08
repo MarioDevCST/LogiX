@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import { fetchCompanyById, updateCompanyById } from "../firebase/auth.js";
 
@@ -135,16 +136,14 @@ export default function CompanyDetail() {
         onSubmit={submit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
-        </div>
-        <div>
-          <div className="label">Dirección (opcional)</div>
+        </FormField>
+        <FormField label="Dirección (opcional)">
           <textarea
             className="input"
             value={form.direccion}
@@ -152,25 +151,23 @@ export default function CompanyDetail() {
             rows={2}
             style={{ resize: "vertical" }}
           />
-        </div>
-        <div>
-          <div className="label">Teléfono (opcional)</div>
+        </FormField>
+        <FormField label="Teléfono (opcional)">
           <input
             className="input"
             value={form.telefono}
             onChange={(e) => setForm({ ...form, telefono: e.target.value })}
             placeholder="+34..."
           />
-        </div>
-        <div>
-          <div className="label">Contacto (opcional)</div>
+        </FormField>
+        <FormField label="Contacto (opcional)">
           <input
             className="input"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             placeholder="correo@ejemplo.com"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar

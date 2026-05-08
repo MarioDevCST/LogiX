@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal.jsx'
 import Snackbar from '../components/Snackbar.jsx'
+import FormField from '../components/FormField.jsx'
 import { getCurrentUser } from '../utils/roles.js'
 import { deleteConsigneeById, fetchConsigneeById, updateConsigneeById } from '../firebase/auth.js'
 
@@ -90,10 +91,9 @@ export default function ConsigneeDetail() {
       </div>
 
       <Modal open={openEdit} title="Editar consignatario" onClose={() => setOpenEdit(false)} onSubmit={submitEdit} submitLabel="Guardar">
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input className="input" value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} placeholder="Nombre" />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar open={snack.open} message={snack.message} type={snack.type} onClose={() => setSnack(s => ({ ...s, open: false }))} />

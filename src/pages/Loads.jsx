@@ -7,6 +7,7 @@ import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
 import Calendar from "../components/Calendar.jsx";
 import SearchableSelect from "../components/SearchableSelect.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   getCurrentRole,
   hasPermission,
@@ -2476,29 +2477,26 @@ export default function Loads() {
       >
         {exportStep === "config" ? (
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Rango de fechas (fecha de carga)</div>
+            <FormField label="Rango de fechas (fecha de carga)">
               <div className="form-row">
-                <div>
-                  <div className="label">Desde</div>
+                <FormField label="Desde">
                   <input
                     type="date"
                     className="input"
                     value={exportStart}
                     onChange={(e) => setExportStart(e.target.value)}
                   />
-                </div>
-                <div>
-                  <div className="label">Hasta</div>
+                </FormField>
+                <FormField label="Hasta">
                   <input
                     type="date"
                     className="input"
                     value={exportEnd}
                     onChange={(e) => setExportEnd(e.target.value)}
                   />
-                </div>
+                </FormField>
               </div>
-            </div>
+            </FormField>
 
             <label className="checkbox-row">
               <input
@@ -2517,22 +2515,22 @@ export default function Loads() {
                 background: "var(--bg)",
               }}
             >
-              <div className="label">Filtros</div>
-              <div style={{ fontSize: 13 }}>
-                {exportUseCurrentFilters ? (
-                  <>
-                    Estado: {estadoFilter || "Todos"} · Barco:{" "}
-                    {barcoFilter || "Todos"} · Búsqueda:{" "}
-                    {query ? `"${query}"` : "—"}
-                  </>
-                ) : (
-                  <>Sin filtros</>
-                )}
-              </div>
+              <FormField label="Filtros" style={{ gap: 6 }}>
+                <div style={{ fontSize: 13 }}>
+                  {exportUseCurrentFilters ? (
+                    <>
+                      Estado: {estadoFilter || "Todos"} · Barco:{" "}
+                      {barcoFilter || "Todos"} · Búsqueda:{" "}
+                      {query ? `"${query}"` : "—"}
+                    </>
+                  ) : (
+                    <>Sin filtros</>
+                  )}
+                </div>
+              </FormField>
             </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Qué cargas incluir</div>
+            <FormField label="Qué cargas incluir" style={{ gap: 6 }}>
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                 <label className="checkbox-row">
                   <input
@@ -2556,7 +2554,7 @@ export default function Loads() {
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                 Candidatas en rango: {exportCandidates.length}
               </div>
-            </div>
+            </FormField>
 
             {exportMode === "select" && (
               <div style={{ display: "grid", gap: 8 }}>
@@ -2773,8 +2771,7 @@ export default function Loads() {
         bodyStyle={{ gridTemplateColumns: "1fr" }}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Env</div>
+          <FormField label="Env" style={{ gap: 6 }}>
             <pre
               style={{
                 margin: 0,
@@ -2788,10 +2785,9 @@ export default function Loads() {
             >
               {JSON.stringify(debugInfo?.env || {}, null, 2)}
             </pre>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Auth (raw)</div>
+          <FormField label="Auth (raw)" style={{ gap: 6 }}>
             <pre
               style={{
                 margin: 0,
@@ -2807,10 +2803,9 @@ export default function Loads() {
             >
               {debugInfo?.authRaw || ""}
             </pre>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Auth (parsed)</div>
+          <FormField label="Auth (parsed)" style={{ gap: 6 }}>
             <pre
               style={{
                 margin: 0,
@@ -2824,10 +2819,9 @@ export default function Loads() {
             >
               {JSON.stringify(debugInfo?.authParsed || {}, null, 2)}
             </pre>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Usuario</div>
+          <FormField label="Usuario" style={{ gap: 6 }}>
             <pre
               style={{
                 margin: 0,
@@ -2852,10 +2846,9 @@ export default function Loads() {
                 2,
               )}
             </pre>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Permisos</div>
+          <FormField label="Permisos" style={{ gap: 6 }}>
             <pre
               style={{
                 margin: 0,
@@ -2869,7 +2862,7 @@ export default function Loads() {
             >
               {JSON.stringify(debugInfo?.permissions || {}, null, 2)}
             </pre>
-          </div>
+          </FormField>
         </div>
       </Modal>
 
@@ -2884,8 +2877,7 @@ export default function Loads() {
       >
         <div style={{ display: "grid", gap: 12 }}>
           {/* Datos básicos */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Barco</div>
+          <FormField label="Barco">
             <SearchableSelect
               value={form.barco}
               onChange={(val) => setForm({ ...form, barco: val })}
@@ -2908,10 +2900,9 @@ export default function Loads() {
                   })),
               ]}
             />
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de carga</div>
+          <FormField label="Fecha y hora de carga">
             <div
               style={{
                 display: "grid",
@@ -2936,10 +2927,9 @@ export default function Loads() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de descarga</div>
+          <FormField label="Fecha y hora de descarga">
             <div
               style={{
                 display: "grid",
@@ -2964,11 +2954,10 @@ export default function Loads() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
           {/* Entrega */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Entrega</div>
+          <FormField label="Entrega">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {ENTREGA_OPTIONS.map((opt) => (
                 <label
@@ -2989,11 +2978,10 @@ export default function Loads() {
                 </label>
               ))}
             </div>
-          </div>
+          </FormField>
 
           {/* Personas */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Responsable</div>
+          <FormField label="Responsable" style={{ gap: 6 }}>
             <SearchableSelect
               value={form.responsable}
               onChange={(val) => setForm({ ...form, responsable: val })}
@@ -3017,9 +3005,8 @@ export default function Loads() {
                   })),
               ]}
             />
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Chofer</div>
+          </FormField>
+          <FormField label="Chofer">
             <SearchableSelect
               value={form.chofer}
               onChange={(val) => setForm({ ...form, chofer: val })}
@@ -3044,9 +3031,8 @@ export default function Loads() {
                   })),
               ]}
             />
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Consignatario</div>
+          </FormField>
+          <FormField label="Consignatario">
             <SearchableSelect
               value={form.consignatario}
               onChange={(val) => setForm({ ...form, consignatario: val })}
@@ -3070,9 +3056,8 @@ export default function Loads() {
                   })),
               ]}
             />
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Terminal de entrega</div>
+          </FormField>
+          <FormField label="Terminal de entrega">
             <SearchableSelect
               value={form.terminal_entrega}
               onChange={(val) => setForm({ ...form, terminal_entrega: val })}
@@ -3107,11 +3092,10 @@ export default function Loads() {
                   }),
               ]}
             />
-          </div>
+          </FormField>
 
           {/* Opciones */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Opciones</div>
+          <FormField label="Opciones">
             <div
               style={{
                 display: "grid",
@@ -3138,11 +3122,10 @@ export default function Loads() {
                 Cobro en efectivo
               </label>
             </div>
-          </div>
+          </FormField>
 
           {/* Estado de carga */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Estado de Carga</div>
+          <FormField label="Estado de Carga">
             <select
               className="select"
               value={form.estado_viaje}
@@ -3156,7 +3139,7 @@ export default function Loads() {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
         </div>
       </Modal>
 
@@ -3168,8 +3151,7 @@ export default function Loads() {
         onSubmit={createShip}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre del barco</div>
+        <FormField label="Nombre del barco">
           <input
             className="input"
             value={shipForm.nombre_del_barco}
@@ -3178,9 +3160,8 @@ export default function Loads() {
             }
             placeholder="Nombre del barco"
           />
-        </div>
-        <div>
-          <div className="label">Empresa (opcional)</div>
+        </FormField>
+        <FormField label="Empresa (opcional)">
           <select
             className="input"
             value={shipForm.empresa}
@@ -3198,9 +3179,8 @@ export default function Loads() {
                 </option>
               ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Enlace (opcional)</div>
+        </FormField>
+        <FormField label="Enlace (opcional)">
           <input
             className="input"
             value={shipForm.enlace}
@@ -3209,7 +3189,7 @@ export default function Loads() {
             }
             placeholder="https://..."
           />
-        </div>
+        </FormField>
       </Modal>
 
       {/* Modal crear usuario (consignatario sin contraseña) */}
@@ -3220,17 +3200,15 @@ export default function Loads() {
         onSubmit={createUser}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={userForm.name}
             onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
             placeholder="Nombre"
           />
-        </div>
-        <div>
-          <div className="label">Email</div>
+        </FormField>
+        <FormField label="Email">
           <input
             className="input"
             value={userForm.email}
@@ -3239,9 +3217,8 @@ export default function Loads() {
             }
             placeholder="email@dominio.com"
           />
-        </div>
-        <div>
-          <div className="label">Rol</div>
+        </FormField>
+        <FormField label="Rol">
           <select
             className="input"
             value={userForm.role}
@@ -3253,10 +3230,9 @@ export default function Loads() {
             <option value="dispatcher">Dispatcher</option>
             <option value="manager">Manager</option>
           </select>
-        </div>
+        </FormField>
         {userForm.role !== "consignee" && (
-          <div>
-            <div className="label">Contraseña</div>
+          <FormField label="Contraseña">
             <input
               className="input"
               type="password"
@@ -3266,7 +3242,7 @@ export default function Loads() {
               }
               placeholder="Contraseña"
             />
-          </div>
+          </FormField>
         )}
       </Modal>
 
@@ -3278,8 +3254,7 @@ export default function Loads() {
         onSubmit={createPallet}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Número de palet</div>
+        <FormField label="Número de palet">
           <input
             className="input"
             value={palletForm.numero_palet}
@@ -3288,9 +3263,8 @@ export default function Loads() {
             }
             placeholder="Nº de palet"
           />
-        </div>
-        <div>
-          <div className="label">Tipo</div>
+        </FormField>
+        <FormField label="Tipo">
           <select
             className="select"
             value={palletForm.tipo}
@@ -3306,9 +3280,8 @@ export default function Loads() {
                 </option>
               ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Base</div>
+        </FormField>
+        <FormField label="Base">
           <select
             className="select"
             value={palletForm.base || "Europeo"}
@@ -3319,7 +3292,7 @@ export default function Loads() {
             <option value="Americano">Americano</option>
             <option value="Europeo">Europeo</option>
           </select>
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar

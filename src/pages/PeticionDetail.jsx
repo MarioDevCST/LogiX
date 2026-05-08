@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
+import { useFeatureOptions } from "../contexts/useFeatureOptions.js";
 import {
   createLoad,
   createShip as createShipFirebase,
@@ -10,7 +12,6 @@ import {
   fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
-  fetchFeatureOptions,
   fetchPeticionById,
   fetchShipById,
   updatePeticionById,
@@ -40,8 +41,9 @@ export default function PeticionDetail() {
   const canView =
     role === ROLES.LOGISTICA || role === ROLES.ADMIN || role === ROLES.OFICINA;
   const canModify = role === ROLES.LOGISTICA || role === ROLES.ADMIN;
-  const [peticionesDisabled, setPeticionesDisabled] = useState(false);
-  const [featureLoaded, setFeatureLoaded] = useState(false);
+  const { featureOptions, loading: featureOptionsLoading } =
+    useFeatureOptions();
+  const peticionesEnabled = featureOptions?.peticiones_enabled !== false;
 
   const [loading, setLoading] = useState(true);
   const [peticion, setPeticion] = useState(null);
@@ -84,27 +86,8 @@ export default function PeticionDetail() {
 
   useEffect(() => {
     if (!canView) return;
-    let mounted = true;
-    fetchFeatureOptions()
-      .then((opts) => {
-        if (!mounted) return;
-        setPeticionesDisabled(!!opts?.disable_peticiones);
-        setFeatureLoaded(true);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setPeticionesDisabled(false);
-        setFeatureLoaded(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [canView]);
-
-  useEffect(() => {
-    if (!canView) return;
-    if (!featureLoaded) return;
-    if (peticionesDisabled && role !== ROLES.ADMIN) {
+    if (featureOptionsLoading) return;
+    if (!peticionesEnabled && role !== ROLES.ADMIN) {
       setLoading(false);
       setPeticion(null);
       setShip(null);
@@ -153,7 +136,7 @@ export default function PeticionDetail() {
     return () => {
       mounted = false;
     };
-  }, [id, canView, featureLoaded, peticionesDisabled, role]);
+  }, [id, canView, featureOptionsLoading, peticionesEnabled, role]);
 
   const barcoLabel = useMemo(() => {
     if (!peticion) return "";
@@ -389,7 +372,7 @@ export default function PeticionDetail() {
       </>
     );
   }
-  if (featureLoaded && peticionesDisabled && role !== ROLES.ADMIN) {
+  if (!featureOptionsLoading && !peticionesEnabled && role !== ROLES.ADMIN) {
     return (
       <>
         <section className="card">
@@ -397,7 +380,7 @@ export default function PeticionDetail() {
             <h2 className="card-title">Petición</h2>
           </div>
           <div style={{ padding: 16, color: "var(--text-secondary)" }}>
-            La funcionalidad de Peticiones está deshabilitada.
+            La funcionalidad de Peticiones no está activa.
           </div>
         </section>
         <Snackbar
@@ -485,8 +468,7 @@ export default function PeticionDetail() {
         width={700}
       >
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Barco</div>
+          <FormField label="Barco" style={{ gap: 6 }}>
             <select
               className="select"
               value={loadForm.barco}
@@ -520,11 +502,10 @@ export default function PeticionDetail() {
                   );
                 })}
             </select>
-          </div>
+          </FormField>
 
           {loadForm.barco === "__manual__" && (
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Nombre del barco</div>
+            <FormField label="Nombre del barco">
               <input
                 className="input"
                 value={loadForm.barco_manual_nombre}
@@ -583,11 +564,10 @@ export default function PeticionDetail() {
                   </div>
                 );
               })()}
-            </div>
+            </FormField>
           )}
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de carga</div>
+          <FormField label="Fecha y hora de carga">
             <div
               style={{
                 display: "grid",
@@ -612,10 +592,9 @@ export default function PeticionDetail() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de descarga</div>
+          <FormField label="Fecha y hora de descarga">
             <div
               style={{
                 display: "grid",
@@ -646,10 +625,9 @@ export default function PeticionDetail() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Entrega</div>
+          <FormField label="Entrega">
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {ENTREGA_OPTIONS.map((opt) => (
                 <label
@@ -672,11 +650,10 @@ export default function PeticionDetail() {
                 </label>
               ))}
             </div>
-          </div>
+          </FormField>
 
           <div className="form-row">
-            <div>
-              <div className="label">Responsable</div>
+            <FormField label="Responsable">
               <select
                 className="select"
                 value={loadForm.responsable}
@@ -694,10 +671,9 @@ export default function PeticionDetail() {
                   );
                 })}
               </select>
-            </div>
+            </FormField>
 
-            <div>
-              <div className="label">Chofer</div>
+            <FormField label="Chofer">
               <select
                 className="select"
                 value={loadForm.chofer}
@@ -717,12 +693,11 @@ export default function PeticionDetail() {
                     );
                   })}
               </select>
-            </div>
+            </FormField>
           </div>
 
           <div className="form-row">
-            <div>
-              <div className="label">Consignatario</div>
+            <FormField label="Consignatario">
               <select
                 className="select"
                 value={loadForm.consignatario}
@@ -740,10 +715,9 @@ export default function PeticionDetail() {
                   );
                 })}
               </select>
-            </div>
+            </FormField>
 
-            <div>
-              <div className="label">Terminal de entrega</div>
+            <FormField label="Terminal de entrega">
               <select
                 className="select"
                 value={loadForm.terminal_entrega}
@@ -764,7 +738,7 @@ export default function PeticionDetail() {
                   );
                 })}
               </select>
-            </div>
+            </FormField>
           </div>
         </div>
       </Modal>
@@ -782,8 +756,7 @@ export default function PeticionDetail() {
         onSubmit={submitCreateShip}
         submitLabel="Crear"
       >
-        <div style={{ display: "grid", gap: 8 }}>
-          <div className="label">Nombre del barco</div>
+        <FormField label="Nombre del barco">
           <input
             className="input"
             value={shipForm.nombre_del_barco}
@@ -792,7 +765,7 @@ export default function PeticionDetail() {
             }
             placeholder="Nombre del barco"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar

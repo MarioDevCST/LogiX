@@ -5,6 +5,8 @@ import Modal from "../components/Modal.jsx";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import SearchableSelect from "../components/SearchableSelect.jsx";
+import FormField from "../components/FormField.jsx";
+import { useFeatureOptions } from "../contexts/useFeatureOptions.js";
 import {
   createPeticion,
   fetchAllConsignees,
@@ -13,7 +15,6 @@ import {
   fetchAllResponsables,
   fetchAllShips,
   fetchAllUsers,
-  fetchFeatureOptions,
 } from "../firebase/auth.js";
 import { getCurrentRole, getCurrentUser, ROLES } from "../utils/roles.js";
 
@@ -45,8 +46,9 @@ export default function Peticiones() {
     role === ROLES.LOGISTICA || role === ROLES.ADMIN || role === ROLES.OFICINA;
   const canFilterEstado = role === ROLES.LOGISTICA || role === ROLES.ADMIN;
   const canCreate = role === ROLES.OFICINA;
-  const [peticionesDisabled, setPeticionesDisabled] = useState(false);
-  const [featureLoaded, setFeatureLoaded] = useState(false);
+  const { featureOptions, loading: featureOptionsLoading } =
+    useFeatureOptions();
+  const peticionesEnabled = featureOptions?.peticiones_enabled !== false;
 
   const [loading, setLoading] = useState(true);
   const [peticiones, setPeticiones] = useState([]);
@@ -85,28 +87,8 @@ export default function Peticiones() {
 
   useEffect(() => {
     if (!canView) return;
-    let mounted = true;
-    fetchFeatureOptions()
-      .then((opts) => {
-        if (!mounted) return;
-        const disabled = !!opts?.disable_peticiones;
-        setPeticionesDisabled(disabled);
-        setFeatureLoaded(true);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setPeticionesDisabled(false);
-        setFeatureLoaded(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [canView]);
-
-  useEffect(() => {
-    if (!canView) return;
-    if (!featureLoaded) return;
-    if (peticionesDisabled && role !== ROLES.ADMIN) {
+    if (featureOptionsLoading) return;
+    if (!peticionesEnabled && role !== ROLES.ADMIN) {
       setLoading(false);
       setPeticiones([]);
       return;
@@ -160,7 +142,7 @@ export default function Peticiones() {
     return () => {
       mounted = false;
     };
-  }, [canView, featureLoaded, peticionesDisabled, role]);
+  }, [canView, featureOptionsLoading, peticionesEnabled, role]);
 
   const shipNameById = useMemo(() => {
     const map = new Map();
@@ -449,7 +431,7 @@ export default function Peticiones() {
       </>
     );
   }
-  if (featureLoaded && peticionesDisabled && role !== ROLES.ADMIN) {
+  if (!featureOptionsLoading && !peticionesEnabled && role !== ROLES.ADMIN) {
     return (
       <>
         <section className="card">
@@ -457,7 +439,7 @@ export default function Peticiones() {
             <h2 className="card-title">Peticiones</h2>
           </div>
           <div style={{ padding: 16, color: "var(--text-secondary)" }}>
-            La funcionalidad de Peticiones está deshabilitada.
+            La funcionalidad de Peticiones no está activa.
           </div>
         </section>
         <Snackbar
@@ -541,8 +523,7 @@ export default function Peticiones() {
         width={720}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Barco</div>
+          <FormField label="Barco">
             <SearchableSelect
               value={form.barco}
               onChange={(val) =>
@@ -573,11 +554,10 @@ export default function Peticiones() {
                   })),
               ]}
             />
-          </div>
+          </FormField>
 
           {form.barco === "__manual__" && (
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Nombre del barco</div>
+            <FormField label="Nombre del barco">
               <input
                 className="input"
                 value={form.barco_nombre}
@@ -586,12 +566,11 @@ export default function Peticiones() {
                 }
                 placeholder="Nombre del barco"
               />
-            </div>
+            </FormField>
           )}
 
           <div className="form-row">
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Fecha y hora de descarga</div>
+            <FormField label="Fecha y hora de descarga">
               <div
                 style={{
                   display: "grid",
@@ -619,10 +598,9 @@ export default function Peticiones() {
                   }
                 />
               </div>
-            </div>
+            </FormField>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Fecha y hora de carga (opcional)</div>
+            <FormField label="Fecha y hora de carga (opcional)">
               <div
                 style={{
                   display: "grid",
@@ -647,11 +625,10 @@ export default function Peticiones() {
                   }
                 />
               </div>
-            </div>
+            </FormField>
           </div>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Entrega (opcional)</div>
+          <FormField label="Entrega (opcional)">
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {ENTREGA_OPTIONS.map((opt) => (
                 <label
@@ -674,11 +651,10 @@ export default function Peticiones() {
                 </label>
               ))}
             </div>
-          </div>
+          </FormField>
 
           <div className="form-row">
-            <div>
-              <div className="label">Responsable (opcional)</div>
+            <FormField label="Responsable (opcional)">
               <SearchableSelect
                 value={form.responsable}
                 onChange={(val) => setForm((p) => ({ ...p, responsable: val }))}
@@ -700,10 +676,9 @@ export default function Peticiones() {
                     })),
                 ]}
               />
-            </div>
+            </FormField>
 
-            <div>
-              <div className="label">Chofer (opcional)</div>
+            <FormField label="Chofer (opcional)">
               <SearchableSelect
                 value={form.chofer}
                 onChange={(val) => setForm((p) => ({ ...p, chofer: val }))}
@@ -726,12 +701,11 @@ export default function Peticiones() {
                     })),
                 ]}
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="form-row">
-            <div>
-              <div className="label">Consignatario (opcional)</div>
+            <FormField label="Consignatario (opcional)">
               <SearchableSelect
                 value={form.consignatario}
                 onChange={(val) =>
@@ -755,10 +729,9 @@ export default function Peticiones() {
                     })),
                 ]}
               />
-            </div>
+            </FormField>
 
-            <div>
-              <div className="label">Terminal (opcional)</div>
+            <FormField label="Terminal (opcional)">
               <SearchableSelect
                 value={form.terminal_entrega}
                 onChange={(val) =>
@@ -782,11 +755,10 @@ export default function Peticiones() {
                     })),
                 ]}
               />
-            </div>
+            </FormField>
           </div>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Extras (opcional)</div>
+          <FormField label="Extras (opcional)">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <label
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
@@ -813,10 +785,9 @@ export default function Peticiones() {
                 Es lancha
               </label>
             </div>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Notas (opcional)</div>
+          <FormField label="Notas (opcional)">
             <textarea
               className="input"
               rows="3"
@@ -827,7 +798,7 @@ export default function Peticiones() {
               placeholder="Comentarios adicionales"
               style={{ height: "auto", minHeight: 76, resize: "vertical" }}
             />
-          </div>
+          </FormField>
         </div>
       </Modal>
 

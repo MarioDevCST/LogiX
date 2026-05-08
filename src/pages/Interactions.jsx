@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import DataTable from "../components/DataTable.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
-import {
-  fetchFeatureOptions,
-  fetchInteractions,
-  setDisablePeticiones,
-} from "../firebase/auth.js";
+import ToggleSwitch from "../components/ToggleSwitch.jsx";
+import { useFeatureOptions } from "../contexts/useFeatureOptions.js";
+import { fetchInteractions, setPeticionesEnabled } from "../firebase/auth.js";
 import { getCurrentRole, ROLES } from "../utils/roles.js";
 
 function toDate(value) {
@@ -72,6 +70,9 @@ const TYPE_LABELS = {
 export default function Interactions() {
   const role = getCurrentRole();
   const canEditOptions = role === ROLES.ADMIN;
+  const { featureOptions, loading: featureOptionsLoading } =
+    useFeatureOptions();
+  const remotePeticionesEnabled = featureOptions?.peticiones_enabled !== false;
   const columns = [
     { key: "at", header: "Fecha y hora" },
     { key: "typeLabel", header: "Acción" },
@@ -94,8 +95,18 @@ export default function Interactions() {
   const [tab, setTab] = useState("stats");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [optionsLoading, setOptionsLoading] = useState(true);
-  const [disablePeticiones, setDisablePeticionesState] = useState(false);
+  const [optionsSaving, setOptionsSaving] = useState(false);
+  const [pendingPeticionesEnabled, setPendingPeticionesEnabled] =
+    useState(null);
+
+  const peticionesEnabled = pendingPeticionesEnabled ?? remotePeticionesEnabled;
+  const optionsLoading = featureOptionsLoading || optionsSaving;
+
+  useEffect(() => {
+    if (pendingPeticionesEnabled === null) return;
+    if (remotePeticionesEnabled === pendingPeticionesEnabled)
+      setPendingPeticionesEnabled(null);
+  }, [remotePeticionesEnabled, pendingPeticionesEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -144,27 +155,6 @@ export default function Interactions() {
         });
       } finally {
         if (mounted) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    const run = async () => {
-      try {
-        setOptionsLoading(true);
-        const opts = await fetchFeatureOptions();
-        if (!mounted) return;
-        setDisablePeticionesState(!!opts?.disable_peticiones);
-      } catch (e) {
-        if (!mounted) return;
-        setDisablePeticionesState(false);
-      } finally {
-        if (mounted) setOptionsLoading(false);
       }
     };
     run();
@@ -664,31 +654,29 @@ export default function Interactions() {
             >
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 800 }}>
-                  Deshabilitar Peticiones (funcionalidad que agrupa las
-                  peticiones)
+                  Mostrar Peticiones para Logística/Oficina
                 </div>
                 <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-                  Aplica a todos los roles excepto Admin
+                  Si está desactivado, solo Admin podrá ver y usar Peticiones
                 </div>
               </div>
-              <input
-                type="checkbox"
+              <ToggleSwitch
+                checked={peticionesEnabled}
                 disabled={optionsLoading || !canEditOptions}
-                checked={disablePeticiones}
-                onChange={async (e) => {
-                  const next = e.target.checked;
+                onChange={async (next) => {
                   try {
-                    setDisablePeticionesState(next);
-                    await setDisablePeticiones(next);
+                    setPendingPeticionesEnabled(next);
+                    setOptionsSaving(true);
+                    await setPeticionesEnabled(next);
                     setSnack({
                       open: true,
                       message: next
-                        ? "Peticiones deshabilitadas"
-                        : "Peticiones habilitadas",
+                        ? "Peticiones activadas"
+                        : "Peticiones desactivadas",
                       type: "success",
                     });
                   } catch (err) {
-                    setDisablePeticionesState(!next);
+                    setPendingPeticionesEnabled(null);
                     setSnack({
                       open: true,
                       message: String(
@@ -696,6 +684,8 @@ export default function Interactions() {
                       ),
                       type: "error",
                     });
+                  } finally {
+                    setOptionsSaving(false);
                   }
                 }}
               />

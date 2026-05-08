@@ -128,13 +128,16 @@ service cloud.firestore {
     }
 
     match /peticiones/{id} {
-      function peticionesDisabled() {
-        return exists(/databases/$(database)/documents/app_options/features) &&
-          get(/databases/$(database)/documents/app_options/features).data.disable_peticiones == true;
+      function peticionesEnabled() {
+        return !exists(/databases/$(database)/documents/app_options/features) ||
+          (
+            get(/databases/$(database)/documents/app_options/features).data.peticiones_enabled != false &&
+            get(/databases/$(database)/documents/app_options/features).data.disable_peticiones != true
+          );
       }
-      allow read: if isAdmin() || (!peticionesDisabled() && isSignedIn());
-      allow create: if isAdmin() || (!peticionesDisabled() && isSignedIn() && userRole() in ['dispatcher', 'oficina', 'office']);
-      allow update: if isAdmin() || (!peticionesDisabled() && isSignedIn() && userRole() in ['admin', 'logistic']);
+      allow read: if isAdmin() || (peticionesEnabled() && isSignedIn());
+      allow create: if isAdmin() || (peticionesEnabled() && isSignedIn() && userRole() in ['dispatcher', 'oficina', 'office']);
+      allow update: if isAdmin() || (peticionesEnabled() && isSignedIn() && userRole() in ['admin', 'logistic']);
       allow delete: if isAdmin();
     }
 

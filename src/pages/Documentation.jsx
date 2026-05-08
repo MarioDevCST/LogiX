@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import EnvBadge from "../components/EnvBadge.jsx";
 import Modal from "../components/Modal.jsx";
 import SearchableSelect from "../components/SearchableSelect.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   fetchAllCompanies,
   fetchAllConsignees,
@@ -66,6 +68,7 @@ function CollapsibleSection({ title, isOpen, onToggle, children }) {
 }
 
 export default function Documentation() {
+  const location = useLocation();
   const updatedAt = useMemo(() => {
     return new Intl.DateTimeFormat("es-ES", {
       year: "numeric",
@@ -86,48 +89,60 @@ export default function Documentation() {
 
   const [openCmr, setOpenCmr] = useState(false);
   const [openCartaPorte, setOpenCartaPorte] = useState(false);
-  const getEmptyCmr = () => ({
-    load_id: "",
-    remitente_empresa_id: "",
-    remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
-    remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
-    destinatario_terminal_id: "",
-    destinatario_nombre: "",
-    destinatario_direccion: "",
-    lugar_entrega: "",
-    lugar_entrega_terminal_id: "",
-    lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
-    fecha_carga: "",
-    documentos_anexos: "",
-    portador_empresa_id: "",
-    portador_nombre: "",
-    portador_direccion: "",
-    matricula_tractora: "",
-    matricula_remolque: "",
-    mercancia: "",
-    temperatura: "",
-    palets: "",
-    peso_bruto_kg: "",
-    volumen_m3: "",
-    sello_seguridad: "",
-    instrucciones: "",
-    total_cantidad: "",
-    fecha_entrega_estimada: "",
-    establecido_en: "",
-    establecido_fecha: "",
-  });
+  const [autoDocApplied, setAutoDocApplied] = useState(false);
+  const getEmptyCmr = useCallback(
+    () => ({
+      load_id: "",
+      camion_id: "",
+      remitente_empresa_id: "",
+      remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
+      remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
+      destinatario_terminal_id: "",
+      destinatario_nombre: "",
+      destinatario_direccion: "",
+      lugar_entrega: "",
+      lugar_entrega_terminal_id: "",
+      lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
+      fecha_carga: "",
+      documentos_anexos: "",
+      portador_empresa_id: "",
+      portador_nombre: "",
+      portador_direccion: "",
+      matricula_tractora: "",
+      matricula_remolque: "",
+      mercancia: "",
+      temperatura: "",
+      palets: "",
+      peso_bruto_kg: "",
+      volumen_m3: "",
+      sello_seguridad: "",
+      instrucciones: "",
+      total_cantidad: "",
+      fecha_entrega_estimada: "",
+      establecido_en: "",
+      establecido_fecha: "",
+    }),
+    [
+      FIXED_CMR_PLACE_OF_TAKING_OVER,
+      FIXED_CMR_REMITENTE_DIRECCION,
+      FIXED_CMR_REMITENTE_NOMBRE,
+    ],
+  );
   const [cmr, setCmr] = useState(getEmptyCmr);
-  const getDefaultCmrFormSections = () => ({
-    asignar: true,
-    destinatario: true,
-    carga: true,
-    documentos: false,
-    portador: false,
-    mercancia: false,
-    medidas: false,
-    instrucciones: false,
-    establecido: false,
-  });
+  const getDefaultCmrFormSections = useCallback(
+    () => ({
+      asignar: true,
+      destinatario: true,
+      carga: true,
+      documentos: false,
+      portador: false,
+      mercancia: false,
+      medidas: false,
+      instrucciones: false,
+      establecido: false,
+    }),
+    [],
+  );
   const [cmrFormSections, setCmrFormSections] = useState(
     getDefaultCmrFormSections,
   );
@@ -135,15 +150,18 @@ export default function Documentation() {
     setCmrFormSections((p) => ({ ...p, [id]: !p[id] }));
   };
 
-  const getDefaultCartaFormSections = () => ({
-    asignar: true,
-    datos: true,
-    empresas: false,
-    transportista: false,
-    destinatario: false,
-    mercancia: false,
-    medidas: false,
-  });
+  const getDefaultCartaFormSections = useCallback(
+    () => ({
+      asignar: true,
+      datos: true,
+      empresas: false,
+      transportista: false,
+      destinatario: false,
+      mercancia: false,
+      medidas: false,
+    }),
+    [],
+  );
   const [cartaFormSections, setCartaFormSections] = useState(
     getDefaultCartaFormSections,
   );
@@ -151,33 +169,37 @@ export default function Documentation() {
     setCartaFormSections((p) => ({ ...p, [id]: !p[id] }));
   };
 
-  const getEmptyCartaPorte = () => ({
-    load_id: "",
-    fecha_transporte: "",
-    origen_carga: "",
-    destino_carga: "",
-    destino_terminal_id: "",
-    matricula_tractora: "",
-    matricula_remolque: "",
-    empresa_cargadora_id: "",
-    empresa_cargadora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
-    empresa_cargadora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
-    empresa_expedidora_id: "",
-    empresa_expedidora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
-    empresa_expedidora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
-    empresa_transportista_id: "",
-    empresa_transportista_nombre: "",
-    empresa_transportista_direccion: "",
-    conductor_nombre: "",
-    conductor_dni: "",
-    precinto: "",
-    destinatario_nombre: "",
-    destinatario_direccion: "",
-    mercancia: "",
-    temperatura: "",
-    bultos: "",
-    peso_kg: "",
-  });
+  const getEmptyCartaPorte = useCallback(
+    () => ({
+      load_id: "",
+      camion_id: "",
+      fecha_transporte: "",
+      origen_carga: "",
+      destino_carga: "",
+      destino_terminal_id: "",
+      matricula_tractora: "",
+      matricula_remolque: "",
+      empresa_cargadora_id: "",
+      empresa_cargadora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
+      empresa_cargadora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
+      empresa_expedidora_id: "",
+      empresa_expedidora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
+      empresa_expedidora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
+      empresa_transportista_id: "",
+      empresa_transportista_nombre: "",
+      empresa_transportista_direccion: "",
+      conductor_nombre: "",
+      conductor_dni: "",
+      precinto: "",
+      destinatario_nombre: "",
+      destinatario_direccion: "",
+      mercancia: "",
+      temperatura: "",
+      bultos: "",
+      peso_kg: "",
+    }),
+    [FIXED_CARTA_EMPRESA_DIRECCION, FIXED_CARTA_EMPRESA_NOMBRE],
+  );
   const [cartaPorte, setCartaPorte] = useState(getEmptyCartaPorte);
 
   const [locations, setLocations] = useState([]);
@@ -329,36 +351,6 @@ export default function Documentation() {
     };
   }, []);
 
-  const getShipName = (value) => {
-    if (!value) return "";
-    if (typeof value === "object") {
-      return String(
-        value?.nombre_del_barco || value?.nombre || value?.name || "",
-      ).trim();
-    }
-    const id = String(value || "").trim();
-    return String(shipById.get(id)?.nombre_del_barco || "").trim();
-  };
-
-  const getConsigneeName = (value) => {
-    if (!value) return "";
-    if (typeof value === "object") {
-      return String(value?.nombre || value?.name || "").trim();
-    }
-    const id = String(value || "").trim();
-    return String(consigneeById.get(id)?.nombre || "").trim();
-  };
-
-  const getLocationLabel = (value) => {
-    const id = getMixedId(value);
-    if (!id) return "";
-    const loc = locationById.get(id);
-    if (!loc) return "";
-    const puerto = String(loc.puerto || "").trim();
-    const nombre = String(loc.nombre || "").trim();
-    return `${puerto ? `${puerto} · ` : ""}${nombre}`.trim();
-  };
-
   const locationById = useMemo(() => {
     return new Map(
       locations
@@ -382,6 +374,45 @@ export default function Documentation() {
         .filter((p) => p[0]),
     );
   }, [consignees]);
+
+  const getShipName = useCallback(
+    (value) => {
+      if (!value) return "";
+      if (typeof value === "object") {
+        return String(
+          value?.nombre_del_barco || value?.nombre || value?.name || "",
+        ).trim();
+      }
+      const id = String(value || "").trim();
+      return String(shipById.get(id)?.nombre_del_barco || "").trim();
+    },
+    [shipById],
+  );
+
+  const getConsigneeName = useCallback(
+    (value) => {
+      if (!value) return "";
+      if (typeof value === "object") {
+        return String(value?.nombre || value?.name || "").trim();
+      }
+      const id = String(value || "").trim();
+      return String(consigneeById.get(id)?.nombre || "").trim();
+    },
+    [consigneeById],
+  );
+
+  const getLocationLabel = useCallback(
+    (value) => {
+      const id = getMixedId(value);
+      if (!id) return "";
+      const loc = locationById.get(id);
+      if (!loc) return "";
+      const puerto = String(loc.puerto || "").trim();
+      const nombre = String(loc.nombre || "").trim();
+      return `${puerto ? `${puerto} · ` : ""}${nombre}`.trim();
+    },
+    [getMixedId, locationById],
+  );
 
   const loadOptions = useMemo(() => {
     return loads
@@ -426,6 +457,52 @@ export default function Documentation() {
     );
   }, [loads]);
 
+  const cmrSelectedLoad = useMemo(() => {
+    const id = String(cmr.load_id || "").trim();
+    if (!id) return null;
+    return loadById.get(id) || null;
+  }, [cmr.load_id, loadById]);
+
+  const cmrTruckOptions = useMemo(() => {
+    const trucks = Array.isArray(cmrSelectedLoad?.camiones)
+      ? cmrSelectedLoad.camiones
+      : [];
+    return trucks
+      .map((t) => {
+        const id = String(t?.id || "").trim();
+        if (!id) return null;
+        const mat = String(t?.matricula || "")
+          .trim()
+          .toUpperCase();
+        return { value: id, label: mat || "Sin matrícula" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a.label).localeCompare(String(b.label), "es"));
+  }, [cmrSelectedLoad]);
+
+  const cartaSelectedLoad = useMemo(() => {
+    const id = String(cartaPorte.load_id || "").trim();
+    if (!id) return null;
+    return loadById.get(id) || null;
+  }, [cartaPorte.load_id, loadById]);
+
+  const cartaTruckOptions = useMemo(() => {
+    const trucks = Array.isArray(cartaSelectedLoad?.camiones)
+      ? cartaSelectedLoad.camiones
+      : [];
+    return trucks
+      .map((t) => {
+        const id = String(t?.id || "").trim();
+        if (!id) return null;
+        const mat = String(t?.matricula || "")
+          .trim()
+          .toUpperCase();
+        return { value: id, label: mat || "Sin matrícula" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a.label).localeCompare(String(b.label), "es"));
+  }, [cartaSelectedLoad]);
+
   const palletCountByLoadId = useMemo(() => {
     const map = new Map();
     for (const p of pallets) {
@@ -435,6 +512,290 @@ export default function Documentation() {
     }
     return map;
   }, [pallets]);
+
+  const applyCmrLoadSelection = useCallback(
+    (id) => {
+      const loadId = String(id || "").trim();
+      const load = loadById.get(loadId);
+      setCmr((p) => {
+        if (!loadId || !load) {
+          return {
+            ...p,
+            load_id: "",
+            camion_id: "",
+            remitente_empresa_id: "",
+            remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
+            remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
+            destinatario_terminal_id: "",
+            destinatario_nombre: "",
+            destinatario_direccion: "",
+            lugar_entrega_terminal_id: "",
+            lugar_entrega: "",
+            lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
+            mercancia: "",
+            palets: "",
+            total_cantidad: "",
+            instrucciones: "",
+            fecha_carga: "",
+            documentos_anexos: "",
+          };
+        }
+        const barcoNombre = getShipName(load.barco);
+        const terminalId = getMixedId(load.terminal_entrega);
+        const terminalLabelFromLoad = getLocationLabel(load.terminal_entrega);
+        const consignatarioNombre = getConsigneeName(load.consignatario);
+        const entrega = Array.isArray(load.entrega) ? load.entrega : [];
+        const fechaCargaIso = (() => {
+          const v = load.fecha_de_carga;
+          if (!v) return "";
+          if (typeof v === "string" && v.includes("-")) return v;
+          return "";
+        })();
+        const trucks = Array.isArray(load?.camiones) ? load.camiones : [];
+        const defaultTruck = trucks.length === 1 ? trucks[0] : null;
+        const defaultTruckId = String(defaultTruck?.id || "").trim();
+        const defaultTruckMat = String(defaultTruck?.matricula || "")
+          .trim()
+          .toUpperCase();
+        const defaultTruckPalletCount =
+          defaultTruck &&
+          Array.isArray(defaultTruck?.pallet_ids) &&
+          defaultTruck.pallet_ids.length > 0
+            ? defaultTruck.pallet_ids.length
+            : 0;
+        const paletsCountNumber =
+          defaultTruckPalletCount ||
+          palletCountByLoadId.get(loadId) ||
+          (Array.isArray(load.palets) ? load.palets.length : 0);
+        const paletsCount = paletsCountNumber ? String(paletsCountNumber) : "";
+        const mercancia = entrega.length ? entrega.join(" / ") : "";
+        const instrucciones =
+          barcoNombre || terminalLabelFromLoad
+            ? `ENTREGAR AL BUQUE ${barcoNombre || "—"} EN ${
+                terminalLabelFromLoad || "—"
+              }`
+            : "";
+        const destinatarioNombre =
+          barcoNombre || consignatarioNombre || terminalLabelFromLoad || "";
+        return {
+          ...p,
+          load_id: loadId,
+          camion_id: defaultTruckId,
+          remitente_empresa_id: "",
+          remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
+          remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
+          destinatario_terminal_id: terminalId,
+          destinatario_nombre:
+            destinatarioNombre ||
+            `${barcoNombre || ""}${
+              terminalLabelFromLoad ? ` · ${terminalLabelFromLoad}` : ""
+            }`.trim(),
+          destinatario_direccion: terminalLabelFromLoad,
+          lugar_entrega_terminal_id: terminalId,
+          lugar_entrega: `${destinatarioNombre}${
+            destinatarioNombre && terminalLabelFromLoad ? " · " : ""
+          }${terminalLabelFromLoad}`.trim(),
+          lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
+          mercancia,
+          palets: paletsCount,
+          total_cantidad: paletsCount ? `${paletsCount} PALLETS` : "",
+          instrucciones,
+          fecha_carga: fechaCargaIso,
+          documentos_anexos: consignatarioNombre ? "DOCUMENTS & INVOICES" : "",
+          ...(defaultTruckMat ? { matricula_tractora: defaultTruckMat } : {}),
+        };
+      });
+    },
+    [
+      FIXED_CMR_PLACE_OF_TAKING_OVER,
+      FIXED_CMR_REMITENTE_DIRECCION,
+      FIXED_CMR_REMITENTE_NOMBRE,
+      getConsigneeName,
+      getLocationLabel,
+      getMixedId,
+      getShipName,
+      loadById,
+      palletCountByLoadId,
+    ],
+  );
+
+  const applyCmrTruckSelection = useCallback(
+    (truckId) => {
+      const tid = String(truckId || "").trim();
+      const trucks = Array.isArray(cmrSelectedLoad?.camiones)
+        ? cmrSelectedLoad.camiones
+        : [];
+      const truck = trucks.find((t) => String(t?.id || "").trim() === tid);
+      const mat = String(truck?.matricula || "")
+        .trim()
+        .toUpperCase();
+      const paletsCountNumber =
+        truck && Array.isArray(truck?.pallet_ids) && truck.pallet_ids.length > 0
+          ? truck.pallet_ids.length
+          : 0;
+      const paletsCount = paletsCountNumber ? String(paletsCountNumber) : "";
+      setCmr((p) => ({
+        ...p,
+        camion_id: tid,
+        matricula_tractora: mat || p.matricula_tractora,
+        palets: paletsCount,
+        total_cantidad: paletsCount ? `${paletsCount} PALLETS` : "",
+      }));
+    },
+    [cmrSelectedLoad],
+  );
+
+  const applyCartaLoadSelection = useCallback(
+    (id) => {
+      const loadId = String(id || "").trim();
+      const load = loadById.get(loadId);
+      setCartaPorte((p) => {
+        if (!loadId || !load) return getEmptyCartaPorte();
+
+        const terminalId = getMixedId(load.terminal_entrega);
+        const terminalLabelFromLoad = getLocationLabel(load.terminal_entrega);
+        const barcoNombre = getShipName(load.barco);
+        const consignatarioNombre = getConsigneeName(load.consignatario);
+        const entrega = Array.isArray(load.entrega)
+          ? load.entrega
+          : load.entrega
+            ? [String(load.entrega)]
+            : [];
+        const mercancia = entrega.length ? entrega.join(" / ") : "";
+        const fechaCargaIso = (() => {
+          const v = load.fecha_de_carga;
+          if (!v) return "";
+          if (typeof v === "string" && v.includes("-")) return v;
+          return "";
+        })();
+        const trucks = Array.isArray(load?.camiones) ? load.camiones : [];
+        const defaultTruck = trucks.length === 1 ? trucks[0] : null;
+        const defaultTruckId = String(defaultTruck?.id || "").trim();
+        const defaultTruckMat = String(defaultTruck?.matricula || "")
+          .trim()
+          .toUpperCase();
+        const defaultTruckPalletCount =
+          defaultTruck &&
+          Array.isArray(defaultTruck?.pallet_ids) &&
+          defaultTruck.pallet_ids.length > 0
+            ? defaultTruck.pallet_ids.length
+            : 0;
+        const paletsCountNumber =
+          defaultTruckPalletCount ||
+          palletCountByLoadId.get(loadId) ||
+          (Array.isArray(load.palets) ? load.palets.length : 0);
+        const paletsCount = paletsCountNumber ? String(paletsCountNumber) : "";
+        const destinatarioNombre =
+          barcoNombre || consignatarioNombre || terminalLabelFromLoad || "";
+        const choferNombre =
+          typeof load.chofer === "object" && load.chofer
+            ? String(load.chofer.nombre || load.chofer.name || "")
+            : "";
+
+        return {
+          ...p,
+          load_id: loadId,
+          camion_id: defaultTruckId,
+          fecha_transporte: fechaCargaIso,
+          origen_carga: FIXED_CARTA_EMPRESA_NOMBRE,
+          destino_terminal_id: terminalId,
+          destino_carga: terminalLabelFromLoad,
+          destinatario_nombre: destinatarioNombre,
+          destinatario_direccion: terminalLabelFromLoad,
+          mercancia,
+          bultos: paletsCount,
+          conductor_nombre: choferNombre || p.conductor_nombre,
+          empresa_cargadora_id: "",
+          empresa_cargadora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
+          empresa_cargadora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
+          empresa_expedidora_id: "",
+          empresa_expedidora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
+          empresa_expedidora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
+          ...(defaultTruckMat ? { matricula_tractora: defaultTruckMat } : {}),
+        };
+      });
+    },
+    [
+      FIXED_CARTA_EMPRESA_DIRECCION,
+      FIXED_CARTA_EMPRESA_NOMBRE,
+      getConsigneeName,
+      getEmptyCartaPorte,
+      getLocationLabel,
+      getMixedId,
+      getShipName,
+      loadById,
+      palletCountByLoadId,
+    ],
+  );
+
+  const applyCartaTruckSelection = useCallback(
+    (truckId) => {
+      const tid = String(truckId || "").trim();
+      const trucks = Array.isArray(cartaSelectedLoad?.camiones)
+        ? cartaSelectedLoad.camiones
+        : [];
+      const truck = trucks.find((t) => String(t?.id || "").trim() === tid);
+      const mat = String(truck?.matricula || "")
+        .trim()
+        .toUpperCase();
+      const paletsCountNumber =
+        truck && Array.isArray(truck?.pallet_ids) && truck.pallet_ids.length > 0
+          ? truck.pallet_ids.length
+          : 0;
+      const paletsCount = paletsCountNumber ? String(paletsCountNumber) : "";
+      setCartaPorte((p) => ({
+        ...p,
+        camion_id: tid,
+        matricula_tractora: mat || p.matricula_tractora,
+        bultos: paletsCount,
+      }));
+    },
+    [cartaSelectedLoad],
+  );
+
+  useEffect(() => {
+    if (autoDocApplied) return;
+    const params = new URLSearchParams(location.search || "");
+    const doc = String(params.get("doc") || "")
+      .trim()
+      .toLowerCase();
+    const loadId = String(params.get("load") || "").trim();
+    const truckId = String(params.get("truck") || "").trim();
+    if (!doc || !loadId) return;
+    if (catalogLoading) return;
+    if (!loadById.get(loadId)) return;
+
+    if (doc === "cmr") {
+      setCmr(getEmptyCmr());
+      setCmrFormSections(getDefaultCmrFormSections());
+      setOpenCmr(true);
+      applyCmrLoadSelection(loadId);
+      if (truckId) applyCmrTruckSelection(truckId);
+      setAutoDocApplied(true);
+      return;
+    }
+    if (doc === "carta" || doc === "packing") {
+      setCartaPorte(getEmptyCartaPorte());
+      setCartaFormSections(getDefaultCartaFormSections());
+      setOpenCartaPorte(true);
+      applyCartaLoadSelection(loadId);
+      if (truckId) applyCartaTruckSelection(truckId);
+      setAutoDocApplied(true);
+    }
+  }, [
+    autoDocApplied,
+    applyCartaLoadSelection,
+    applyCartaTruckSelection,
+    applyCmrLoadSelection,
+    applyCmrTruckSelection,
+    catalogLoading,
+    getDefaultCartaFormSections,
+    getDefaultCmrFormSections,
+    getEmptyCartaPorte,
+    getEmptyCmr,
+    location.search,
+    loadById,
+  ]);
 
   const terminalLabel = useMemo(() => {
     const id = String(cartaPorte.destino_terminal_id || "").trim();
@@ -913,100 +1274,30 @@ export default function Documentation() {
             isOpen={!!cmrFormSections.asignar}
             onToggle={() => toggleCmrSection("asignar")}
           >
-            <div className="label">Asignar carga (opcional)</div>
-            <SearchableSelect
-              value={cmr.load_id}
-              onChange={(id) => {
-                const loadId = String(id || "").trim();
-                const load = loadById.get(loadId);
-                setCmr((p) => {
-                  if (!loadId || !load) {
-                    return {
-                      ...p,
-                      load_id: "",
-                      remitente_empresa_id: "",
-                      remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
-                      remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
-                      destinatario_terminal_id: "",
-                      destinatario_nombre: "",
-                      destinatario_direccion: "",
-                      lugar_entrega_terminal_id: "",
-                      lugar_entrega: "",
-                      lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
-                      mercancia: "",
-                      palets: "",
-                      total_cantidad: "",
-                      instrucciones: "",
-                      fecha_carga: "",
-                      documentos_anexos: "",
-                    };
-                  }
-                  const barcoNombre = getShipName(load.barco);
-                  const terminalId = getMixedId(load.terminal_entrega);
-                  const terminalLabel = getLocationLabel(load.terminal_entrega);
-                  const consignatarioNombre = getConsigneeName(
-                    load.consignatario,
-                  );
-                  const entrega = Array.isArray(load.entrega)
-                    ? load.entrega
-                    : [];
-                  const fechaCargaIso = (() => {
-                    const v = load.fecha_de_carga;
-                    if (!v) return "";
-                    if (typeof v === "string" && v.includes("-")) return v;
-                    return "";
-                  })();
-                  const paletsCountNumber =
-                    palletCountByLoadId.get(loadId) ||
-                    (Array.isArray(load.palets) ? load.palets.length : 0);
-                  const paletsCount = paletsCountNumber
-                    ? String(paletsCountNumber)
-                    : "";
-                  const mercancia = entrega.length ? entrega.join(" / ") : "";
-                  const instrucciones =
-                    barcoNombre || terminalLabel
-                      ? `ENTREGAR AL BUQUE ${
-                          barcoNombre || "—"
-                        } EN ${terminalLabel || "—"}`
-                      : "";
-                  const destinatarioNombre =
-                    barcoNombre || consignatarioNombre || terminalLabel || "";
-                  return {
-                    ...p,
-                    load_id: loadId,
-                    remitente_empresa_id: "",
-                    remitente_nombre: FIXED_CMR_REMITENTE_NOMBRE,
-                    remitente_direccion: FIXED_CMR_REMITENTE_DIRECCION,
-                    destinatario_terminal_id: terminalId,
-                    destinatario_nombre:
-                      destinatarioNombre ||
-                      `${barcoNombre || ""}${
-                        terminalLabel ? ` · ${terminalLabel}` : ""
-                      }`.trim(),
-                    destinatario_direccion: terminalLabel,
-                    lugar_entrega_terminal_id: terminalId,
-                    lugar_entrega: `${destinatarioNombre}${
-                      destinatarioNombre && terminalLabel ? " · " : ""
-                    }${terminalLabel}`.trim(),
-                    lugar_carga: FIXED_CMR_PLACE_OF_TAKING_OVER,
-                    mercancia,
-                    palets: paletsCount,
-                    total_cantidad: paletsCount ? `${paletsCount} PALLETS` : "",
-                    instrucciones,
-                    fecha_carga: fechaCargaIso,
-                    documentos_anexos: consignatarioNombre
-                      ? "DOCUMENTS & INVOICES"
-                      : "",
-                  };
-                });
-              }}
-              options={loadOptions}
-              placeholder={
-                catalogLoading ? "Cargando..." : "Selecciona una carga"
-              }
-              searchPlaceholder="Buscar carga..."
-              disabled={catalogLoading}
-            />
+            <FormField label="Asignar carga (opcional)" style={{ gap: 6 }}>
+              <SearchableSelect
+                value={cmr.load_id}
+                onChange={(id) => applyCmrLoadSelection(id)}
+                options={loadOptions}
+                placeholder={
+                  catalogLoading ? "Cargando..." : "Selecciona una carga"
+                }
+                searchPlaceholder="Buscar carga..."
+                disabled={catalogLoading}
+              />
+            </FormField>
+            {cmrTruckOptions.length > 0 && (
+              <FormField label="Camión (matrícula)" style={{ gap: 6 }}>
+                <SearchableSelect
+                  value={cmr.camion_id}
+                  onChange={(truckId) => applyCmrTruckSelection(truckId)}
+                  options={cmrTruckOptions}
+                  placeholder="Selecciona un camión"
+                  searchPlaceholder="Buscar matrícula..."
+                  disabled={!cmr.load_id}
+                />
+              </FormField>
+            )}
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1146,8 +1437,7 @@ export default function Documentation() {
                 gap: 10,
               }}
             >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Matrícula tractora</div>
+              <FormField label="Matrícula tractora" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.matricula_tractora}
@@ -1159,9 +1449,8 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 9190KZN"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Matrícula remolque</div>
+              </FormField>
+              <FormField label="Matrícula remolque" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.matricula_remolque}
@@ -1173,7 +1462,7 @@ export default function Documentation() {
                   }
                   placeholder="Ej: R1073BCR-3555"
                 />
-              </div>
+              </FormField>
             </div>
           </CollapsibleSection>
 
@@ -1182,17 +1471,18 @@ export default function Documentation() {
             isOpen={!!cmrFormSections.mercancia}
             onToggle={() => toggleCmrSection("mercancia")}
           >
-            <div className="label">Naturaleza de la mercancía</div>
-            <textarea
-              className="input"
-              value={cmr.mercancia}
-              onChange={(e) =>
-                setCmr((p) => ({ ...p, mercancia: e.target.value }))
-              }
-              placeholder="Ej: PROVISIONES PARA EL BARCO..."
-              rows={2}
-              style={{ resize: "vertical" }}
-            />
+            <FormField label="Naturaleza de la mercancía" style={{ gap: 6 }}>
+              <textarea
+                className="input"
+                value={cmr.mercancia}
+                onChange={(e) =>
+                  setCmr((p) => ({ ...p, mercancia: e.target.value }))
+                }
+                placeholder="Ej: PROVISIONES PARA EL BARCO..."
+                rows={2}
+                style={{ resize: "vertical" }}
+              />
+            </FormField>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1207,8 +1497,7 @@ export default function Documentation() {
                 gap: 10,
               }}
             >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Palets</div>
+              <FormField label="Palets" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.palets}
@@ -1217,9 +1506,8 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 25"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Temperatura</div>
+              </FormField>
+              <FormField label="Temperatura" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.temperatura}
@@ -1228,9 +1516,8 @@ export default function Documentation() {
                   }
                   placeholder="Ej: -20 / +5"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Peso bruto (kg)</div>
+              </FormField>
+              <FormField label="Peso bruto (kg)" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.peso_bruto_kg}
@@ -1239,9 +1526,8 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 16301"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Volumen (m3)</div>
+              </FormField>
+              <FormField label="Volumen (m3)" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cmr.volumen_m3}
@@ -1250,9 +1536,11 @@ export default function Documentation() {
                   }
                   placeholder="Opcional"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
-                <div className="label">Sello de seguridad</div>
+              </FormField>
+              <FormField
+                label="Sello de seguridad"
+                style={{ gap: 6, gridColumn: "1 / -1" }}
+              >
                 <input
                   className="input"
                   value={cmr.sello_seguridad}
@@ -1261,7 +1549,7 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 000003631"
                 />
-              </div>
+              </FormField>
             </div>
           </CollapsibleSection>
 
@@ -1270,15 +1558,16 @@ export default function Documentation() {
             isOpen={!!cmrFormSections.instrucciones}
             onToggle={() => toggleCmrSection("instrucciones")}
           >
-            <div className="label">Instrucciones del remitente</div>
-            <input
-              className="input"
-              value={cmr.instrucciones}
-              onChange={(e) =>
-                setCmr((p) => ({ ...p, instrucciones: e.target.value }))
-              }
-              placeholder="Ej: ENTREGAR AL BUQUE..."
-            />
+            <FormField label="Instrucciones del remitente" style={{ gap: 6 }}>
+              <input
+                className="input"
+                value={cmr.instrucciones}
+                onChange={(e) =>
+                  setCmr((p) => ({ ...p, instrucciones: e.target.value }))
+                }
+                placeholder="Ej: ENTREGAR AL BUQUE..."
+              />
+            </FormField>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1293,16 +1582,14 @@ export default function Documentation() {
                 gap: 10,
               }}
             >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Establecido en</div>
+              <FormField label="Establecido en" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={FIXED_CMR_ESTABLECIDO_EN}
                   readOnly
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Fecha</div>
+              </FormField>
+              <FormField label="Fecha" style={{ gap: 6 }}>
                 <input
                   className="input"
                   type="date"
@@ -1311,7 +1598,7 @@ export default function Documentation() {
                     setCmr((p) => ({ ...p, establecido_fecha: e.target.value }))
                   }
                 />
-              </div>
+              </FormField>
             </div>
           </CollapsibleSection>
         </div>
@@ -1718,69 +2005,7 @@ export default function Documentation() {
           >
             <SearchableSelect
               value={cartaPorte.load_id}
-              onChange={(id) => {
-                const loadId = String(id || "").trim();
-                const load = loadById.get(loadId);
-                setCartaPorte((p) => {
-                  if (!loadId || !load) return getEmptyCartaPorte();
-
-                  const terminalId = getMixedId(load.terminal_entrega);
-                  const terminalLabelFromLoad = getLocationLabel(
-                    load.terminal_entrega,
-                  );
-                  const barcoNombre = getShipName(load.barco);
-                  const consignatarioNombre = getConsigneeName(
-                    load.consignatario,
-                  );
-                  const entrega = Array.isArray(load.entrega)
-                    ? load.entrega
-                    : load.entrega
-                      ? [String(load.entrega)]
-                      : [];
-                  const mercancia = entrega.length ? entrega.join(" / ") : "";
-                  const fechaCargaIso = (() => {
-                    const v = load.fecha_de_carga;
-                    if (!v) return "";
-                    if (typeof v === "string" && v.includes("-")) return v;
-                    return "";
-                  })();
-                  const paletsCountNumber =
-                    palletCountByLoadId.get(loadId) ||
-                    (Array.isArray(load.palets) ? load.palets.length : 0);
-                  const paletsCount = paletsCountNumber
-                    ? String(paletsCountNumber)
-                    : "";
-                  const destinatarioNombre =
-                    barcoNombre ||
-                    consignatarioNombre ||
-                    terminalLabelFromLoad ||
-                    "";
-                  const choferNombre =
-                    typeof load.chofer === "object" && load.chofer
-                      ? String(load.chofer.nombre || load.chofer.name || "")
-                      : "";
-
-                  return {
-                    ...p,
-                    load_id: loadId,
-                    fecha_transporte: fechaCargaIso,
-                    origen_carga: FIXED_CARTA_EMPRESA_NOMBRE,
-                    destino_terminal_id: terminalId,
-                    destino_carga: terminalLabelFromLoad,
-                    destinatario_nombre: destinatarioNombre,
-                    destinatario_direccion: terminalLabelFromLoad,
-                    mercancia,
-                    bultos: paletsCount,
-                    conductor_nombre: choferNombre || p.conductor_nombre,
-                    empresa_cargadora_id: "",
-                    empresa_cargadora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
-                    empresa_cargadora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
-                    empresa_expedidora_id: "",
-                    empresa_expedidora_nombre: FIXED_CARTA_EMPRESA_NOMBRE,
-                    empresa_expedidora_direccion: FIXED_CARTA_EMPRESA_DIRECCION,
-                  };
-                });
-              }}
+              onChange={(id) => applyCartaLoadSelection(id)}
               options={loadOptions}
               placeholder={
                 catalogLoading ? "Cargando..." : "Selecciona una carga"
@@ -1788,6 +2013,18 @@ export default function Documentation() {
               searchPlaceholder="Buscar carga..."
               disabled={catalogLoading}
             />
+            {cartaTruckOptions.length > 0 && (
+              <FormField label="Camión (matrícula)" style={{ gap: 6 }}>
+                <SearchableSelect
+                  value={cartaPorte.camion_id}
+                  onChange={(truckId) => applyCartaTruckSelection(truckId)}
+                  options={cartaTruckOptions}
+                  placeholder="Selecciona un camión"
+                  searchPlaceholder="Buscar matrícula..."
+                  disabled={!cartaPorte.load_id}
+                />
+              </FormField>
+            )}
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1795,8 +2032,7 @@ export default function Documentation() {
             isOpen={!!cartaFormSections.datos}
             onToggle={() => toggleCartaSection("datos")}
           >
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Fecha de transporte</div>
+            <FormField label="Fecha de transporte" style={{ gap: 6 }}>
               <input
                 className="input"
                 type="date"
@@ -1808,9 +2044,8 @@ export default function Documentation() {
                   }))
                 }
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Origen de la carga</div>
+            </FormField>
+            <FormField label="Origen de la carga" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.origen_carga}
@@ -1819,9 +2054,8 @@ export default function Documentation() {
                 }
                 placeholder="Dirección / ubicación"
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Destino de la carga</div>
+            </FormField>
+            <FormField label="Destino de la carga" style={{ gap: 6 }}>
               <div style={{ display: "grid", gap: 8 }}>
                 <SearchableSelect
                   value={cartaPorte.destino_terminal_id}
@@ -1857,7 +2091,7 @@ export default function Documentation() {
                   placeholder="Destino (texto libre)"
                 />
               </div>
-            </div>
+            </FormField>
             <div
               style={{
                 display: "grid",
@@ -1865,8 +2099,7 @@ export default function Documentation() {
                 gap: 10,
               }}
             >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Matrícula tractora</div>
+              <FormField label="Matrícula tractora" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cartaPorte.matricula_tractora}
@@ -1877,9 +2110,8 @@ export default function Documentation() {
                     }))
                   }
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Matrícula remolque</div>
+              </FormField>
+              <FormField label="Matrícula remolque" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cartaPorte.matricula_remolque}
@@ -1890,7 +2122,7 @@ export default function Documentation() {
                     }))
                   }
                 />
-              </div>
+              </FormField>
             </div>
           </CollapsibleSection>
 
@@ -1899,8 +2131,7 @@ export default function Documentation() {
             isOpen={!!cartaFormSections.empresas}
             onToggle={() => toggleCartaSection("empresas")}
           >
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Empresa cargadora (fija)</div>
+            <FormField label="Empresa cargadora (fija)" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.empresa_cargadora_nombre}
@@ -1913,9 +2144,8 @@ export default function Documentation() {
                 rows={3}
                 style={{ resize: "vertical" }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Empresa expedidora (fija)</div>
+            </FormField>
+            <FormField label="Empresa expedidora (fija)" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.empresa_expedidora_nombre}
@@ -1928,9 +2158,8 @@ export default function Documentation() {
                 rows={3}
                 style={{ resize: "vertical" }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Empresa transportista</div>
+            </FormField>
+            <FormField label="Empresa transportista" style={{ gap: 6 }}>
               <SearchableSelect
                 value={cartaPorte.empresa_transportista_id}
                 onChange={(id) => {
@@ -1979,7 +2208,7 @@ export default function Documentation() {
                 rows={2}
                 style={{ resize: "vertical" }}
               />
-            </div>
+            </FormField>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1987,8 +2216,7 @@ export default function Documentation() {
             isOpen={!!cartaFormSections.transportista}
             onToggle={() => toggleCartaSection("transportista")}
           >
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Conductor</div>
+            <FormField label="Conductor" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.conductor_nombre}
@@ -2000,9 +2228,8 @@ export default function Documentation() {
                 }
                 placeholder="Nombre y apellidos"
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">DNI</div>
+            </FormField>
+            <FormField label="DNI" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.conductor_dni}
@@ -2013,9 +2240,8 @@ export default function Documentation() {
                   }))
                 }
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Precinto</div>
+            </FormField>
+            <FormField label="Precinto" style={{ gap: 6 }}>
               <input
                 className="input"
                 value={cartaPorte.precinto}
@@ -2023,7 +2249,7 @@ export default function Documentation() {
                   setCartaPorte((p) => ({ ...p, precinto: e.target.value }))
                 }
               />
-            </div>
+            </FormField>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -2086,8 +2312,7 @@ export default function Documentation() {
                 gap: 10,
               }}
             >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Palets</div>
+              <FormField label="Palets" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cartaPorte.bultos}
@@ -2096,9 +2321,8 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 5"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Temperatura</div>
+              </FormField>
+              <FormField label="Temperatura" style={{ gap: 6 }}>
                 <input
                   className="input"
                   value={cartaPorte.temperatura}
@@ -2110,9 +2334,11 @@ export default function Documentation() {
                   }
                   placeholder="Ej: -20ºC / +5ºC / SECO"
                 />
-              </div>
-              <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
-                <div className="label">Peso (kg)</div>
+              </FormField>
+              <FormField
+                label="Peso (kg)"
+                style={{ gap: 6, gridColumn: "1 / -1" }}
+              >
                 <input
                   className="input"
                   value={cartaPorte.peso_kg}
@@ -2121,7 +2347,7 @@ export default function Documentation() {
                   }
                   placeholder="Ej: 2000"
                 />
-              </div>
+              </FormField>
             </div>
           </CollapsibleSection>
         </div>

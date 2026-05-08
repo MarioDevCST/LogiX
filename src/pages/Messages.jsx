@@ -5,6 +5,7 @@ import CardGrid from "../components/CardGrid.jsx";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   ROLES,
   ROLE_LABELS,
@@ -668,8 +669,7 @@ export default function Messages() {
             style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
           >
             <div style={{ display: "grid", gap: 12 }}>
-              <div>
-                <div className="label">Título</div>
+              <FormField label="Título">
                 <input
                   className="input"
                   value={form.titulo}
@@ -678,9 +678,8 @@ export default function Messages() {
                   }
                   placeholder="Título"
                 />
-              </div>
-              <div>
-                <div className="label">Cuerpo</div>
+              </FormField>
+              <FormField label="Cuerpo">
                 <textarea
                   className="input"
                   style={{ width: "100%", resize: "vertical", minHeight: 220 }}
@@ -691,7 +690,7 @@ export default function Messages() {
                   placeholder="Contenido del mensaje"
                   rows={10}
                 />
-              </div>
+              </FormField>
             </div>
             <div style={{ display: "grid", gap: 12 }}>
               <div
@@ -701,8 +700,7 @@ export default function Messages() {
                   gap: 12,
                 }}
               >
-                <div>
-                  <div className="label">Prioridad</div>
+                <FormField label="Prioridad">
                   <select
                     className="input"
                     value={form.priority}
@@ -716,9 +714,8 @@ export default function Messages() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <div className="label">Caduca (opcional)</div>
+                </FormField>
+                <FormField label="Caduca (opcional)">
                   <input
                     className="input"
                     type="datetime-local"
@@ -730,10 +727,9 @@ export default function Messages() {
                       }))
                     }
                   />
-                </div>
+                </FormField>
               </div>
-              <div>
-                <div className="label">Usuario específico (opcional)</div>
+              <FormField label="Usuario específico (opcional)">
                 <select
                   className="input"
                   value={form.target_user_id}
@@ -760,9 +756,8 @@ export default function Messages() {
                     );
                   })}
                 </select>
-              </div>
-              <div>
-                <div className="label">Roles destinatarios</div>
+              </FormField>
+              <FormField label="Roles destinatarios">
                 <div
                   style={{
                     border: "1px solid var(--border)",
@@ -804,7 +799,7 @@ export default function Messages() {
                   Si no seleccionas roles ni usuario, el mensaje será visible
                   para todos.
                 </div>
-              </div>
+              </FormField>
             </div>
           </div>
         </Modal>
@@ -823,8 +818,7 @@ export default function Messages() {
             style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
           >
             <div style={{ display: "grid", gap: 12 }}>
-              <div>
-                <div className="label">Título</div>
+              <FormField label="Título">
                 <input
                   className="input"
                   value={editForm.titulo}
@@ -833,9 +827,8 @@ export default function Messages() {
                   }
                   placeholder="Título"
                 />
-              </div>
-              <div>
-                <div className="label">Cuerpo</div>
+              </FormField>
+              <FormField label="Cuerpo">
                 <textarea
                   className="input"
                   style={{ width: "100%", resize: "vertical", minHeight: 220 }}
@@ -846,7 +839,7 @@ export default function Messages() {
                   placeholder="Contenido del mensaje"
                   rows={10}
                 />
-              </div>
+              </FormField>
             </div>
             <div style={{ display: "grid", gap: 12 }}>
               <div
@@ -856,8 +849,7 @@ export default function Messages() {
                   gap: 12,
                 }}
               >
-                <div>
-                  <div className="label">Prioridad</div>
+                <FormField label="Prioridad">
                   <select
                     className="input"
                     value={editForm.priority}
@@ -874,9 +866,8 @@ export default function Messages() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <div className="label">Caduca (opcional)</div>
+                </FormField>
+                <FormField label="Caduca (opcional)">
                   <input
                     className="input"
                     type="datetime-local"
@@ -888,10 +879,9 @@ export default function Messages() {
                       }))
                     }
                   />
-                </div>
+                </FormField>
               </div>
-              <div>
-                <div className="label">Usuario específico (opcional)</div>
+              <FormField label="Usuario específico (opcional)">
                 <select
                   className="input"
                   value={editForm.target_user_id}
@@ -918,9 +908,8 @@ export default function Messages() {
                     );
                   })}
                 </select>
-              </div>
-              <div>
-                <div className="label">Roles destinatarios</div>
+              </FormField>
+              <FormField label="Roles destinatarios">
                 <div
                   style={{
                     border: "1px solid var(--border)",
@@ -965,7 +954,7 @@ export default function Messages() {
                   Si no seleccionas roles ni usuario, el mensaje será visible
                   para todos.
                 </div>
-              </div>
+              </FormField>
             </div>
           </div>
         </Modal>

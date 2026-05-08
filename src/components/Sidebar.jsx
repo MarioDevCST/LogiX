@@ -7,10 +7,10 @@ import {
   PERMISSIONS,
   ROLES,
 } from "../utils/roles.js";
+import { useFeatureOptions } from "../contexts/useFeatureOptions.js";
 import {
   subscribeHasPendingMerma,
   subscribeHasPendingPeticiones,
-  subscribeFeatureOptions,
 } from "../firebase/auth.js";
 
 export default function Sidebar({ collapsed }) {
@@ -22,16 +22,17 @@ export default function Sidebar({ collapsed }) {
   const isOffice = role === ROLES.OFICINA;
   const isDriver = role === ROLES.CONDUCTOR;
   const showDocumentacion = true;
-  const [featureOptions, setFeatureOptions] = useState({
-    disable_peticiones: false,
-  });
-  const peticionesDisabled = !!featureOptions.disable_peticiones;
+  const { featureOptions, loading: featureOptionsLoading } =
+    useFeatureOptions();
+  const peticionesEnabled = featureOptions?.peticiones_enabled !== false;
   const showPeticiones =
     role === ROLES.ADMIN ||
-    (!peticionesDisabled &&
+    (!featureOptionsLoading &&
+      peticionesEnabled &&
       (role === ROLES.LOGISTICA || role === ROLES.OFICINA));
   const shouldShowPeticionesDot =
-    role === ROLES.ADMIN || (!peticionesDisabled && role === ROLES.LOGISTICA);
+    role === ROLES.ADMIN ||
+    (!featureOptionsLoading && peticionesEnabled && role === ROLES.LOGISTICA);
   const shouldShowMermaDot = role === ROLES.ADMIN || role === ROLES.LOGISTICA;
   const [pendingMerma, setPendingMerma] = useState(false);
   const [pendingPeticiones, setPendingPeticiones] = useState(false);
@@ -60,15 +61,6 @@ export default function Sidebar({ collapsed }) {
       if (typeof unsubscribe === "function") unsubscribe();
     };
   }, [shouldShowPeticionesDot]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeFeatureOptions((opts) => {
-      setFeatureOptions(opts || { disable_peticiones: false });
-    });
-    return () => {
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, []);
 
   if (isDriver) {
     return (

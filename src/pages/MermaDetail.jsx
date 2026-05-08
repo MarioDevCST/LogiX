@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   deleteMermaById,
   fetchMermaById,
@@ -377,8 +378,7 @@ export default function MermaDetail() {
         onSubmit={submitEdit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Código</div>
+        <FormField label="Código">
           <input
             className="input"
             value={editForm.codigo}
@@ -387,10 +387,8 @@ export default function MermaDetail() {
             }
             placeholder="Código"
           />
-        </div>
-
-        <div>
-          <div className="label">Nombre del Producto</div>
+        </FormField>
+        <FormField label="Nombre del Producto">
           <input
             className="input"
             value={editForm.nombre_producto}
@@ -402,10 +400,8 @@ export default function MermaDetail() {
             }
             placeholder="Nombre del Producto"
           />
-        </div>
-
-        <div>
-          <div className="label">Lote</div>
+        </FormField>
+        <FormField label="Lote">
           <input
             className="input"
             value={editForm.lote}
@@ -414,10 +410,8 @@ export default function MermaDetail() {
             }
             placeholder="Lote"
           />
-        </div>
-
-        <div>
-          <div className="label">Fecha de Caducidad</div>
+        </FormField>
+        <FormField label="Fecha de Caducidad">
           <input
             className="input"
             type="date"
@@ -429,10 +423,8 @@ export default function MermaDetail() {
               }))
             }
           />
-        </div>
-
-        <div>
-          <div className="label">Cantidad</div>
+        </FormField>
+        <FormField label="Cantidad">
           <input
             className="input"
             type="number"
@@ -443,10 +435,8 @@ export default function MermaDetail() {
             }
             placeholder="Cantidad"
           />
-        </div>
-
-        <div>
-          <div className="label">Unidad</div>
+        </FormField>
+        <FormField label="Unidad">
           <select
             className="input"
             value={editForm.unidad}
@@ -465,10 +455,8 @@ export default function MermaDetail() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <div className="label">Motivo</div>
+        </FormField>
+        <FormField label="Motivo">
           <select
             className="input"
             value={editForm.motivo}
@@ -482,10 +470,8 @@ export default function MermaDetail() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <div className="label">Estado</div>
+        </FormField>
+        <FormField label="Estado">
           <select
             className="input"
             value={editForm.estado}
@@ -502,7 +488,7 @@ export default function MermaDetail() {
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar

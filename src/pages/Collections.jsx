@@ -5,6 +5,7 @@ import CardGrid from "../components/CardGrid.jsx";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import Pagination from "../components/Pagination.jsx";
+import FormField from "../components/FormField.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import {
   createCargoType,
@@ -371,8 +372,7 @@ function LocationsTab() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Puerto</div>
+        <FormField label="Puerto">
           <select
             className="select"
             value={portMode === "new" ? "__new__" : selectedPort}
@@ -403,25 +403,23 @@ function LocationsTab() {
               placeholder="Nombre del puerto"
             />
           )}
-        </div>
-        <div>
-          <div className="label">Terminal</div>
+        </FormField>
+        <FormField label="Terminal">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             placeholder="Nombre del terminal"
           />
-        </div>
-        <div>
-          <div className="label">Ciudad</div>
+        </FormField>
+        <FormField label="Ciudad">
           <input
             className="input"
             value={form.ciudad}
             onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
             placeholder="Ciudad"
           />
-        </div>
+        </FormField>
         <div>
           <div
             className="label"
@@ -787,15 +785,14 @@ function ConsigneesTab() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             placeholder="Nombre"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Modal
@@ -805,8 +802,7 @@ function ConsigneesTab() {
         onSubmit={submitEdit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={editForm.nombre}
@@ -815,7 +811,7 @@ function ConsigneesTab() {
             }
             placeholder="Nombre"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar
@@ -1212,17 +1208,15 @@ function CompaniesTab() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             placeholder="Nombre"
           />
-        </div>
-        <div>
-          <div className="label">Dirección (opcional)</div>
+        </FormField>
+        <FormField label="Dirección (opcional)">
           <textarea
             className="input"
             value={form.direccion}
@@ -1231,25 +1225,23 @@ function CompaniesTab() {
             rows={2}
             style={{ resize: "vertical" }}
           />
-        </div>
-        <div>
-          <div className="label">Teléfono (opcional)</div>
+        </FormField>
+        <FormField label="Teléfono (opcional)">
           <input
             className="input"
             value={form.telefono}
             onChange={(e) => setForm({ ...form, telefono: e.target.value })}
             placeholder="+34..."
           />
-        </div>
-        <div>
-          <div className="label">Contacto (opcional)</div>
+        </FormField>
+        <FormField label="Contacto (opcional)">
           <input
             className="input"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             placeholder="correo@ejemplo.com"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Modal
@@ -1259,8 +1251,7 @@ function CompaniesTab() {
         onSubmit={submitEdit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={editForm.nombre}
@@ -1269,9 +1260,8 @@ function CompaniesTab() {
             }
             placeholder="Nombre"
           />
-        </div>
-        <div>
-          <div className="label">Dirección (opcional)</div>
+        </FormField>
+        <FormField label="Dirección (opcional)">
           <textarea
             className="input"
             value={editForm.direccion}
@@ -1282,9 +1272,8 @@ function CompaniesTab() {
             rows={2}
             style={{ resize: "vertical" }}
           />
-        </div>
-        <div>
-          <div className="label">Teléfono (opcional)</div>
+        </FormField>
+        <FormField label="Teléfono (opcional)">
           <input
             className="input"
             value={editForm.telefono}
@@ -1293,9 +1282,8 @@ function CompaniesTab() {
             }
             placeholder="+34..."
           />
-        </div>
-        <div>
-          <div className="label">Contacto (opcional)</div>
+        </FormField>
+        <FormField label="Contacto (opcional)">
           <input
             className="input"
             value={editForm.email}
@@ -1304,7 +1292,7 @@ function CompaniesTab() {
             }
             placeholder="correo@ejemplo.com"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar
@@ -1695,8 +1683,7 @@ function ShipsTab() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre del barco</div>
+        <FormField label="Nombre del barco">
           <input
             className="input"
             value={form.nombre_del_barco}
@@ -1705,7 +1692,7 @@ function ShipsTab() {
             }
             placeholder="Nombre del barco"
           />
-        </div>
+        </FormField>
         <div>
           <div
             className="label"
@@ -1762,8 +1749,7 @@ function ShipsTab() {
             ))}
           </select>
         </div>
-        <div>
-          <div className="label">Tipo</div>
+        <FormField label="Tipo">
           <select
             className="select"
             value={form.tipo}
@@ -1773,9 +1759,8 @@ function ShipsTab() {
             <option value="Ferry">Ferry</option>
             <option value="Crucero">Crucero</option>
           </select>
-        </div>
-        <div>
-          <div className="label">Tipo de carga</div>
+        </FormField>
+        <FormField label="Tipo de carga">
           <select
             className="input"
             value={form.cargo_type}
@@ -1796,16 +1781,15 @@ function ShipsTab() {
                 </option>
               ))}
           </select>
-        </div>
-        <div>
-          <div className="label">Enlace (opcional)</div>
+        </FormField>
+        <FormField label="Enlace (opcional)">
           <input
             className="input"
             value={form.enlace}
             onChange={(e) => setForm({ ...form, enlace: e.target.value })}
             placeholder="https://..."
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Modal
@@ -1857,8 +1841,7 @@ function ShipsTab() {
         }}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={companyForm.nombre}
@@ -1867,9 +1850,8 @@ function ShipsTab() {
             }
             placeholder="Nombre de la empresa"
           />
-        </div>
-        <div>
-          <div className="label">Teléfono (opcional)</div>
+        </FormField>
+        <FormField label="Teléfono (opcional)">
           <input
             className="input"
             value={companyForm.telefono}
@@ -1878,9 +1860,8 @@ function ShipsTab() {
             }
             placeholder="+34..."
           />
-        </div>
-        <div>
-          <div className="label">Contacto (opcional)</div>
+        </FormField>
+        <FormField label="Contacto (opcional)">
           <input
             className="input"
             value={companyForm.email}
@@ -1889,7 +1870,7 @@ function ShipsTab() {
             }
             placeholder="correo@ejemplo.com"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar
@@ -2244,15 +2225,14 @@ function CargoTypesTab() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             placeholder="Nombre"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Modal
@@ -2262,8 +2242,7 @@ function CargoTypesTab() {
         onSubmit={submitEdit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={editForm.nombre}
@@ -2272,7 +2251,7 @@ function CargoTypesTab() {
             }
             placeholder="Nombre"
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar
@@ -2655,33 +2634,30 @@ function ResponsablesTab() {
         submitLabel="Crear"
       >
         <div style={{ display: "grid", gap: 10 }}>
-          <div>
-            <div className="label">Nombre</div>
+          <FormField label="Nombre">
             <input
               className="input"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               placeholder="Nombre"
             />
-          </div>
-          <div>
-            <div className="label">E-mail</div>
+          </FormField>
+          <FormField label="E-mail">
             <input
               className="input"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="email@..."
             />
-          </div>
-          <div>
-            <div className="label">Teléfono</div>
+          </FormField>
+          <FormField label="Teléfono">
             <input
               className="input"
               value={form.telefono}
               onChange={(e) => setForm({ ...form, telefono: e.target.value })}
               placeholder="Teléfono"
             />
-          </div>
+          </FormField>
         </div>
       </Modal>
 
@@ -2693,8 +2669,7 @@ function ResponsablesTab() {
         submitLabel="Guardar"
       >
         <div style={{ display: "grid", gap: 10 }}>
-          <div>
-            <div className="label">Nombre</div>
+          <FormField label="Nombre">
             <input
               className="input"
               value={editForm.nombre}
@@ -2703,9 +2678,8 @@ function ResponsablesTab() {
               }
               placeholder="Nombre"
             />
-          </div>
-          <div>
-            <div className="label">E-mail</div>
+          </FormField>
+          <FormField label="E-mail">
             <input
               className="input"
               value={editForm.email}
@@ -2714,9 +2688,8 @@ function ResponsablesTab() {
               }
               placeholder="email@..."
             />
-          </div>
-          <div>
-            <div className="label">Teléfono</div>
+          </FormField>
+          <FormField label="Teléfono">
             <input
               className="input"
               value={editForm.telefono}
@@ -2725,7 +2698,7 @@ function ResponsablesTab() {
               }
               placeholder="Teléfono"
             />
-          </div>
+          </FormField>
         </div>
       </Modal>
 

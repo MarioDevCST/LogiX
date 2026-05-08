@@ -4,6 +4,7 @@ import DataTable from "../components/DataTable.jsx";
 import Modal from "../components/Modal.jsx";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import { createProducto, fetchAllProductos } from "../firebase/auth.js";
 import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 
@@ -278,8 +279,7 @@ export default function Products() {
           onSubmit={submit}
           submitLabel="Crear"
         >
-          <div>
-            <div className="label">Código</div>
+          <FormField label="Código">
             <input
               className="input"
               value={form.codigo}
@@ -288,9 +288,8 @@ export default function Products() {
               }
               placeholder="Código"
             />
-          </div>
-          <div>
-            <div className="label">Nombre del producto</div>
+          </FormField>
+          <FormField label="Nombre del producto">
             <input
               className="input"
               value={form.nombre_producto}
@@ -302,9 +301,8 @@ export default function Products() {
               }
               placeholder="Nombre del producto"
             />
-          </div>
-          <div>
-            <div className="label">Familia</div>
+          </FormField>
+          <FormField label="Familia">
             <input
               className="input"
               value={form.familia}
@@ -313,9 +311,8 @@ export default function Products() {
               }
               placeholder="Familia"
             />
-          </div>
-          <div>
-            <div className="label">Tipo</div>
+          </FormField>
+          <FormField label="Tipo">
             <select
               className="input"
               value={form.tipo}
@@ -329,9 +326,8 @@ export default function Products() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <div className="label">Composición</div>
+          </FormField>
+          <FormField label="Composición">
             <input
               className="input"
               value={form.composicion}
@@ -340,9 +336,8 @@ export default function Products() {
               }
               placeholder="Composición"
             />
-          </div>
-          <div>
-            <div className="label">Alérgenos</div>
+          </FormField>
+          <FormField label="Alérgenos">
             <input
               className="input"
               value={form.alergenos}
@@ -351,9 +346,8 @@ export default function Products() {
               }
               placeholder="Alérgenos"
             />
-          </div>
-          <div>
-            <div className="label">Estado</div>
+          </FormField>
+          <FormField label="Estado">
             <select
               className="input"
               value={form.estado}
@@ -369,7 +363,7 @@ export default function Products() {
               <option value="disponible">Disponible</option>
               <option value="no disponible">No disponible</option>
             </select>
-          </div>
+          </FormField>
         </Modal>
       )}
 

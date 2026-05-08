@@ -4,6 +4,7 @@ import DataTable from "../components/DataTable.jsx";
 import Modal from "../components/Modal.jsx";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   createMerma,
   fetchAllMerma,
@@ -455,8 +456,7 @@ export default function Waste() {
         onSubmit={submit}
         submitLabel="Crear"
       >
-        <div>
-          <div className="label">Producto</div>
+        <FormField label="Producto">
           <div style={{ position: "relative", display: "flex", gap: 8 }}>
             <input
               className="input"
@@ -556,10 +556,9 @@ export default function Waste() {
                 </div>
               )}
           </div>
-        </div>
+        </FormField>
 
-        <div>
-          <div className="label">Lote</div>
+        <FormField label="Lote">
           <input
             className="input"
             value={form.lote}
@@ -568,10 +567,9 @@ export default function Waste() {
             }
             placeholder="Lote"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <div className="label">Fecha de Caducidad</div>
+        <FormField label="Fecha de Caducidad">
           <input
             className="input"
             type="date"
@@ -580,10 +578,9 @@ export default function Waste() {
               setForm((prev) => ({ ...prev, fecha_caducidad: e.target.value }))
             }
           />
-        </div>
+        </FormField>
 
-        <div>
-          <div className="label">Cantidad</div>
+        <FormField label="Cantidad">
           <input
             className="input"
             type="number"
@@ -594,10 +591,9 @@ export default function Waste() {
             }
             placeholder="Cantidad"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <div className="label">Unidad</div>
+        <FormField label="Unidad">
           <select
             className="input"
             value={form.unidad}
@@ -611,10 +607,9 @@ export default function Waste() {
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
 
-        <div>
-          <div className="label">Motivo</div>
+        <FormField label="Motivo">
           <select
             className="input"
             value={form.motivo}
@@ -628,7 +623,7 @@ export default function Waste() {
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
       </Modal>
 
       <Snackbar

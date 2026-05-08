@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import { ROLES, getCurrentRole, getCurrentUser } from "../utils/roles.js";
 import {
   deletePalletById,
@@ -300,8 +301,7 @@ export default function PalletDetail() {
           onSubmit={submit}
           submitLabel="Guardar"
         >
-          <div>
-            <div className="label">Número de palet</div>
+          <FormField label="Número de palet">
             <input
               className="input"
               value={form.numero_palet}
@@ -309,9 +309,8 @@ export default function PalletDetail() {
                 setForm({ ...form, numero_palet: e.target.value })
               }
             />
-          </div>
-          <div>
-            <div className="label">Tipo</div>
+          </FormField>
+          <FormField label="Tipo">
             <select
               className="select"
               value={form.tipo}
@@ -324,9 +323,8 @@ export default function PalletDetail() {
               <option value="Fruta y verdura">Fruta y verdura</option>
               <option value="Repuestos">Repuestos</option>
             </select>
-          </div>
-          <div>
-            <div className="label">Base</div>
+          </FormField>
+          <FormField label="Base">
             <select
               className="select"
               value={form.base || "Europeo"}
@@ -335,9 +333,8 @@ export default function PalletDetail() {
               <option value="Europeo">Europeo</option>
               <option value="Americano">Americano</option>
             </select>
-          </div>
-          <div>
-            <div className="label">Productos</div>
+          </FormField>
+          <FormField label="Productos">
             <div style={{ display: "grid", gap: 10 }}>
               <div
                 style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
@@ -610,7 +607,7 @@ export default function PalletDetail() {
                 placeholder="Texto libre (opcional)"
               />
             </div>
-          </div>
+          </FormField>
         </Modal>
       )}
 

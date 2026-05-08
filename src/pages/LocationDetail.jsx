@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import { getCurrentUser } from "../utils/roles.js";
 import {
   deleteLocationById,
@@ -153,38 +154,34 @@ export default function LocationDetail() {
         onSubmit={submit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
-        </div>
-        <div>
-          <div className="label">Ciudad</div>
+        </FormField>
+        <FormField label="Ciudad">
           <input
             className="input"
             value={form.ciudad}
             onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
           />
-        </div>
-        <div>
-          <div className="label">Puerto</div>
+        </FormField>
+        <FormField label="Puerto">
           <input
             className="input"
             value={form.puerto}
             onChange={(e) => setForm({ ...form, puerto: e.target.value })}
           />
-        </div>
-        <div>
-          <div className="label">Coordenadas</div>
+        </FormField>
+        <FormField label="Coordenadas">
           <input
             className="input"
             value={form.coordenadas}
             onChange={(e) => setForm({ ...form, coordenadas: e.target.value })}
           />
-        </div>
+        </FormField>
         {canDeleteLocation && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button

@@ -435,6 +435,28 @@ function isoDateOnly(value) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function normalizeLoadCamiones(value) {
+  const list = Array.isArray(value) ? value : [];
+  return list
+    .map((t) => ({
+      id: String(t?.id || t?._id || "").trim(),
+      alias: String(t?.alias || "").trim(),
+      matricula: String(t?.matricula || "")
+        .trim()
+        .toUpperCase(),
+      matricula_tractora: String(t?.matricula_tractora || "")
+        .trim()
+        .toUpperCase(),
+      pallet_ids: Array.isArray(t?.pallet_ids)
+        ? t.pallet_ids.map((v) => String(v)).filter(Boolean)
+        : [],
+      ready: !!t?.ready,
+      loaded_at: t?.loaded_at || null,
+      loaded_by: t?.loaded_by || null,
+    }))
+    .filter((t) => t.id);
+}
+
 export async function fetchAllLoads() {
   const docs = await getAllDocsOrdered({
     collectionName: "loads",
@@ -459,6 +481,7 @@ export async function fetchAllLoads() {
     lancha: !!data.lancha,
     estado_viaje: data.estado_viaje || "Preparando",
     last_informe_resumen: data.last_informe_resumen || null,
+    camiones: normalizeLoadCamiones(data.camiones),
   }));
 }
 
@@ -515,6 +538,7 @@ export async function fetchLoadsByFechaCargaRange({
       lancha: !!data.lancha,
       estado_viaje: data.estado_viaje || "Preparando",
       last_informe_resumen: data.last_informe_resumen || null,
+      camiones: normalizeLoadCamiones(data.camiones),
     });
   });
   return list;
@@ -560,6 +584,7 @@ export async function fetchLoadsByChoferId(choferId) {
       lancha: !!data.lancha,
       estado_viaje: data.estado_viaje || "Preparando",
       last_informe_resumen: data.last_informe_resumen || null,
+      camiones: normalizeLoadCamiones(data.camiones),
     });
   });
   const toMs = (value) => {
@@ -601,6 +626,7 @@ export async function fetchLoadById(id) {
     lancha: !!data.lancha,
     estado_viaje: data.estado_viaje || "Preparando",
     last_informe_resumen: data.last_informe_resumen || null,
+    camiones: normalizeLoadCamiones(data.camiones),
   };
 }
 
@@ -620,6 +646,7 @@ export async function createLoad(payload) {
   const palets = Array.isArray(payload?.palets)
     ? payload.palets.map((v) => String(v)).filter(Boolean)
     : [];
+  const camiones = normalizeLoadCamiones(payload?.camiones);
 
   const ship = await fetchShipById(barco).catch(() => null);
   const nombre =
@@ -647,6 +674,7 @@ export async function createLoad(payload) {
     cash: !!payload?.cash,
     lancha: !!payload?.lancha,
     estado_viaje: String(payload?.estado_viaje || "Preparando"),
+    camiones,
     creado_por: String(payload?.creado_por || "Testing"),
     modificado_por: "",
     fecha_creacion: serverTimestamp(),
@@ -739,6 +767,20 @@ export async function updateLoadById(id, updates) {
   if (Array.isArray(updates?.entrega)) patch.entrega = updates.entrega;
   if (Array.isArray(updates?.carga)) patch.carga = updates.carga;
   if (Array.isArray(updates?.palets)) patch.palets = updates.palets;
+  if (typeof updates?.camiones !== "undefined") {
+    patch.camiones = normalizeLoadCamiones(updates.camiones);
+  } else if (
+    shouldResetPalletEstado &&
+    Array.isArray(current?.camiones) &&
+    current.camiones.length > 0
+  ) {
+    patch.camiones = current.camiones.map((t) => ({
+      ...t,
+      ready: false,
+      loaded_at: null,
+      loaded_by: null,
+    }));
+  }
 
   const cleanedPatch = Object.fromEntries(
     Object.entries(patch).filter(([, v]) => typeof v !== "undefined"),
@@ -3336,8 +3378,15 @@ export async function fetchFeatureOptions() {
   const ref = doc(firebaseDb, "app_options", "features");
   const snap = await getDoc(ref);
   const data = snap.exists() ? snap.data() || {} : {};
+  const enabledRaw = data.peticiones_enabled;
+  const enabled =
+    typeof enabledRaw === "boolean"
+      ? enabledRaw
+      : data.disable_peticiones === true
+        ? false
+        : true;
   return {
-    disable_peticiones: !!data.disable_peticiones,
+    peticiones_enabled: enabled,
   };
 }
 
@@ -3350,21 +3399,33 @@ export function subscribeFeatureOptions(onChange) {
     ref,
     (snap) => {
       const data = snap.exists() ? snap.data() || {} : {};
-      onChange({ disable_peticiones: !!data.disable_peticiones });
+      const enabledRaw = data.peticiones_enabled;
+      const enabled =
+        typeof enabledRaw === "boolean"
+          ? enabledRaw
+          : data.disable_peticiones === true
+            ? false
+            : true;
+      onChange({ peticiones_enabled: enabled });
     },
     () => {
-      onChange({ disable_peticiones: false });
+      onChange({ peticiones_enabled: true });
     },
   );
 }
 
 export async function setDisablePeticiones(disable) {
+  return setPeticionesEnabled(!disable);
+}
+
+export async function setPeticionesEnabled(enabled) {
   if (!firebaseDb) throw new Error("Firestore no está configurado");
   const ref = doc(firebaseDb, "app_options", "features");
   await setDoc(
     ref,
     {
-      disable_peticiones: !!disable,
+      peticiones_enabled: !!enabled,
+      disable_peticiones: !enabled,
       updatedAt: serverTimestamp(),
     },
     { merge: true },

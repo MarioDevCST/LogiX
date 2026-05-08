@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+// Selector reutilizable con búsqueda:
+// - Renderiza el botón/input en el flujo normal.
+// - Renderiza el menú en un portal para evitar recortes por overflow en modales/cards.
+// - Devuelve al padre únicamente el `value` elegido.
 export default function SearchableSelect({
   value,
   onChange,
@@ -16,11 +20,15 @@ export default function SearchableSelect({
   const menuRef = useRef(null);
   const [menuPos, setMenuPos] = useState(null);
 
+  // Resuelve la opción actualmente seleccionada a partir del `value` externo.
+  // Se memoiza para evitar búsquedas repetidas en cada render.
   const selected = useMemo(() => {
     const val = String(value ?? "");
     return (options || []).find((o) => String(o?.value ?? "") === val) || null;
   }, [options, value]);
 
+  // Filtra opciones por el texto introducido en el buscador interno.
+  // Si no hay query, devuelve la lista completa en el orden recibido.
   const filtered = useMemo(() => {
     const q = String(query || "")
       .trim()
@@ -34,6 +42,8 @@ export default function SearchableSelect({
     );
   }, [options, query]);
 
+  // Cierra el menú al hacer click/touch fuera del botón o del menú portal.
+  // También limpia la query para que al reabrir aparezca la lista completa.
   useEffect(() => {
     if (!open) return;
     const onDown = (e) => {
@@ -52,6 +62,8 @@ export default function SearchableSelect({
     };
   }, [open]);
 
+  // Calcula posición y ancho del menú en pantalla cuando está abierto.
+  // Se recalcula en resize/scroll para que el portal "siga" al control origen.
   useEffect(() => {
     if (!open) return;
     const update = () => {
@@ -93,6 +105,7 @@ export default function SearchableSelect({
           gap: 8,
         }}
       >
+        {/* Texto actual o placeholder si no hay selección */}
         <span
           style={{
             color: selected ? "inherit" : "var(--text-secondary)",
@@ -112,6 +125,7 @@ export default function SearchableSelect({
       {open &&
         typeof document !== "undefined" &&
         createPortal(
+          // Menú en portal para evitar clipping por overflow en contenedores padres.
           <div
             ref={menuRef}
             style={{
@@ -164,6 +178,7 @@ export default function SearchableSelect({
                       key={val || o?.label}
                       type="button"
                       onClick={() => {
+                        // Notifica selección al padre y cierra el menú.
                         onChange?.(val);
                         setOpen(false);
                         setQuery("");

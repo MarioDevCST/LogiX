@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import * as ReactRouterDom from "react-router-dom";
 import Pagination from "../components/Pagination.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
+import LoadDivisionModal from "../components/LoadDivisionModal.jsx";
 import {
   fetchAllLoads,
   fetchAllPallets,
@@ -64,6 +66,11 @@ export default function PalletLoading() {
     message: "",
     type: "success",
   });
+  const [divisionLoadId, setDivisionLoadId] = useState("");
+  const [divisionSaving, setDivisionSaving] = useState(false);
+  const [checklistTruckTabByLoadId, setChecklistTruckTabByLoadId] = useState(
+    {},
+  );
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -457,13 +464,42 @@ export default function PalletLoading() {
   const openFinalizeReport = (loadId) => {
     const id = String(loadId || "");
     if (!id) return;
+    const loadEntity =
+      loadsCargando.find((x) => String(x?._id || x?.id || "") === id) || null;
+    const camiones = Array.isArray(loadEntity?.camiones)
+      ? loadEntity.camiones
+      : [];
+    if (camiones.length > 0) {
+      const palletsInLoad = palletsByLoadId.get(id) || [];
+      const allIds = palletsInLoad
+        .map((p) => String(p?._id || p?.id || ""))
+        .filter(Boolean);
+      const assigned = new Set();
+      camiones.forEach((t) => {
+        (Array.isArray(t?.pallet_ids) ? t.pallet_ids : [])
+          .map((v) => String(v))
+          .filter(Boolean)
+          .forEach((pid) => assigned.add(pid));
+      });
+      const unassigned = allIds.filter((pid) => !assigned.has(pid));
+      const readyAll = camiones.every((t) => !!t?.ready || !!t?.loaded_at);
+      if (unassigned.length > 0 || !readyAll) {
+        setSnack({
+          open: true,
+          message:
+            "No se puede finalizar: asigna todos los palets a camiones y marca todos los camiones como listos.",
+          type: "warning",
+        });
+        setExpandedLoadId(id);
+        setDivisionLoadId(id);
+        return;
+      }
+    }
     setReportLoadId(id);
     const currentUser = getCurrentUser();
     const currentId = String(currentUser?._id || currentUser?.id || "").trim();
     setReportOperators(currentId ? [currentId] : []);
     setReportNotes("");
-    const loadEntity =
-      loadsCargando.find((x) => String(x?._id || x?.id || "") === id) || null;
     const choferId = getRefId(loadEntity?.chofer);
     const choferName = getRefName(loadEntity?.chofer);
     const consigneeId = getRefId(loadEntity?.consignatario);
@@ -537,6 +573,44 @@ export default function PalletLoading() {
       return;
     }
     const palletsInLoad = palletsByLoadId.get(id) || [];
+    const loadEntity =
+      loadsCargando.find((x) => String(x?._id || x?.id || "") === id) || null;
+    const camiones = Array.isArray(loadEntity?.camiones)
+      ? loadEntity.camiones
+      : [];
+    if (camiones.length > 0) {
+      const allIds = palletsInLoad
+        .map((p) => String(p?._id || p?.id || ""))
+        .filter(Boolean);
+      const assigned = new Set();
+      camiones.forEach((t) => {
+        (Array.isArray(t?.pallet_ids) ? t.pallet_ids : [])
+          .map((v) => String(v))
+          .filter(Boolean)
+          .forEach((pid) => assigned.add(pid));
+      });
+      const unassigned = allIds.filter((pid) => !assigned.has(pid));
+      const readyAll = camiones.every((t) => !!t?.ready || !!t?.loaded_at);
+      if (unassigned.length > 0 || !readyAll) {
+        setSnack({
+          open: true,
+          message:
+            "No se puede finalizar: asigna todos los palets a camiones y marca todos los camiones como listos.",
+          type: "warning",
+        });
+        return;
+      }
+      const pending = palletsInLoad.filter((p) => p?.estado !== true);
+      if (pending.length > 0) {
+        setSnack({
+          open: true,
+          message:
+            "No se puede finalizar: hay palets pendientes. Marca todos los palets del/los camiones como cargados.",
+          type: "warning",
+        });
+        return;
+      }
+    }
     const selectedIds = palletsInLoad
       .filter((p) => p?.estado === true)
       .map((p) => String(p?._id || p?.id || ""))
@@ -562,8 +636,6 @@ export default function PalletLoading() {
         estado_viaje: "Viajando",
         modificado_por: getCurrentUser()?.name || "Testing",
       });
-      const loadEntity =
-        loadsCargando.find((l) => String(l?._id || l?.id || "") === id) || null;
       const loadNombre = loadEntity?.nombre || "";
       const operatorObjs = [];
       const byId = new Map(
@@ -660,6 +732,10 @@ export default function PalletLoading() {
     }
   };
 
+  const closeDivision = () => {
+    setDivisionLoadId("");
+  };
+
   return (
     <>
       <div
@@ -703,6 +779,26 @@ export default function PalletLoading() {
               const loadId = String(l?._id || l?.id || "");
               const expanded = expandedLoadId === loadId;
               const palletsInLoad = palletsByLoadId.get(loadId) || [];
+              const camiones = Array.isArray(l?.camiones) ? l.camiones : [];
+              const byTipo = !!groupByTipoByLoadId[loadId];
+              const hideLoaded = !!hideUnloadedByLoadId[loadId];
+              const divisionActive = String(divisionLoadId || "") === loadId;
+              const selectedChecklistTruckIdRaw = String(
+                checklistTruckTabByLoadId?.[loadId] || "all",
+              ).trim();
+              const selectedChecklistTruckId =
+                selectedChecklistTruckIdRaw || "all";
+              const selectedChecklistTruck =
+                selectedChecklistTruckId !== "all"
+                  ? camiones.find(
+                      (t) =>
+                        String(t?.id || t?._id || "").trim() ===
+                        selectedChecklistTruckId,
+                    ) || null
+                  : null;
+              const effectiveChecklistTruckId = selectedChecklistTruck
+                ? selectedChecklistTruckId
+                : "all";
               const selectedSet = new Set(
                 palletsInLoad
                   .filter((p) => p?.estado === true)
@@ -746,16 +842,22 @@ export default function PalletLoading() {
                       cursor: "pointer",
                       background: "#f8fafc",
                       border: "1px solid var(--border)",
-                      borderLeft: "4px solid #6b7280",
+                      borderLeft: divisionActive
+                        ? "4px solid #7c3aed"
+                        : "4px solid #6b7280",
                       borderRadius: expanded ? "10px 10px 0 0" : 10,
                       display: "flex",
                       alignItems: "center",
                     }}
-                    onClick={() =>
-                      setExpandedLoadId((cur) =>
-                        String(cur || "") === loadId ? "" : loadId,
-                      )
-                    }
+                    onClick={() => {
+                      if (expanded) {
+                        setExpandedLoadId("");
+                        if (String(divisionLoadId || "") === loadId)
+                          setDivisionLoadId("");
+                        return;
+                      }
+                      setExpandedLoadId(loadId);
+                    }}
                   >
                     <div
                       style={{
@@ -780,6 +882,80 @@ export default function PalletLoading() {
                             ? ` · Palets: ${palletsInLoad.length}`
                             : ""}
                         </div>
+                        {divisionActive || hideLoaded || byTipo ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 6,
+                              marginTop: 6,
+                            }}
+                          >
+                            {divisionActive ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  borderRadius: 999,
+                                  padding: "2px 8px",
+                                  border: "1px solid #ddd6fe",
+                                  background: "#f5f3ff",
+                                  color: "#5b21b6",
+                                }}
+                              >
+                                <span className="material-symbols-outlined">
+                                  local_shipping
+                                </span>
+                                División
+                              </span>
+                            ) : null}
+                            {hideLoaded ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  borderRadius: 999,
+                                  padding: "2px 8px",
+                                  border: "1px solid #bae6fd",
+                                  background: "#f0f9ff",
+                                  color: "#0369a1",
+                                }}
+                              >
+                                <span className="material-symbols-outlined">
+                                  visibility_off
+                                </span>
+                                Ocultar cargados
+                              </span>
+                            ) : null}
+                            {byTipo ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  borderRadius: 999,
+                                  padding: "2px 8px",
+                                  border: "1px solid #fde68a",
+                                  background: "#fffbeb",
+                                  color: "#b45309",
+                                }}
+                              >
+                                <span className="material-symbols-outlined">
+                                  filter_alt
+                                </span>
+                                Por tipo
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <button
                         className="icon-button"
@@ -825,14 +1001,67 @@ export default function PalletLoading() {
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: "stretch",
-                          gap: 12,
+                          alignItems: "center",
+                          gap: 10,
                           flexWrap: "wrap",
                         }}
                       >
-                        <div style={{ display: "grid", gap: 8 }}>
+                        <div
+                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                        >
                           <button
-                            className="secondary-button"
+                            type="button"
+                            className={
+                              !divisionActive
+                                ? "primary-button"
+                                : "secondary-button"
+                            }
+                            onClick={() => setDivisionLoadId("")}
+                            style={{
+                              height: 36,
+                              padding: "0 10px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                            title="Ver checklist"
+                          >
+                            <span className="material-symbols-outlined">
+                              checklist
+                            </span>
+                            Checklist
+                          </button>
+                          <button
+                            type="button"
+                            className={
+                              divisionActive
+                                ? "primary-button"
+                                : "secondary-button"
+                            }
+                            onClick={() => setDivisionLoadId(loadId)}
+                            style={{
+                              height: 36,
+                              padding: "0 10px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                            title="División de carga"
+                          >
+                            <span className="material-symbols-outlined">
+                              local_shipping
+                            </span>
+                            División
+                          </button>
+                        </div>
+
+                        <div
+                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                        >
+                          <button
+                            className={
+                              byTipo ? "primary-button" : "secondary-button"
+                            }
                             type="button"
                             onClick={() => toggleGroupByTipo(loadId)}
                             title="Separar por tipo"
@@ -840,7 +1069,7 @@ export default function PalletLoading() {
                               display: "inline-flex",
                               alignItems: "center",
                               gap: 8,
-                              padding: "8px 10px",
+                              padding: "0 10px",
                               height: 36,
                               whiteSpace: "nowrap",
                             }}
@@ -849,17 +1078,17 @@ export default function PalletLoading() {
                               filter_alt
                             </span>
                             <span style={{ fontWeight: 700, fontSize: 13 }}>
-                              {groupByTipoByLoadId[loadId]
-                                ? "Ver por número"
-                                : "Separar por tipo"}
+                              Por tipo
                             </span>
                           </button>
                           <button
-                            className="secondary-button"
+                            className={
+                              hideLoaded ? "primary-button" : "secondary-button"
+                            }
                             type="button"
                             onClick={() => toggleHideUnloaded(loadId)}
                             title={
-                              hideUnloadedByLoadId[loadId]
+                              hideLoaded
                                 ? "Mostrar todos los palets"
                                 : "Ocultar cargados"
                             }
@@ -867,420 +1096,725 @@ export default function PalletLoading() {
                               display: "inline-flex",
                               alignItems: "center",
                               gap: 8,
-                              padding: "8px 10px",
+                              padding: "0 10px",
                               height: 36,
                               whiteSpace: "nowrap",
                             }}
                           >
                             <span className="material-symbols-outlined">
-                              {hideUnloadedByLoadId[loadId]
-                                ? "visibility_off"
-                                : "visibility"}
+                              {hideLoaded ? "visibility_off" : "visibility"}
                             </span>
                             <span style={{ fontWeight: 700, fontSize: 13 }}>
-                              {hideUnloadedByLoadId[loadId]
-                                ? "Mostrar todos"
-                                : "Ocultar cargados"}
+                              {hideLoaded ? "Ocultando" : "Ocultar cargados"}
                             </span>
                           </button>
                         </div>
+                      </div>
 
-                        <div
-                          style={{
-                            flex: 1,
-                            minWidth: 280,
-                            border: "1px solid var(--border)",
-                            borderRadius: 10,
-                            padding: 10,
-                            display: "grid",
-                            gap: 10,
+                      {divisionActive ? (
+                        <LoadDivisionModal
+                          open={divisionActive}
+                          variant="inline"
+                          load={
+                            loads.find(
+                              (x) => String(x?._id || x?.id || "") === loadId,
+                            ) || null
+                          }
+                          pallets={palletsInLoad}
+                          hideLoaded={hideLoaded}
+                          actor={getCurrentUser()}
+                          saving={divisionSaving}
+                          onTogglePallet={(pid) => togglePallet(loadId, pid)}
+                          onClose={closeDivision}
+                          onSave={async ({ camiones, error }) => {
+                            if (error) {
+                              setSnack({
+                                open: true,
+                                message: String(error),
+                                type: "error",
+                              });
+                              return;
+                            }
+                            if (!loadId) return;
+                            if (!Array.isArray(camiones)) return;
+                            if (divisionSaving) return;
+                            try {
+                              setDivisionSaving(true);
+                              const updated = await updateLoadById(loadId, {
+                                camiones,
+                                modificado_por:
+                                  getCurrentUser()?.name || "Testing",
+                              });
+                              if (updated) {
+                                setLoads((prev) =>
+                                  prev.map((item) =>
+                                    String(item?._id || item?.id || "") ===
+                                    String(loadId)
+                                      ? {
+                                          ...item,
+                                          ...updated,
+                                          _id: updated._id || updated.id,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                                setSnack({
+                                  open: true,
+                                  message: "División guardada",
+                                  type: "success",
+                                });
+                                closeDivision();
+                                return;
+                              }
+                              setSnack({
+                                open: true,
+                                message: "No se pudo guardar la división",
+                                type: "error",
+                              });
+                            } catch (e) {
+                              setSnack({
+                                open: true,
+                                message: String(
+                                  e?.message || "Error guardando la división",
+                                ),
+                                type: "error",
+                              });
+                            } finally {
+                              setDivisionSaving(false);
+                            }
                           }}
-                        >
+                        />
+                      ) : (
+                        <>
                           <div
                             style={{
-                              display: "flex",
-                              gap: 12,
-                              alignItems: "center",
+                              border: "1px solid var(--border)",
+                              borderRadius: 10,
+                              padding: 10,
+                              display: "grid",
+                              gap: 10,
                             }}
                           >
                             <div
                               style={{
-                                width: 74,
-                                height: 74,
-                                borderRadius: "50%",
-                                background:
-                                  totalCount > 0 && donutSegments
-                                    ? `conic-gradient(${donutSegments})`
-                                    : "#e5e7eb",
-                                display: "grid",
-                                placeItems: "center",
-                                flex: "0 0 auto",
+                                display: "flex",
+                                gap: 12,
+                                alignItems: "center",
                               }}
-                              title="Distribución de palets por tipo"
                             >
                               <div
                                 style={{
-                                  width: 46,
-                                  height: 46,
+                                  width: 74,
+                                  height: 74,
                                   borderRadius: "50%",
-                                  background: "#fff",
+                                  background:
+                                    totalCount > 0 && donutSegments
+                                      ? `conic-gradient(${donutSegments})`
+                                      : "#e5e7eb",
                                   display: "grid",
                                   placeItems: "center",
-                                  fontSize: 12,
-                                  fontWeight: 800,
+                                  flex: "0 0 auto",
                                 }}
-                              >
-                                {totalCount}
-                              </div>
-                            </div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: "var(--text-secondary)",
-                                  marginBottom: 4,
-                                }}
-                              >
-                                Carga completada
-                              </div>
-                              <div
-                                style={{
-                                  height: 10,
-                                  borderRadius: 999,
-                                  background: "var(--hover)",
-                                  overflow: "hidden",
-                                }}
+                                title="Distribución de palets por tipo"
                               >
                                 <div
                                   style={{
-                                    width: `${loadedPct}%`,
-                                    height: "100%",
-                                    background:
-                                      loadedPct >= 100 ? "#16a34a" : "#2563eb",
-                                  }}
-                                />
-                              </div>
-                              <div
-                                style={{
-                                  marginTop: 6,
-                                  fontSize: 12,
-                                  color: "var(--text-secondary)",
-                                }}
-                              >
-                                {loadedCount}/{totalCount} cargados ({loadedPct}
-                                %)
-                              </div>
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            {tipoEntries.map(([tipo, count]) => (
-                              <div
-                                key={`${loadId}-tipo-${tipo}`}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                  fontSize: 12,
-                                  color: "var(--text-secondary)",
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 999,
-                                  padding: "3px 8px",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    width: 8,
-                                    height: 8,
+                                    width: 46,
+                                    height: 46,
                                     borderRadius: "50%",
-                                    background: tipoColor(tipo),
-                                  }}
-                                />
-                                {tipoLabel(tipo)}: {count}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {palletsInLoad.length === 0 ? (
-                        <div style={{ color: "var(--text-secondary)" }}>
-                          Sin palets en esta carga
-                        </div>
-                      ) : (
-                        (() => {
-                          const byTipo = !!groupByTipoByLoadId[loadId];
-                          const hideLoaded = !!hideUnloadedByLoadId[loadId];
-                          const baseSort = (a, b) =>
-                            String(a?.numero_palet || "").localeCompare(
-                              String(b?.numero_palet || ""),
-                              "es",
-                              { numeric: true, sensitivity: "base" },
-                            );
-                          const list = (
-                            hideLoaded
-                              ? palletsInLoad.filter((p) => p?.estado !== true)
-                              : palletsInLoad
-                          ).slice();
-                          if (list.length === 0) {
-                            return (
-                              <div style={{ color: "var(--text-secondary)" }}>
-                                {hideLoaded
-                                  ? "No hay palets pendientes para mostrar"
-                                  : "Sin palets en esta carga"}
-                              </div>
-                            );
-                          }
-                          const renderPalletCard = (p, key) => {
-                            const pid = String(p?._id || p?.id || "");
-                            const checked = selectedSet.has(pid);
-                            const numero = String(p?.numero_palet || "").trim();
-                            const tipo = String(p?.tipo || "").trim();
-                            const base = String(p?.base || "").trim();
-                            const productos = String(p?.productos || "").trim();
-                            const hasProducts = !!productos;
-                            const productsExpanded =
-                              !!expandedProductsByPalletId[pid];
-                            return (
-                              <label
-                                key={key}
-                                style={{
-                                  display: "flex",
-                                  gap: 10,
-                                  alignItems: "stretch",
-                                  padding: "10px 10px",
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 10,
-                                  cursor: "pointer",
-                                  background: checked ? tipoTint(tipo) : "#fff",
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => togglePallet(loadId, pid)}
-                                  style={{ marginTop: 3 }}
-                                />
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div
-                                    style={{
-                                      fontWeight: 800,
-                                      fontSize: 16,
-                                      lineHeight: "20px",
-                                    }}
-                                  >
-                                    {numero || "—"}
-                                  </div>
-                                  <div
-                                    style={{
-                                      color: "var(--text-secondary)",
-                                      fontSize: 13,
-                                      lineHeight: "16px",
-                                    }}
-                                  >
-                                    {[tipo, base].filter(Boolean).join(" · ") ||
-                                      "—"}
-                                  </div>
-                                  {hasProducts && productsExpanded ? (
-                                    <div
-                                      style={{
-                                        marginTop: 6,
-                                        fontSize: 13,
-                                        lineHeight: "16px",
-                                        color: "var(--text-secondary)",
-                                        whiteSpace: "pre-wrap",
-                                      }}
-                                    >
-                                      {productos}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div
-                                  style={{
-                                    marginLeft: "auto",
-                                    display: "flex",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    title={
-                                      hasProducts
-                                        ? productsExpanded
-                                          ? "Ocultar productos"
-                                          : "Ver productos"
-                                        : "Sin productos"
-                                    }
-                                    aria-label={
-                                      hasProducts
-                                        ? productsExpanded
-                                          ? "Ocultar productos"
-                                          : "Ver productos"
-                                        : "Sin productos"
-                                    }
-                                    disabled={!hasProducts}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      if (!hasProducts) return;
-                                      togglePalletProducts(pid);
-                                    }}
-                                    style={{
-                                      height: 28,
-                                      minWidth: 94,
-                                      border: "1px solid var(--border)",
-                                      borderRadius: 999,
-                                      background: hasProducts
-                                        ? "#fff"
-                                        : "#f3f4f6",
-                                      cursor: hasProducts
-                                        ? "pointer"
-                                        : "not-allowed",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      gap: 4,
-                                      padding: "0 10px",
-                                      color: hasProducts
-                                        ? "#374151"
-                                        : "#9ca3af",
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    <span
-                                      className="material-symbols-outlined"
-                                      style={{ fontSize: 16 }}
-                                    >
-                                      {hasProducts
-                                        ? productsExpanded
-                                          ? "expand_less"
-                                          : "expand_more"
-                                        : "block"}
-                                    </span>
-                                    {hasProducts
-                                      ? productsExpanded
-                                        ? "Ocultar"
-                                        : "Productos"
-                                      : "Sin prod."}
-                                  </button>
-                                </div>
-                              </label>
-                            );
-                          };
-                          if (!byTipo) {
-                            return (
-                              <div
-                                style={{
-                                  display: "grid",
-                                  gridTemplateColumns:
-                                    "repeat(2, minmax(0, 1fr))",
-                                  gap: 8,
-                                }}
-                              >
-                                {list
-                                  .sort(baseSort)
-                                  .map((p) =>
-                                    renderPalletCard(
-                                      p,
-                                      String(
-                                        p?._id ||
-                                          p?.id ||
-                                          p?.numero_palet ||
-                                          "",
-                                      ),
-                                    ),
-                                  )}
-                              </div>
-                            );
-                          }
-
-                          const grouped = new Map();
-                          list.forEach((p) => {
-                            const key = normalizeTipo(p?.tipo);
-                            if (!grouped.has(key)) grouped.set(key, []);
-                            grouped.get(key).push(p);
-                          });
-                          const keys = Array.from(grouped.keys()).sort(
-                            (a, b) => {
-                              const ao = tipoOrder(a);
-                              const bo = tipoOrder(b);
-                              if (ao !== bo) return ao - bo;
-                              return String(a || "").localeCompare(
-                                String(b || ""),
-                                "es",
-                                {
-                                  sensitivity: "base",
-                                },
-                              );
-                            },
-                          );
-
-                          return keys.map((k) => {
-                            const items = grouped.get(k) || [];
-                            items.sort(baseSort);
-                            const label = tipoLabel(k);
-                            return (
-                              <div
-                                key={`group-${k || "sin-tipo"}`}
-                                style={{
-                                  display: "grid",
-                                  gap: 8,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    padding: "6px 8px",
-                                    borderRadius: 10,
-                                    background: tipoTint(k),
-                                    border: "1px solid var(--border)",
+                                    background: "#fff",
+                                    display: "grid",
+                                    placeItems: "center",
+                                    fontSize: 12,
                                     fontWeight: 800,
                                   }}
                                 >
-                                  {label}
-                                  <span
-                                    style={{
-                                      color: "var(--text-secondary)",
-                                      fontWeight: 700,
-                                      fontSize: 12,
-                                    }}
-                                  >
-                                    {items.length}
-                                  </span>
+                                  {totalCount}
+                                </div>
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    color: "var(--text-secondary)",
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  Carga completada
                                 </div>
                                 <div
                                   style={{
-                                    display: "grid",
-                                    gridTemplateColumns:
-                                      "repeat(2, minmax(0, 1fr))",
-                                    gap: 8,
+                                    height: 10,
+                                    borderRadius: 999,
+                                    background: "var(--hover)",
+                                    overflow: "hidden",
                                   }}
                                 >
-                                  {items.map((p) => {
-                                    const pid = String(
-                                      p?._id || p?.id || p?.numero_palet || "",
-                                    );
-                                    return renderPalletCard(
-                                      p,
-                                      `${k || "sin-tipo"}-${pid}`,
-                                    );
-                                  })}
+                                  <div
+                                    style={{
+                                      width: `${loadedPct}%`,
+                                      height: "100%",
+                                      background:
+                                        loadedPct >= 100
+                                          ? "#16a34a"
+                                          : "#2563eb",
+                                    }}
+                                  />
+                                </div>
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    fontSize: 12,
+                                    color: "var(--text-secondary)",
+                                  }}
+                                >
+                                  {loadedCount}/{totalCount} cargados (
+                                  {loadedPct}%)
                                 </div>
                               </div>
-                            );
-                          });
-                        })()
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 8,
+                              }}
+                            >
+                              {tipoEntries.map(([tipo, count]) => (
+                                <div
+                                  key={`${loadId}-tipo-${tipo}`}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    fontSize: 12,
+                                    color: "var(--text-secondary)",
+                                    border: "1px solid var(--border)",
+                                    borderRadius: 999,
+                                    padding: "3px 8px",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: "50%",
+                                      background: tipoColor(tipo),
+                                    }}
+                                  />
+                                  {tipoLabel(tipo)}: {count}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {camiones.length > 1 ? (
+                            <div
+                              style={{
+                                border: "1px solid var(--border)",
+                                borderRadius: 10,
+                                padding: 10,
+                                display: "grid",
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  color: "var(--text-secondary)",
+                                }}
+                              >
+                                Progreso por camión
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: 8,
+                                }}
+                              >
+                                {camiones.map((t) => {
+                                  const tid = String(
+                                    t?.id || t?._id || "",
+                                  ).trim();
+                                  if (!tid) return null;
+                                  const label = String(
+                                    t?.alias || t?.matricula || "Camión",
+                                  ).trim();
+                                  const ids = Array.isArray(t?.pallet_ids)
+                                    ? Array.from(
+                                        new Set(
+                                          t.pallet_ids
+                                            .map((v) => String(v || "").trim())
+                                            .filter(Boolean),
+                                        ),
+                                      )
+                                    : [];
+                                  const total = ids.length;
+                                  const loaded = ids.filter((pid) =>
+                                    selectedSet.has(pid),
+                                  ).length;
+                                  const pct = total
+                                    ? Math.round((loaded / total) * 100)
+                                    : 0;
+                                  const ready = !!t?.ready || !!t?.loaded_at;
+                                  return (
+                                    <div
+                                      key={`${loadId}-truck-progress-${tid}`}
+                                      style={{
+                                        width: 240,
+                                        border: "1px solid var(--border)",
+                                        borderRadius: 10,
+                                        padding: 10,
+                                        background: ready ? "#ecfdf5" : "#fff",
+                                        display: "grid",
+                                        gap: 6,
+                                      }}
+                                      title={label}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          gap: 10,
+                                          alignItems: "center",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontWeight: 800,
+                                            fontSize: 13,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {label}
+                                        </div>
+                                        <div
+                                          style={{
+                                            fontSize: 12,
+                                            color: "var(--text-secondary)",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {loaded}/{total}
+                                        </div>
+                                      </div>
+                                      <div
+                                        style={{
+                                          height: 8,
+                                          borderRadius: 999,
+                                          background: "var(--hover)",
+                                          overflow: "hidden",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            width: `${pct}%`,
+                                            height: "100%",
+                                            background: ready
+                                              ? "#16a34a"
+                                              : pct >= 100
+                                                ? "#16a34a"
+                                                : "#2563eb",
+                                          }}
+                                        />
+                                      </div>
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          color: "var(--text-secondary)",
+                                        }}
+                                      >
+                                        {pct}% {ready ? "· listo" : ""}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {camiones.length > 0 ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 8,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className={
+                                  effectiveChecklistTruckId === "all"
+                                    ? "primary-button"
+                                    : "secondary-button"
+                                }
+                                onClick={() =>
+                                  setChecklistTruckTabByLoadId((prev) => ({
+                                    ...prev,
+                                    [loadId]: "all",
+                                  }))
+                                }
+                                style={{ height: 34, padding: "0 10px" }}
+                              >
+                                Todos
+                              </button>
+                              {camiones.map((t) => {
+                                const tid = String(
+                                  t?.id || t?._id || "",
+                                ).trim();
+                                if (!tid) return null;
+                                const label = String(
+                                  t?.alias || t?.matricula || "Camión",
+                                ).trim();
+                                const count = Array.isArray(t?.pallet_ids)
+                                  ? new Set(
+                                      t.pallet_ids
+                                        .map((v) => String(v || "").trim())
+                                        .filter(Boolean),
+                                    ).size
+                                  : 0;
+                                return (
+                                  <button
+                                    key={`${loadId}-truck-tab-${tid}`}
+                                    type="button"
+                                    className={
+                                      effectiveChecklistTruckId === tid
+                                        ? "primary-button"
+                                        : "secondary-button"
+                                    }
+                                    onClick={() =>
+                                      setChecklistTruckTabByLoadId((prev) => ({
+                                        ...prev,
+                                        [loadId]: tid,
+                                      }))
+                                    }
+                                    style={{ height: 34, padding: "0 10px" }}
+                                    title={label}
+                                  >
+                                    {label} ({count})
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+
+                          {palletsInLoad.length === 0 ? (
+                            <div style={{ color: "var(--text-secondary)" }}>
+                              Sin palets en esta carga
+                            </div>
+                          ) : (
+                            (() => {
+                              const baseSort = (a, b) =>
+                                String(a?.numero_palet || "").localeCompare(
+                                  String(b?.numero_palet || ""),
+                                  "es",
+                                  { numeric: true, sensitivity: "base" },
+                                );
+                              const truckPalletSet =
+                                effectiveChecklistTruckId !== "all" &&
+                                selectedChecklistTruck
+                                  ? new Set(
+                                      (Array.isArray(
+                                        selectedChecklistTruck?.pallet_ids,
+                                      )
+                                        ? selectedChecklistTruck.pallet_ids
+                                        : []
+                                      )
+                                        .map((v) => String(v || "").trim())
+                                        .filter(Boolean),
+                                    )
+                                  : null;
+                              const baseByTruck =
+                                truckPalletSet instanceof Set
+                                  ? palletsInLoad.filter((p) => {
+                                      const pid = String(
+                                        p?._id || p?.id || "",
+                                      ).trim();
+                                      if (!pid) return false;
+                                      return truckPalletSet.has(pid);
+                                    })
+                                  : palletsInLoad;
+                              const list = (
+                                hideLoaded
+                                  ? baseByTruck.filter(
+                                      (p) => p?.estado !== true,
+                                    )
+                                  : baseByTruck
+                              ).slice();
+                              if (list.length === 0) {
+                                return (
+                                  <div
+                                    style={{ color: "var(--text-secondary)" }}
+                                  >
+                                    {hideLoaded
+                                      ? "No hay palets pendientes para mostrar"
+                                      : effectiveChecklistTruckId !== "all"
+                                        ? "No hay palets para este camión"
+                                        : "Sin palets en esta carga"}
+                                  </div>
+                                );
+                              }
+                              const renderPalletCard = (p, key) => {
+                                const pid = String(p?._id || p?.id || "");
+                                const checked = selectedSet.has(pid);
+                                const numero = String(
+                                  p?.numero_palet || "",
+                                ).trim();
+                                const tipo = String(p?.tipo || "").trim();
+                                const base = String(p?.base || "").trim();
+                                const productos = String(
+                                  p?.productos || "",
+                                ).trim();
+                                const hasProducts = !!productos;
+                                const productsExpanded =
+                                  !!expandedProductsByPalletId[pid];
+                                return (
+                                  <label
+                                    key={key}
+                                    style={{
+                                      display: "flex",
+                                      gap: 10,
+                                      alignItems: "stretch",
+                                      padding: "10px 10px",
+                                      border: "1px solid var(--border)",
+                                      borderRadius: 10,
+                                      cursor: "pointer",
+                                      background: checked
+                                        ? tipoTint(tipo)
+                                        : "#fff",
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => togglePallet(loadId, pid)}
+                                      style={{ marginTop: 3 }}
+                                    />
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 800,
+                                          fontSize: 16,
+                                          lineHeight: "20px",
+                                        }}
+                                      >
+                                        {numero || "—"}
+                                      </div>
+                                      <div
+                                        style={{
+                                          color: "var(--text-secondary)",
+                                          fontSize: 13,
+                                          lineHeight: "16px",
+                                        }}
+                                      >
+                                        {[tipo, base]
+                                          .filter(Boolean)
+                                          .join(" · ") || "—"}
+                                      </div>
+                                      {hasProducts && productsExpanded ? (
+                                        <div
+                                          style={{
+                                            marginTop: 6,
+                                            fontSize: 13,
+                                            lineHeight: "16px",
+                                            color: "var(--text-secondary)",
+                                            whiteSpace: "pre-wrap",
+                                          }}
+                                        >
+                                          {productos}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div
+                                      style={{
+                                        marginLeft: "auto",
+                                        display: "flex",
+                                        alignItems: "center",
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        title={
+                                          hasProducts
+                                            ? productsExpanded
+                                              ? "Ocultar productos"
+                                              : "Ver productos"
+                                            : "Sin productos"
+                                        }
+                                        aria-label={
+                                          hasProducts
+                                            ? productsExpanded
+                                              ? "Ocultar productos"
+                                              : "Ver productos"
+                                            : "Sin productos"
+                                        }
+                                        disabled={!hasProducts}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          if (!hasProducts) return;
+                                          togglePalletProducts(pid);
+                                        }}
+                                        style={{
+                                          height: 28,
+                                          minWidth: 94,
+                                          border: "1px solid var(--border)",
+                                          borderRadius: 999,
+                                          background: hasProducts
+                                            ? "#fff"
+                                            : "#f3f4f6",
+                                          cursor: hasProducts
+                                            ? "pointer"
+                                            : "not-allowed",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: 4,
+                                          padding: "0 10px",
+                                          color: hasProducts
+                                            ? "#374151"
+                                            : "#9ca3af",
+                                          fontSize: 12,
+                                          fontWeight: 700,
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        <span
+                                          className="material-symbols-outlined"
+                                          style={{ fontSize: 16 }}
+                                        >
+                                          {hasProducts
+                                            ? productsExpanded
+                                              ? "expand_less"
+                                              : "expand_more"
+                                            : "block"}
+                                        </span>
+                                        {hasProducts
+                                          ? productsExpanded
+                                            ? "Ocultar"
+                                            : "Productos"
+                                          : "Sin prod."}
+                                      </button>
+                                    </div>
+                                  </label>
+                                );
+                              };
+                              if (!byTipo) {
+                                return (
+                                  <div
+                                    style={{
+                                      display: "grid",
+                                      gridTemplateColumns:
+                                        "repeat(2, minmax(0, 1fr))",
+                                      gap: 8,
+                                    }}
+                                  >
+                                    {list
+                                      .sort(baseSort)
+                                      .map((p) =>
+                                        renderPalletCard(
+                                          p,
+                                          String(
+                                            p?._id ||
+                                              p?.id ||
+                                              p?.numero_palet ||
+                                              "",
+                                          ),
+                                        ),
+                                      )}
+                                  </div>
+                                );
+                              }
+
+                              const grouped = new Map();
+                              list.forEach((p) => {
+                                const key = normalizeTipo(p?.tipo);
+                                if (!grouped.has(key)) grouped.set(key, []);
+                                grouped.get(key).push(p);
+                              });
+                              const keys = Array.from(grouped.keys()).sort(
+                                (a, b) => {
+                                  const ao = tipoOrder(a);
+                                  const bo = tipoOrder(b);
+                                  if (ao !== bo) return ao - bo;
+                                  return String(a || "").localeCompare(
+                                    String(b || ""),
+                                    "es",
+                                    {
+                                      sensitivity: "base",
+                                    },
+                                  );
+                                },
+                              );
+
+                              return keys.map((k) => {
+                                const items = grouped.get(k) || [];
+                                items.sort(baseSort);
+                                const label = tipoLabel(k);
+                                return (
+                                  <div
+                                    key={`group-${k || "sin-tipo"}`}
+                                    style={{
+                                      display: "grid",
+                                      gap: 8,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "6px 8px",
+                                        borderRadius: 10,
+                                        background: tipoTint(k),
+                                        border: "1px solid var(--border)",
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      {label}
+                                      <span
+                                        style={{
+                                          color: "var(--text-secondary)",
+                                          fontWeight: 700,
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        {items.length}
+                                      </span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "grid",
+                                        gridTemplateColumns:
+                                          "repeat(2, minmax(0, 1fr))",
+                                        gap: 8,
+                                      }}
+                                    >
+                                      {items.map((p) => {
+                                        const pid = String(
+                                          p?._id ||
+                                            p?.id ||
+                                            p?.numero_palet ||
+                                            "",
+                                        );
+                                        return renderPalletCard(
+                                          p,
+                                          `${k || "sin-tipo"}-${pid}`,
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()
+                          )}
+                        </>
                       )}
 
                       <div
@@ -1368,8 +1902,7 @@ export default function PalletLoading() {
         })()}
 
         <div className="form-row">
-          <div>
-            <div className="label">Cargado por</div>
+          <FormField label="Cargado por">
             <select
               className="select"
               value={reportOperators[0] || ""}
@@ -1402,30 +1935,29 @@ export default function PalletLoading() {
                   );
                 })}
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <div className="label">Chofer</div>
-            <input
-              className="input"
-              value={reportChoferName}
-              onChange={(e) => setReportChoferName(e.target.value)}
-              placeholder="Nombre del chofer"
-            />
-            <div className="label" style={{ marginTop: 10 }}>
-              Consignatario
-            </div>
-            <input
-              className="input"
-              value={reportConsignatarioName}
-              onChange={(e) => setReportConsignatarioName(e.target.value)}
-              placeholder="Nombre del consignatario"
-            />
+          <div style={{ display: "grid", gap: 10 }}>
+            <FormField label="Chofer">
+              <input
+                className="input"
+                value={reportChoferName}
+                onChange={(e) => setReportChoferName(e.target.value)}
+                placeholder="Nombre del chofer"
+              />
+            </FormField>
+            <FormField label="Consignatario">
+              <input
+                className="input"
+                value={reportConsignatarioName}
+                onChange={(e) => setReportConsignatarioName(e.target.value)}
+                placeholder="Nombre del consignatario"
+              />
+            </FormField>
           </div>
         </div>
 
-        <div>
-          <div className="label">Notas</div>
+        <FormField label="Notas">
           <textarea
             className="input"
             rows="4"
@@ -1434,7 +1966,7 @@ export default function PalletLoading() {
             placeholder="Incidencias o comentarios"
             style={{ height: "auto", minHeight: 88, resize: "vertical" }}
           />
-        </div>
+        </FormField>
       </Modal>
 
       <Pagination

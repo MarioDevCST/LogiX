@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   deleteProductoById,
   fetchProductoById,
@@ -288,8 +289,7 @@ export default function ProductDetail() {
           onSubmit={submitEdit}
           submitLabel="Guardar"
         >
-          <div>
-            <div className="label">Código</div>
+          <FormField label="Código">
             <input
               className="input"
               value={editForm.codigo}
@@ -298,9 +298,8 @@ export default function ProductDetail() {
               }
               placeholder="Código"
             />
-          </div>
-          <div>
-            <div className="label">Nombre del producto</div>
+          </FormField>
+          <FormField label="Nombre del producto">
             <input
               className="input"
               value={editForm.nombre_producto}
@@ -312,9 +311,8 @@ export default function ProductDetail() {
               }
               placeholder="Nombre del producto"
             />
-          </div>
-          <div>
-            <div className="label">Familia</div>
+          </FormField>
+          <FormField label="Familia">
             <input
               className="input"
               value={editForm.familia}
@@ -323,9 +321,8 @@ export default function ProductDetail() {
               }
               placeholder="Familia"
             />
-          </div>
-          <div>
-            <div className="label">Tipo</div>
+          </FormField>
+          <FormField label="Tipo">
             <select
               className="input"
               value={editForm.tipo}
@@ -342,9 +339,8 @@ export default function ProductDetail() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <div className="label">Composición</div>
+          </FormField>
+          <FormField label="Composición">
             <input
               className="input"
               value={editForm.composicion}
@@ -356,9 +352,8 @@ export default function ProductDetail() {
               }
               placeholder="Composición"
             />
-          </div>
-          <div>
-            <div className="label">Alérgenos</div>
+          </FormField>
+          <FormField label="Alérgenos">
             <input
               className="input"
               value={editForm.alergenos}
@@ -367,9 +362,8 @@ export default function ProductDetail() {
               }
               placeholder="Alérgenos"
             />
-          </div>
-          <div>
-            <div className="label">Estado</div>
+          </FormField>
+          <FormField label="Estado">
             <select
               className="input"
               value={editForm.estado}
@@ -383,7 +377,7 @@ export default function ProductDetail() {
               <option value="disponible">Disponible</option>
               <option value="no disponible">No disponible</option>
             </select>
-          </div>
+          </FormField>
         </Modal>
       )}
 

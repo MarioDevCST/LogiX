@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
+import LoadDivisionModal from "../components/LoadDivisionModal.jsx";
 import {
   getCurrentRole,
   hasPermission,
@@ -796,6 +798,8 @@ export default function LoadDetail() {
   const [markViajandoSubmitting, setMarkViajandoSubmitting] = useState(false);
   const [finalizeSubmitting, setFinalizeSubmitting] = useState(false);
   const [openDriverFinalize, setOpenDriverFinalize] = useState(false);
+  const [divisionOpen, setDivisionOpen] = useState(false);
+  const [divisionSaving, setDivisionSaving] = useState(false);
 
   const currentUser = getCurrentUser();
   const currentUserId = String(
@@ -2087,6 +2091,18 @@ export default function LoadDetail() {
             {!isReadOnlyActions && canManageLoads && (
               <button
                 className="icon-button"
+                type="button"
+                onClick={() => setDivisionOpen(true)}
+                title="División de carga"
+              >
+                <span className="material-symbols-outlined">
+                  local_shipping
+                </span>
+              </button>
+            )}
+            {!isReadOnlyActions && canManageLoads && (
+              <button
+                className="icon-button"
                 onClick={() => {
                   setResponsableQuery("");
                   setOpen(true);
@@ -2522,8 +2538,7 @@ export default function LoadDetail() {
             baseCandidates[0] ||
             "";
           return (
-            <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
-              <div className="label">Base final</div>
+            <FormField label="Base final" style={{ marginTop: 12, gap: 6 }}>
               <select
                 className="select"
                 value={value}
@@ -2535,7 +2550,7 @@ export default function LoadDetail() {
                   </option>
                 ))}
               </select>
-            </div>
+            </FormField>
           );
         })()}
       </Modal>
@@ -2589,8 +2604,7 @@ export default function LoadDetail() {
           </button>
         </div>
 
-        <div style={{ display: "grid", gap: 8 }}>
-          <div className="label">Palet destino</div>
+        <FormField label="Palet destino">
           <select
             className="input"
             value={fuseTargetId}
@@ -2617,7 +2631,7 @@ export default function LoadDetail() {
                 }`
               : ""}
           </div>
-        </div>
+        </FormField>
 
         {(() => {
           const normalizeBase = (value) => {
@@ -2651,8 +2665,7 @@ export default function LoadDetail() {
             baseCandidates[0] ||
             "";
           return (
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="label">Base final</div>
+            <FormField label="Base final">
               <select
                 className="select"
                 value={value}
@@ -2664,13 +2677,12 @@ export default function LoadDetail() {
                   </option>
                 ))}
               </select>
-            </div>
+            </FormField>
           );
         })()}
 
         {fuseMode === "seleccion" ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Palets a fusionar</div>
+          <FormField label="Palets a fusionar">
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
@@ -2747,10 +2759,9 @@ export default function LoadDetail() {
             <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
               Seleccionados: {fuseSourceIds.length}
             </div>
-          </div>
+          </FormField>
         ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Números de palet a fusionar</div>
+          <FormField label="Números de palet a fusionar">
             <textarea
               className="input"
               style={{ height: 110, resize: "vertical" }}
@@ -2764,7 +2775,7 @@ export default function LoadDetail() {
                 ? ` · No encontrados: ${fuseMissingNumbers.join(", ")}`
                 : ""}
             </div>
-          </div>
+          </FormField>
         )}
       </Modal>
 
@@ -2783,8 +2794,7 @@ export default function LoadDetail() {
       >
         {folioStep === "config" ? (
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div className="label">Rango de números</div>
+            <FormField label="Rango de números" style={{ gap: 6 }}>
               <div
                 style={{
                   display: "grid",
@@ -2792,8 +2802,7 @@ export default function LoadDetail() {
                   gap: 10,
                 }}
               >
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div className="label">Desde</div>
+                <FormField label="Desde" style={{ gap: 6 }}>
                   <input
                     type="number"
                     className="input"
@@ -2801,9 +2810,8 @@ export default function LoadDetail() {
                     value={folioFrom}
                     onChange={(e) => setFolioFrom(e.target.value)}
                   />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div className="label">Hasta</div>
+                </FormField>
+                <FormField label="Hasta" style={{ gap: 6 }}>
                   <input
                     type="number"
                     className="input"
@@ -2811,9 +2819,9 @@ export default function LoadDetail() {
                     value={folioTo}
                     onChange={(e) => setFolioTo(e.target.value)}
                   />
-                </div>
+                </FormField>
               </div>
-            </div>
+            </FormField>
 
             <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
               {(() => {
@@ -2883,8 +2891,7 @@ export default function LoadDetail() {
             </label>
 
             {folioIncludeLoadSheet && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <div className="label">Rango hoja de carga</div>
+              <FormField label="Rango hoja de carga" style={{ gap: 6 }}>
                 <div
                   style={{
                     display: "grid",
@@ -2892,8 +2899,7 @@ export default function LoadDetail() {
                     gap: 10,
                   }}
                 >
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div className="label">Desde</div>
+                  <FormField label="Desde" style={{ gap: 6 }}>
                     <input
                       type="number"
                       className="input"
@@ -2901,9 +2907,8 @@ export default function LoadDetail() {
                       value={folioSheetFrom}
                       onChange={(e) => setFolioSheetFrom(e.target.value)}
                     />
-                  </div>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div className="label">Hasta</div>
+                  </FormField>
+                  <FormField label="Hasta" style={{ gap: 6 }}>
                     <input
                       type="number"
                       className="input"
@@ -2911,9 +2916,9 @@ export default function LoadDetail() {
                       value={folioSheetTo}
                       onChange={(e) => setFolioSheetTo(e.target.value)}
                     />
-                  </div>
+                  </FormField>
                 </div>
-              </div>
+              </FormField>
             )}
 
             <div
@@ -3132,8 +3137,7 @@ export default function LoadDetail() {
       >
         <div style={{ display: "grid", gap: 12 }}>
           {/* Datos básicos */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Barco</div>
+          <FormField label="Barco">
             <select
               className="input"
               value={form.barco}
@@ -3146,10 +3150,9 @@ export default function LoadDetail() {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de carga</div>
+          <FormField label="Fecha y hora de carga">
             <div
               style={{
                 display: "grid",
@@ -3174,10 +3177,9 @@ export default function LoadDetail() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Fecha y hora de descarga</div>
+          <FormField label="Fecha y hora de descarga">
             <div
               style={{
                 display: "grid",
@@ -3202,11 +3204,10 @@ export default function LoadDetail() {
                 }
               />
             </div>
-          </div>
+          </FormField>
 
           {/* Entrega */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Entrega</div>
+          <FormField label="Entrega">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {ENTREGA_OPTIONS.map((opt) => (
                 <label
@@ -3227,11 +3228,10 @@ export default function LoadDetail() {
                 </label>
               ))}
             </div>
-          </div>
+          </FormField>
 
           {/* Personas */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <div className="label">Responsable</div>
+          <FormField label="Responsable" style={{ gap: 6 }}>
             <input
               className="input"
               value={responsableQuery}
@@ -3269,9 +3269,8 @@ export default function LoadDetail() {
                   </option>
                 ))}
             </select>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Chofer</div>
+          </FormField>
+          <FormField label="Chofer">
             <select
               className="input"
               value={form.chofer}
@@ -3286,9 +3285,8 @@ export default function LoadDetail() {
                   </option>
                 ))}
             </select>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Consignatario</div>
+          </FormField>
+          <FormField label="Consignatario">
             <select
               className="input"
               value={form.consignatario}
@@ -3304,9 +3302,8 @@ export default function LoadDetail() {
                 </option>
               ))}
             </select>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Terminal de entrega</div>
+          </FormField>
+          <FormField label="Terminal de entrega">
             <select
               className="input"
               value={form.terminal_entrega}
@@ -3346,11 +3343,10 @@ export default function LoadDetail() {
                 ));
               })()}
             </select>
-          </div>
+          </FormField>
 
           {/* Palets */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Palets</div>
+          <FormField label="Palets">
             <select
               multiple
               className="input"
@@ -3368,11 +3364,10 @@ export default function LoadDetail() {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
           {/* Tipo de carga */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Tipo de carga</div>
+          <FormField label="Tipo de carga">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {CARGA_OPTIONS.map((opt) => (
                 <label
@@ -3393,11 +3388,10 @@ export default function LoadDetail() {
                 </label>
               ))}
             </div>
-          </div>
+          </FormField>
 
           {/* Opciones */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Opciones</div>
+          <FormField label="Opciones">
             <div
               style={{
                 display: "grid",
@@ -3424,11 +3418,10 @@ export default function LoadDetail() {
                 Cobro en efectivo
               </label>
             </div>
-          </div>
+          </FormField>
 
           {/* Estado de carga */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <div className="label">Estado de Carga</div>
+          <FormField label="Estado de Carga">
             <select
               className="select"
               value={form.estado_viaje}
@@ -3442,7 +3435,7 @@ export default function LoadDetail() {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
         </div>
       </Modal>
 
@@ -3502,8 +3495,7 @@ export default function LoadDetail() {
         submitLabel="Crear"
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <div>
-            <div className="label">Número de palet</div>
+          <FormField label="Número de palet">
             <input
               className="input"
               value={createPalletForm.numero_palet}
@@ -3515,9 +3507,8 @@ export default function LoadDetail() {
               }
               placeholder="Nº de palet"
             />
-          </div>
-          <div>
-            <div className="label">Tipo</div>
+          </FormField>
+          <FormField label="Tipo">
             <select
               className="select"
               value={createPalletForm.tipo}
@@ -3534,9 +3525,8 @@ export default function LoadDetail() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <div className="label">Base</div>
+          </FormField>
+          <FormField label="Base">
             <select
               className="select"
               value={createPalletForm.base}
@@ -3550,9 +3540,8 @@ export default function LoadDetail() {
               <option value="Europeo">Europeo</option>
               <option value="Americano">Americano</option>
             </select>
-          </div>
-          <div>
-            <div className="label">Productos</div>
+          </FormField>
+          <FormField label="Productos">
             <textarea
               className="input"
               rows="4"
@@ -3564,7 +3553,7 @@ export default function LoadDetail() {
                 })
               }
             />
-          </div>
+          </FormField>
         </div>
       </Modal>
 
@@ -3606,6 +3595,54 @@ export default function LoadDetail() {
         message={snack.message}
         type={snack.type}
         onClose={() => setSnack({ ...snack, open: false })}
+      />
+
+      <LoadDivisionModal
+        open={divisionOpen}
+        load={load}
+        pallets={palletsInLoad}
+        actor={getCurrentUser()}
+        saving={divisionSaving}
+        onClose={() => setDivisionOpen(false)}
+        onSave={async ({ camiones, error }) => {
+          if (error) {
+            setSnack({ open: true, message: String(error), type: "error" });
+            return;
+          }
+          if (!loadId) return;
+          if (!Array.isArray(camiones)) return;
+          if (divisionSaving) return;
+          try {
+            setDivisionSaving(true);
+            const updated = await updateLoadById(loadId, {
+              camiones,
+              modificado_por: getCurrentUser()?.name || "Testing",
+            });
+            if (!updated) {
+              setSnack({
+                open: true,
+                message: "No se pudo guardar la división",
+                type: "error",
+              });
+              return;
+            }
+            setLoad(updated);
+            setSnack({
+              open: true,
+              message: "División guardada",
+              type: "success",
+            });
+            setDivisionOpen(false);
+          } catch (e) {
+            setSnack({
+              open: true,
+              message: String(e?.message || "Error guardando la división"),
+              type: "error",
+            });
+          } finally {
+            setDivisionSaving(false);
+          }
+        }}
       />
     </section>
   );

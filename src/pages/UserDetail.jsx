@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   deleteUserById,
   fetchUserById,
@@ -213,26 +214,23 @@ export default function UserDetail() {
         onSubmit={submit}
         submitLabel="Guardar"
       >
-        <div>
-          <div className="label">Nombre</div>
+        <FormField label="Nombre">
           <input
             className="input"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-        </div>
-        <div>
-          <div className="label">Email</div>
+        </FormField>
+        <FormField label="Email">
           <input
             className="input"
             type="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-        </div>
+        </FormField>
         <div className="form-row">
-          <div>
-            <div className="label">Rol</div>
+          <FormField label="Rol">
             <select
               className="select"
               value={form.role}
@@ -246,9 +244,8 @@ export default function UserDetail() {
                 )
               )}
             </select>
-          </div>
-          <div>
-            <div className="label">Activo</div>
+          </FormField>
+          <FormField label="Activo">
             <select
               className="select"
               value={form.active ? "true" : "false"}
@@ -259,7 +256,7 @@ export default function UserDetail() {
               <option value="true">Sí</option>
               <option value="false">No</option>
             </select>
-          </div>
+          </FormField>
         </div>
         {canDeleteThisUser && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>

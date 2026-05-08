@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
+import FormField from "../components/FormField.jsx";
 import {
   ROLES,
   ROLE_LABELS,
@@ -719,8 +720,7 @@ export default function MessageDetail() {
             style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
           >
             <div style={{ display: "grid", gap: 12 }}>
-              <div>
-                <div className="label">Título</div>
+              <FormField label="Título">
                 <input
                   className="input"
                   value={editForm.titulo}
@@ -729,9 +729,8 @@ export default function MessageDetail() {
                   }
                   placeholder="Título"
                 />
-              </div>
-              <div>
-                <div className="label">Cuerpo</div>
+              </FormField>
+              <FormField label="Cuerpo">
                 <textarea
                   className="input"
                   style={{ width: "100%", resize: "vertical", minHeight: 220 }}
@@ -742,7 +741,7 @@ export default function MessageDetail() {
                   placeholder="Contenido del mensaje"
                   rows={10}
                 />
-              </div>
+              </FormField>
             </div>
             <div style={{ display: "grid", gap: 12 }}>
               <div
@@ -752,8 +751,7 @@ export default function MessageDetail() {
                   gap: 12,
                 }}
               >
-                <div>
-                  <div className="label">Prioridad</div>
+                <FormField label="Prioridad">
                   <select
                     className="input"
                     value={editForm.priority}
@@ -770,9 +768,8 @@ export default function MessageDetail() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <div className="label">Caduca (opcional)</div>
+                </FormField>
+                <FormField label="Caduca (opcional)">
                   <input
                     className="input"
                     type="datetime-local"
@@ -784,10 +781,9 @@ export default function MessageDetail() {
                       }))
                     }
                   />
-                </div>
+                </FormField>
               </div>
-              <div>
-                <div className="label">Usuario específico (opcional)</div>
+              <FormField label="Usuario específico (opcional)">
                 <select
                   className="input"
                   value={editForm.target_user_id}
@@ -814,9 +810,8 @@ export default function MessageDetail() {
                     );
                   })}
                 </select>
-              </div>
-              <div>
-                <div className="label">Roles destinatarios</div>
+              </FormField>
+              <FormField label="Roles destinatarios">
                 <div
                   style={{
                     border: "1px solid var(--border)",
@@ -851,7 +846,7 @@ export default function MessageDetail() {
                     </label>
                   ))}
                 </div>
-              </div>
+              </FormField>
             </div>
           </div>
         </Modal>

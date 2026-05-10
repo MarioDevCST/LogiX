@@ -246,6 +246,10 @@ function buildFoliosHtml({
         String(miniLogoUrl || "").trim() && typeof miniLogoUrl === "string"
           ? escapeHtml(miniLogoUrl)
           : "";
+      const safeEis =
+        String(logoUrl || "").trim() && typeof logoUrl === "string"
+          ? escapeHtml(logoUrl)
+          : "";
       const payload = `LOGIX-PALLET:${String(loadIdForCodes || "").trim()}:${trimmedNumber}`;
       const qrSvg = renderToStaticMarkup(
         <QRCode value={payload} size={256} level="M" />,
@@ -265,14 +269,11 @@ function buildFoliosHtml({
           <div class="top">
             <div class="small-circle">${big}</div>
             <div class="code-block">
-              <div class="code-qr">
-                ${qrSvg}
-                ${
-                  safeMini
-                    ? `<img class="code-qr-logo" src="${safeMini}" alt="" />`
-                    : ""
-                }
-              </div>
+              ${
+                safeEis
+                  ? `<img class="code-logo" src="${safeEis}" alt="" />`
+                  : ""
+              }
               <div class="code-barcode">
                 ${barcodeSvg}
               </div>
@@ -280,6 +281,14 @@ function buildFoliosHtml({
           </div>
           <div class="ship">${escapeHtml(shipName || "")}</div>
           <div class="big-area">
+            <div class="mid-qr">
+              ${qrSvg}
+              ${
+                safeMini
+                  ? `<img class="mid-qr-logo" src="${safeMini}" alt="" />`
+                  : ""
+              }
+            </div>
             <div class="${bigClass}">${big}</div>
           </div>
           <div class="bottom">
@@ -485,12 +494,6 @@ function buildFoliosHtml({
           align-items: center;
           justify-content: center;
         }
-        .big-area {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-        }
         .big {
           margin-top: 0;
           text-align: center;
@@ -528,27 +531,11 @@ function buildFoliosHtml({
           justify-items: end;
           gap: 2mm;
         }
-        .code-qr {
-          width: 20mm;
-          height: 20mm;
-          position: relative;
-        }
-        .code-qr svg {
-          width: 20mm;
-          height: 20mm;
-          display: block;
-        }
-        .code-qr-logo {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 6.5mm;
-          height: 6.5mm;
+        .code-logo {
+          height: 18mm;
+          width: auto;
+          max-width: 44mm;
           object-fit: contain;
-          background: #fff;
-          border-radius: 1.5mm;
-          padding: 0.7mm;
         }
         .code-barcode {
           width: 44mm;
@@ -559,6 +546,43 @@ function buildFoliosHtml({
           width: 44mm;
           height: 10mm;
           display: block;
+        }
+        .big-area {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .mid-qr {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 26mm;
+          height: 26mm;
+          background: rgba(255, 255, 255, 0.9);
+          border-radius: 6mm;
+          display: grid;
+          place-items: center;
+          z-index: 2;
+        }
+        .mid-qr svg {
+          width: 26mm;
+          height: 26mm;
+          display: block;
+        }
+        .mid-qr-logo {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 7mm;
+          height: 7mm;
+          object-fit: contain;
+          background: #fff;
+          border-radius: 2mm;
+          padding: 0.8mm;
         }
 
         @media print {

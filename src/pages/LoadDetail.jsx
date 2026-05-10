@@ -268,6 +268,14 @@ function buildFoliosHtml({
         <div class="page numero-page">
           <div class="top">
             <div class="small-circle">${big}</div>
+            <div class="top-qr">
+              ${qrSvg}
+              ${
+                safeMini
+                  ? `<img class="top-qr-logo" src="${safeMini}" alt="" />`
+                  : ""
+              }
+            </div>
             <div class="code-block">
               ${
                 safeEis
@@ -281,14 +289,6 @@ function buildFoliosHtml({
           </div>
           <div class="ship">${escapeHtml(shipName || "")}</div>
           <div class="big-area">
-            <div class="mid-qr">
-              ${qrSvg}
-              ${
-                safeMini
-                  ? `<img class="mid-qr-logo" src="${safeMini}" alt="" />`
-                  : ""
-              }
-            </div>
             <div class="${bigClass}">${big}</div>
           </div>
           <div class="bottom">
@@ -422,6 +422,7 @@ function buildFoliosHtml({
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
+          gap: 10mm;
         }
         .numero-page {
           padding: 14mm 18mm 18mm;
@@ -547,32 +548,19 @@ function buildFoliosHtml({
           height: 10mm;
           display: block;
         }
-        .big-area {
+        .top-qr {
+          width: 24mm;
+          height: 24mm;
           position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
+          margin-top: 2mm;
+          flex: 0 0 auto;
         }
-        .mid-qr {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 26mm;
-          height: 26mm;
-          background: rgba(255, 255, 255, 0.9);
-          border-radius: 6mm;
-          display: grid;
-          place-items: center;
-          z-index: 2;
-        }
-        .mid-qr svg {
-          width: 26mm;
-          height: 26mm;
+        .top-qr svg {
+          width: 24mm;
+          height: 24mm;
           display: block;
         }
-        .mid-qr-logo {
+        .top-qr-logo {
           position: absolute;
           left: 50%;
           top: 50%;

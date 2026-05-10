@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { renderToStaticMarkup } from "react-dom/server";
+import QRCode from "react-qr-code";
+import Barcode from "react-barcode";
 import Modal from "../components/Modal.jsx";
 import Snackbar from "../components/Snackbar.jsx";
 import FormField from "../components/FormField.jsx";
@@ -202,14 +205,14 @@ function buildFoliosHtml({
   shipName,
   dateLabel,
   portLabel,
-  numbersFrom,
-  numbersTo,
   hojaFrom,
   hojaTo,
   includeHojaCarga,
   includeNumbers,
   logoUrl,
   poweredLogoUrl,
+  miniLogoUrl,
+  labels,
 }) {
   const pages = [];
   if (includeHojaCarga) {
@@ -230,49 +233,42 @@ function buildFoliosHtml({
     }
   }
   if (includeNumbers) {
-    for (let n = numbersFrom; n <= numbersTo; n += 1) {
-      const rawNumber = String(n);
-      const trimmedNumber = rawNumber.trim();
-      const big = escapeHtml(trimmedNumber);
-      const digits = trimmedNumber.length;
-      const bigClass =
-        digits >= 3 ? "big big-3" : digits === 2 ? "big big-2" : "big big-1";
+    const list = Array.isArray(labels) ? labels : [];
+    const perPage = 36;
+    for (let i = 0; i < list.length; i += perPage) {
+      const chunk = list.slice(i, i + perPage);
       pages.push(`
-        <div class="page numero-page">
-          <div class="top">
-            <div class="small-circle">${big}</div>
-            ${
-              String(logoUrl || "").trim()
-                ? `<img class="top-logo" src="${escapeHtml(
-                    String(logoUrl || "").trim(),
-                  )}" alt="" />`
-                : ""
-            }
+        <div class="page labels-page">
+          <div class="labels-grid">
+            ${chunk
+              .map((item) => {
+                const num = escapeHtml(String(item?.num ?? "").trim());
+                const qrSvg = String(item?.qrSvg || "");
+                const barcodeSvg = String(item?.barcodeSvg || "");
+                const safeMini =
+                  String(miniLogoUrl || "").trim() &&
+                  typeof miniLogoUrl === "string"
+                    ? escapeHtml(miniLogoUrl)
+                    : "";
+                return `
+                  <div class="pallet-label">
+                    <div class="pallet-qr">
+                      ${qrSvg}
+                      ${
+                        safeMini
+                          ? `<img class="pallet-qr-logo" src="${safeMini}" alt="" />`
+                          : ""
+                      }
+                    </div>
+                    <div class="pallet-barcode">
+                      ${barcodeSvg}
+                    </div>
+                    <div class="pallet-num">${num}</div>
+                  </div>
+                `;
+              })
+              .join("")}
           </div>
-          <div class="ship">${escapeHtml(shipName || "")}</div>
-          <div class="big-area">
-            <div class="${bigClass}">${big}</div>
-          </div>
-          <div class="bottom">
-            <div class="row">
-              <span class="label">FECHA PREVISTA DE CARGA:</span>
-              <span class="value">${escapeHtml(dateLabel || "-")}</span>
-            </div>
-            <div class="row">
-              <span class="label">PUERTO:</span>
-              <span class="value">${escapeHtml(portLabel || "-")}</span>
-            </div>
-          </div>
-          ${
-            String(poweredLogoUrl || "").trim()
-              ? `<div class="powered-by">
-                  <span>Powered by</span>
-                  <img src="${escapeHtml(
-                    String(poweredLogoUrl || "").trim(),
-                  )}" alt="" />
-                </div>`
-              : ""
-          }
         </div>
       `);
     }
@@ -492,6 +488,68 @@ function buildFoliosHtml({
         }
         .label { font-weight: 500; }
         .value { font-weight: 800; }
+
+        .labels-page {
+          padding: 5mm;
+          display: grid;
+          align-content: start;
+        }
+        .labels-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 50mm);
+          grid-auto-rows: 30mm;
+          justify-content: center;
+          align-content: start;
+          gap: 0;
+        }
+        .pallet-label {
+          width: 50mm;
+          height: 30mm;
+          padding: 2mm;
+          display: grid;
+          grid-template-rows: 18mm 7mm 1fr;
+          gap: 0.8mm;
+          overflow: hidden;
+        }
+        .pallet-qr {
+          width: 18mm;
+          height: 18mm;
+          position: relative;
+        }
+        .pallet-qr svg {
+          width: 18mm;
+          height: 18mm;
+          display: block;
+        }
+        .pallet-qr-logo {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 6mm;
+          height: 6mm;
+          object-fit: contain;
+          background: #fff;
+          border-radius: 1.5mm;
+          padding: 0.7mm;
+        }
+        .pallet-barcode {
+          width: 100%;
+          height: 7mm;
+          overflow: hidden;
+        }
+        .pallet-barcode svg {
+          width: 100%;
+          height: 7mm;
+          display: block;
+        }
+        .pallet-num {
+          font-size: 9px;
+          font-weight: 800;
+          color: #111827;
+          line-height: 1;
+          margin-top: -0.4mm;
+        }
 
         @media print {
           html, body { background: white; margin: 0; padding: 0; }
@@ -991,18 +1049,50 @@ export default function LoadDetail() {
         return "";
       }
     })();
+    const miniLogoUrl = (() => {
+      try {
+        if (typeof window === "undefined") return "";
+        return new URL("/mini.png", window.location.origin).toString();
+      } catch {
+        return "";
+      }
+    })();
+    const labels = (() => {
+      if (!folioIncludeNumbers) return [];
+      const idValue = String(load?._id || load?.id || id || "").trim();
+      if (!idValue) return [];
+      const out = [];
+      for (let n = aNum; n <= bNum; n += 1) {
+        const payload = `LOGIX-PALLET:${idValue}:${String(n)}`;
+        const qrSvg = renderToStaticMarkup(
+          <QRCode value={payload} size={256} level="M" />,
+        );
+        const barcodeSvg = renderToStaticMarkup(
+          <Barcode
+            value={payload}
+            format="CODE128"
+            renderer="svg"
+            displayValue={false}
+            margin={0}
+            height={40}
+          />,
+        );
+        out.push({ num: n, payload, qrSvg, barcodeSvg });
+      }
+      return out;
+    })();
     return buildFoliosHtml({
       shipName: folioMeta.shipName,
       dateLabel: folioMeta.dateLabel,
       portLabel: folioMeta.portLabel,
-      numbersFrom: folioIncludeNumbers ? aNum : 1,
-      numbersTo: folioIncludeNumbers ? bNum : 1,
       hojaFrom: folioIncludeLoadSheet ? aSheet : 1,
       hojaTo: folioIncludeLoadSheet ? bSheet : 1,
       includeHojaCarga: folioIncludeLoadSheet,
       includeNumbers: folioIncludeNumbers,
       logoUrl,
       poweredLogoUrl,
+      miniLogoUrl,
+      labels,
     });
   }, [
     openFolio,
@@ -1014,6 +1104,9 @@ export default function LoadDetail() {
     folioMeta,
     folioIncludeLoadSheet,
     folioIncludeNumbers,
+    load?._id,
+    load?.id,
+    id,
   ]);
 
   const openFolioModal = () => {
